@@ -2,8 +2,7 @@
  * The Merge manager's page (#439, ⌘⇧L): what the main area shows while its
  * route is `mergeManager`. Its figure and where merging runs ("Merging on
  * this Mac" or on a VM, with the hand-off and bring-back, #442) in the
- * header, and what happened while merging was on a VM under the tiles; tiles that count the user's landed PRs by stage
- * and the CI runs saved this week; every lane, grouped by repository with its
+ * header, and what happened while merging was on a VM under it; every lane, grouped by repository with its
  * kind, the head on top as a card with three steps and the rest in the lane's
  * order (only the user's own PRs); Merged today at the bottom; and the
  * selected row's detail beside it, per stage, with its actions.
@@ -22,13 +21,11 @@ import {SceneFigure} from '../bug-manager/ManagerFigure';
 import {mergeFigureOf, type MergeFigure} from '../../../domain/merge-manager/figure';
 import {ordinal} from '../../../domain/merge-manager/stage-words';
 import {
-    ciRunsSaved,
     dayStart,
     errandNotes,
     errandOf,
     headSteps,
     laneKindLabel,
-    mergeManagerTiles,
     mergedToday,
     pageLanes,
     pageSubline,
@@ -76,7 +73,6 @@ function MergeManagerView(): JSX.Element {
     const now = useStore((state) => state.sessionList.now) || Date.now();
     const today = dayStart(now);
     const lanes = pageLanes(merge);
-    const tiles = mergeManagerTiles(merge, today);
     const merged = mergedToday(merge, today);
     const selected = selectedRow(lanes, page.selected);
 
@@ -180,31 +176,6 @@ function MergeManagerView(): JSX.Element {
                 </div>
             </header>
 
-            <div className="im-tiles mm-tiles" role="group" aria-label="Summary">
-                <Tile n={tiles.needsYou} label="Needs you" hint="push, answer or try again" tone="hot" />
-                <Tile n={tiles.fixing} label="Fixing" hint="a fix errand on it" tone="green" />
-                <Tile n={tiles.merging} label="Merging" hint="yours as the head" tone="purple" />
-                <Tile
-                    n={tiles.waiting}
-                    label="Waiting"
-                    hint={tiles.willConflict > 0 ? `${tiles.willConflict} will conflict` : 'for their turn'}
-                />
-                <Tile n={tiles.held} label="Held" hint="keep their place" tone="muted" />
-                <Tile
-                    n={tiles.mergedToday}
-                    label="Merged today"
-                    hint={tiles.lastMergedAt ? 'last ' + clock(tiles.lastMergedAt) : 'none yet'}
-                    tone="purple"
-                />
-                <Tile
-                    n={ciRunsSaved(page.facts?.savedThisWeek)}
-                    label="CI runs saved"
-                    hint="this week · estimate"
-                    saved
-                    title={savedText(page.facts?.savedThisWeek) ?? 'Nothing saved yet this week'}
-                />
-            </div>
-
             <AwaySummaryBox />
 
             {page.notice && (
@@ -259,30 +230,6 @@ function MergeManagerView(): JSX.Element {
                     <kbd className="sw-kbd">O</kbd> open on GitHub
                 </span>
             </footer>
-        </div>
-    );
-}
-
-function Tile({
-    n,
-    label,
-    hint,
-    tone,
-    saved,
-    title,
-}: {
-    n: number;
-    label: string;
-    hint: string;
-    tone?: 'hot' | 'green' | 'purple' | 'muted';
-    saved?: boolean;
-    title?: string;
-}): JSX.Element {
-    return (
-        <div className={'im-tile mm-tile' + (tone ? ' is-' + tone : '') + (saved ? ' is-saved' : '')} title={title}>
-            <span className="im-tile-n">{n}</span>
-            <span className="im-tile-l">{label}</span>
-            <span className="im-tile-hint">{hint}</span>
         </div>
     );
 }

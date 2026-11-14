@@ -1,12 +1,12 @@
 /**
  * The Bug manager page (#414) wired into the real app: ⌘B opens it on the
  * inbox seeded into the database, grouped by local project with "Not
- * linked" last, a tile filters it, J moves the cursor and marks the row
+ * linked" last, a filter narrows it, J moves the cursor and marks the row
  * seen, and F makes a worktree of the linked project on
  * `fix/bugsnag-<8 chars>` and starts Claude there with the Fix prompt, which
  * moves the bug to In progress.
  *
- * The tabs, tiles, groups, keys and stages are unit tested in
+ * The tabs, filters, groups, keys and stages are unit tested in
  * test/bug-page-slice.test.ts and test/bug-fix-service.test.ts; this proves
  * the IPC round-trip, the keyboard and the session start. No Bugsnag token
  * is saved, so the detail's reads answer nothing and nothing leaves the box.
@@ -120,7 +120,10 @@ function row(page: Page, errorId: string, projectId = API) {
     return bugPage(page).locator(`[data-bug-key="bug:${projectId}:${errorId}"]`);
 }
 
-test('⌘B opens the Bug manager on its inbox; a tile filters it and J marks the next row seen', async ({page, home}) => {
+test('⌘B opens the Bug manager on its inbox; a filter narrows it and J marks the next row seen', async ({
+    page,
+    home,
+}) => {
     /* Given */
     await linkBugsnagProjects(page, home.projectPath(P.acmeApi));
 

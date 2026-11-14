@@ -1,6 +1,6 @@
 /**
  * The Issue manager page (#415), renderer side: the manager's items as main
- * last answered them, the tab and tile on screen, the selected issue and its
+ * last answered them, the tab and filter on screen, the selected issue and its
  * thread, and what a Comment, a Start or a Stop is doing.
  *
  * The items are main's (`inboxItems`); the page asks again as it opens and
@@ -32,7 +32,7 @@ export interface IssueManagerState {
     /** Null until main first answers. */
     readonly items: readonly InboxItem[] | null;
     readonly tab: InboxTab;
-    /** The tile picked as the inbox's filter; null shows every row. */
+    /** The filter picked as the inbox's filter; null shows every row. */
     readonly filter: IssueFilter | null;
     readonly selected: string | null;
     readonly threads: Readonly<Record<string, ThreadLoad>>;
@@ -222,7 +222,7 @@ export interface IssueGroup {
     readonly items: readonly InboxItem[];
 }
 
-/** The items of the tab on screen, the inbox's filtered by its tile, grouped by repository, newest update first. */
+/** The items of the tab on screen, the inbox's narrowed by its filter, grouped by repository, newest update first. */
 export function visibleGroups(state: Pick<IssueManagerState, 'items' | 'tab' | 'filter'>): IssueGroup[] {
     const byRepository = new Map<string, InboxItem[]>();
     for (const item of state.items ?? []) {

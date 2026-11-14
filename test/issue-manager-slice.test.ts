@@ -48,7 +48,7 @@ test('the inbox is grouped by repository, newest update first, without what is b
     );
 });
 
-test('the Unread tile leaves the read rows out, and In progress lists the started ones', () => {
+test('the Unread filter leaves the read rows out, and In progress lists the started ones', () => {
     /* Given */
     const loaded = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerItemsLoaded', items: items()});
 

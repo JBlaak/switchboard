@@ -1,9 +1,8 @@
 /* ========== THE MERGE MANAGER PAGE (#439) ==========
-   ⌘⇧L: the Merge manager's head and where merging runs, the tiles over the
-   landed PRs, every lane grouped by repository with the head as a card, and
-   the selected row's detail beside them. The header, tiles, list, detail and
-   keys are the Issue manager's and the Tasks page's (.sw-header, .im-tiles,
-   .im-body, .im-detail, .tk-keys); the stage pills are the shared stage
+   ⌘⇧L: the Merge manager's head and where merging runs, every lane grouped
+   by repository with the head as a card, and the selected row's detail
+   beside them. The header, list, detail and keys are the Issue manager's and
+   the Tasks page's (.sw-header, .im-body, .im-detail, .tk-keys); the stage pills are the shared stage
    words' (.pp-stage.is-landed-*). Its own: the host pill, the lane label,
    the head card's steps and the timelines. */
 
@@ -34,34 +33,6 @@
         height: 7px;
         border-radius: 50%;
         background: var(--sb-green);
-    }
-}
-
-/* ---- Tiles: counts only, the CI saved one in mint at the end ---- */
-.mm-tile {
-    min-width: 108px;
-    cursor: default;
-
-    &:hover {
-        box-shadow: inset 0 0 0 1px var(--sb-line);
-    }
-    &.is-green .im-tile-n {
-        color: var(--sb-green);
-    }
-    &.is-purple .im-tile-n {
-        color: var(--sb-purple);
-    }
-    &.is-muted .im-tile-n {
-        color: var(--sb-text-muted);
-    }
-    &.is-saved {
-        margin-left: auto;
-        background: var(--sb-mint);
-        box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.25);
-
-        .im-tile-n {
-            color: var(--sb-accent);
-        }
     }
 }
 

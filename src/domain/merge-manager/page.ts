@@ -3,11 +3,6 @@
  * from the state main pushes (`MergeManagerState`) and the page's own facts
  * (`MergeManagerPageFacts`).
  *
- * - **Tiles** count the user's own landed PRs by stage: Needs you, Fixing,
- *   Merging (yours as the head), Waiting, Held, Merged today, and the CI runs
- *   the Switchboard lane runner saved this week, an estimate: one run for each
- *   update not pushed to a waiting PR, each unfinished run cancelled behind
- *   the head and each conflict found by a local test rebase instead of a push.
  * - **Lanes** are grouped by repository, each with its kind. The head comes
  *   first, as a card; a Switchboard lane goes on in land order, a queue lane
  *   in the queue's order (then the rest in land order). Only the user's own
@@ -20,16 +15,7 @@
  * Pure, so the tests hold it still. Times are epoch ms, days and weeks local.
  */
 import {stageWords, type StageWords} from './stage-words';
-import type {
-    FixingCause,
-    LandedView,
-    LaneKind,
-    LaneSaving,
-    LaneStage,
-    LaneStageKind,
-    LaneView,
-    MergeManagerState,
-} from './model';
+import type {FixingCause, LandedView, LaneKind, LaneSaving, LaneStage, LaneView, MergeManagerState} from './model';
 
 // ── What main answers for the page ──
 
@@ -76,12 +62,6 @@ export function weekStart(now: number): number {
 
 // ── CI saved ──
 
-/** CI runs saved: one per update not pushed, run cancelled and conflict found locally. An estimate. */
-export function ciRunsSaved(saved: Readonly<Record<LaneSaving, number>> | null | undefined): number {
-    if (!saved) return 0;
-    return Object.values(saved).reduce((sum, n) => sum + (Number.isFinite(n) && n > 0 ? n : 0), 0);
-}
-
 /** "2 updates not pushed, 1 run cancelled, 1 conflict found by a local test rebase"; null when nothing was saved. */
 export function savedText(saved: Readonly<Record<LaneSaving, number>> | null | undefined): string | null {
     if (!saved) return null;
@@ -95,39 +75,6 @@ export function savedText(saved: Readonly<Record<LaneSaving, number>> | null | u
         parts.push(plural(n('conflict-found'), 'conflict', 'conflicts') + ' found by a local test rebase');
     }
     return parts.length > 0 ? parts.join(', ') : null;
-}
-
-// ── Tiles ──
-
-export interface MergeManagerTiles {
-    readonly needsYou: number;
-    readonly fixing: number;
-    /** The user's PRs that are their lane's head. */
-    readonly merging: number;
-    readonly waiting: number;
-    /** Waiting ones a test rebase found a conflict in. */
-    readonly willConflict: number;
-    readonly held: number;
-    readonly mergedToday: number;
-    /** When the last of today's merged; null when none did. */
-    readonly lastMergedAt: number | null;
-}
-
-/** The tiles over the user's own landed PRs; Merged today counts from local midnight (`today`). */
-export function mergeManagerTiles(state: MergeManagerState, today: number): MergeManagerTiles {
-    const prs = state.lanes.flatMap((lane) => lane.pullRequests);
-    const count = (kind: LaneStageKind): number => prs.filter((pr) => pr.stage.kind === kind).length;
-    const merged = mergedToday(state, today);
-    return {
-        needsYou: count('needsYou'),
-        fixing: count('fixing'),
-        merging: count('head'),
-        waiting: count('waiting'),
-        willConflict: prs.filter((pr) => pr.stage.kind === 'waiting' && pr.stage.willConflict).length,
-        held: count('held'),
-        mergedToday: merged.length,
-        lastMergedAt: merged.length > 0 ? stageAt(merged[0].stage) : null,
-    };
 }
 
 /** The user's PRs that merged since `today` (local midnight), newest first. */

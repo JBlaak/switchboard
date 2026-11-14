@@ -1,6 +1,6 @@
 /**
  * The Issue manager page's rules (#415, for #409): how a row shows its
- * labels and why it is unread, what the tiles count, the comment Claude
+ * labels and why it is unread, the comment Claude
  * polishes from your notes and the line it always ends with, and where a
  * started issue stands from the PRs that close it.
  */
@@ -58,31 +58,7 @@ export function issueChip(item: InboxItem): IssueChip {
     return item.facts.comments > item.seenComments ? 'comments' : 'changed';
 }
 
-/** The tiles over the inbox: what is unread, why, and what is being worked on. */
-export interface IssueTiles {
-    readonly unread: number;
-    readonly new: number;
-    readonly comments: number;
-    readonly inProgress: number;
-}
-
-export function issueTiles(items: readonly InboxItem[]): IssueTiles {
-    let unread = 0;
-    let fresh = 0;
-    let comments = 0;
-    let inProgress = 0;
-    for (const item of items) {
-        if (item.state.kind === 'inProgress') inProgress++;
-        const chip = issueChip(item);
-        if (!chip) continue;
-        unread++;
-        if (chip === 'new') fresh++;
-        if (chip === 'comments') comments++;
-    }
-    return {unread, new: fresh, comments, inProgress};
-}
-
-/** A tile picked as the inbox's filter. */
+/** A filter picked as the inbox's filter. */
 export type IssueFilter = 'unread' | 'new' | 'comments';
 
 export function matchesFilter(item: InboxItem, filter: IssueFilter | null): boolean {

@@ -1,13 +1,13 @@
 /**
  * The Bug manager page (#414, for #409), renderer side: the Bug manager's
- * items as main last answered them, the tab and tile filter, the cursor, and
+ * items as main last answered them, the tab and filter, the cursor, and
  * what the detail pane and the rows' sparklines read from Bugsnag.
  *
  * **Tabs.** Inbox (unread and read), In progress, Done, Snoozed, Backlog,
  * each with its count. Only Needs you and CI failing put a dot on In progress.
  *
- * **Tiles.** Over the inbox: Unread, Trending, Regressed and New filter it;
- * In progress opens its tab. The same tile again shows the whole inbox.
+ * **Filters.** Over the inbox: Unread, Trending, Regressed and New. The same
+ * filter again shows the whole inbox.
  *
  * **Groups.** The rows are grouped by the local project their Bugsnag project
  * is linked to ("from Connect API + Connect Web"), and the projects linked to
@@ -139,32 +139,6 @@ export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPa
 /** Whether a Fix in progress wants you (Needs you, CI failing): the In progress tab's dot. */
 export function inProgressWantsYou(items: readonly InboxItem[]): boolean {
     return items.some((item) => item.state.kind === 'inProgress' && wantsYou(item.state.stage));
-}
-
-export interface BugTiles {
-    readonly unread: number;
-    readonly trending: number;
-    readonly regressed: number;
-    readonly new: number;
-    readonly inProgress: number;
-}
-
-/** The summary tiles: the inbox's unread, trending, regressed and new bugs, and how many are in progress. */
-export function bugTiles(items: readonly InboxItem[]): BugTiles {
-    let unread = 0,
-        trending = 0,
-        regressed = 0,
-        fresh = 0,
-        inProgress = 0;
-    for (const item of items) {
-        if (item.state.kind === 'inProgress') inProgress++;
-        if (tabOf(item.state) !== 'inbox') continue;
-        if (item.state.kind === 'unread') unread++;
-        if (item.signals?.trending) trending++;
-        if (item.signals?.regressed) regressed++;
-        if (item.signals?.new) fresh++;
-    }
-    return {unread, trending, regressed, new: fresh, inProgress};
 }
 
 function passes(item: InboxItem, filter: BugFilter): boolean {
