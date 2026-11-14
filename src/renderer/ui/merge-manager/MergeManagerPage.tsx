@@ -595,7 +595,7 @@ function HeadBody({
                 <Step tone={tone(1)}>
                     <b>{steps[1]?.label ?? 'Checks'}</b>
                 </Step>
-                <Step tone={tone(2)}>Merge · the session archives with the rocket</Step>
+                <Step tone={tone(2)}>Merge · the session archives with confetti</Step>
             </Box>
             {checks.length > 0 && (
                 <Box label={`Required checks · ${passed} of ${checks.length} passed`}>

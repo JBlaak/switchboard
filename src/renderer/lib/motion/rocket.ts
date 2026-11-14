@@ -1,6 +1,6 @@
 /**
- * A small rocket with a smoke trail (#440): what archiving a landed session
- * launches instead of confetti, from the same spot (the row's centre).
+ * A small rocket with a smoke trail (#440): what pressing Land it launches,
+ * from the middle of the button, once the PR is landed.
  *
  * It pops up a little, then climbs away, leaning right as it speeds up, and
  * leaves puffs of smoke that swell and fade along its path. Plain DOM and the

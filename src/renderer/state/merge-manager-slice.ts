@@ -1,8 +1,7 @@
 /**
  * The Merge manager (#434), renderer side: every lane with a landed PR and
  * how many PRs need you, as main pushed them last (`mergeManagerChanged`),
- * for Land it, the Merge manager's page and its figure (#436, #439, #440),
- * and the rocket an archived landed session leaves with (#440).
+ * for Land it, the Merge manager's page and its figure (#436, #439, #440).
  *
  * Land it (#436) keeps three more things here:
  *
@@ -20,7 +19,6 @@
  * The events are declared here rather than in `events.ts`, like the archive
  * undo's, so the vocabulary stays in one file.
  */
-import {isSamePullRequest, type SessionPullRequestRef} from '../../domain/merge-manager/archive-on-merge';
 import {EMPTY_MERGE_MANAGER_STATE, landedKey} from '../../domain/merge-manager/model';
 import {landedToastText} from '../../domain/merge-manager/land-it';
 import {findLanded} from '../../domain/merge-manager/stage-words';
@@ -214,19 +212,4 @@ export function landBusy(state: MergeManagerSliceState, repository: string, numb
 export function rekeyMergeManager(state: MergeManagerSliceState, oldId: string, newId: string): MergeManagerSliceState {
     const sessionPullRequests = movedEntry(state.sessionPullRequests, oldId, newId);
     return sessionPullRequests === state.sessionPullRequests ? state : {...state, sessionPullRequests};
-}
-
-/**
- * Was any of these sessions' PRs landed (#440)? Archiving one launches the
- * rocket instead of confetti. Merged PRs stay in the lanes a while, so a
- * session archived on its PR's merge still counts.
- */
-export function isLandedSession(
-    state: MergeManagerSliceState,
-    sessions: readonly {readonly pullRequests?: readonly SessionPullRequestRef[]}[],
-): boolean {
-    const landed = state.state.lanes.flatMap((lane) => lane.pullRequests);
-    return sessions.some((session) =>
-        (session.pullRequests ?? []).some((pr) => landed.some((candidate) => isSamePullRequest(pr, candidate))),
-    );
 }
