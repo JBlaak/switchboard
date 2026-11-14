@@ -175,6 +175,66 @@ export interface InboxItem {
     readonly work?: InboxWork | null;
     /** A bug's Fix as the Bug manager page follows it (#414); absent before any. Kept after the work ends. */
     readonly fix?: BugFix | null;
+    /** A bug's latest quick triage (T): the errand while it runs, then its verdict. Absent before any. */
+    readonly triage?: BugTriage | null;
+}
+
+// ── Quick triage ──
+
+/** What a triage errand suggests doing with the bug. It only picks the page's primary button. */
+export type TriageSuggestion = 'fix' | 'snooze' | 'backlog' | 'needsYou';
+
+export type TriageConfidence = 'high' | 'medium' | 'low';
+
+/** What a triage errand found, as its `finish_triage` call said it. */
+export interface BugTriageVerdict {
+    /** What happened, in a sentence or two. */
+    readonly happened: string;
+    /** Why it happened. */
+    readonly why: string;
+    /** The likely place in the code, `path:line`, when it found one. */
+    readonly where: string | null;
+    /** Who or what it affects, and how badly. */
+    readonly impact: string;
+    readonly suggestion: TriageSuggestion;
+    /** Why that suggestion, in a few words: the row's one-line verdict. */
+    readonly summary: string;
+    readonly confidence: TriageConfidence;
+    /** Epoch ms. */
+    readonly at: number;
+}
+
+/**
+ * A bug's quick triage (T): a read-only errand session in a worktree of the
+ * linked project that finds out what happened and reports with
+ * `finish_triage`. Only the latest is kept; Triage again replaces it.
+ */
+export interface BugTriage {
+    /** The errand's session id, as launched. */
+    readonly sessionId: string;
+    /** The id the session goes by now (a fork or plan-accept re-keys it). */
+    readonly currentId: string;
+    /** The worktree it runs in. */
+    readonly worktree: string;
+    /** Epoch ms. */
+    readonly startedAt: number;
+    /** Its verdict, once it finished. */
+    readonly verdict: BugTriageVerdict | null;
+    /** When it stopped without a verdict (a turn ended without `finish_triage`, or its session ended). */
+    readonly stoppedAt: number | null;
+}
+
+/** A triage errand still running or stopped without a verdict, as the Errands shelf shows it. */
+export interface TriageErrandView {
+    readonly sessionId: string;
+    /** The bug's inbox key. */
+    readonly key: string;
+    /** The bug's title: error class and message, shortened by the shelf. */
+    readonly title: string;
+    /** `owner/repo` of the linked project, or its folder name when it has no GitHub remote. */
+    readonly repository: string;
+    /** Stopped without a verdict: only you can move it on. */
+    readonly needsYou: boolean;
 }
 
 /** What a Fix or Start session works on: its branch, the session, and the PR it opened. */
@@ -228,10 +288,13 @@ export interface InboxSummary {
     readonly bug: ManagerCounts;
     readonly issue: ManagerCounts;
     readonly configured: ConfiguredManagers;
+    /** The Bug manager's triage errands still running or stuck, for the Errands shelf. */
+    readonly triaging: readonly TriageErrandView[];
 }
 
 export const EMPTY_INBOX_SUMMARY: InboxSummary = {
     bug: {unread: 0, urgent: 0},
     issue: {unread: 0, urgent: 0},
     configured: {bug: false, issue: false},
+    triaging: [],
 };

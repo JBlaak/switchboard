@@ -210,6 +210,7 @@ function summary(bug: [number, number], issue: number): InboxSummary {
         bug: {unread: bug[0], urgent: bug[1]},
         issue: {unread: issue, urgent: 0},
         configured: {bug: true, issue: true},
+        triaging: [],
     };
 }
 

@@ -273,5 +273,5 @@ export function managerCounts(items: readonly InboxItem[], manager: InboxManager
 }
 
 export function inboxSummary(items: readonly InboxItem[], configured: ConfiguredManagers): InboxSummary {
-    return {bug: managerCounts(items, 'bug'), issue: managerCounts(items, 'issue'), configured};
+    return {bug: managerCounts(items, 'bug'), issue: managerCounts(items, 'issue'), configured, triaging: []};
 }

@@ -12,6 +12,7 @@ const SUMMARY: InboxSummary = {
     bug: {unread: 3, urgent: 1},
     issue: {unread: 2, urgent: 0},
     configured: {bug: true, issue: true},
+    triaging: [],
 };
 
 /** The state after main pushed `summary`. */
