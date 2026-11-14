@@ -35,7 +35,7 @@ import {VmSchedulesService} from '../application/services/vm-schedules-service';
 import {VmRegistryService} from '../application/services/vm-registry-service';
 import type {VmRegistry} from '../application/services/vm-registry';
 import {DroppedFilesService} from '../application/services/dropped-files-service';
-import {isVmFolder, vmHostPath} from '../domain/agent/vm-paths';
+import {isVmFolder, splitVmPath, vmHostPath} from '../domain/agent/vm-paths';
 import type {VmSchedules} from '../application/services/vm-schedules';
 import type {DroppedFiles} from '../application/services/dropped-files';
 import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
@@ -72,6 +72,7 @@ import {WorkPageRouter} from '../application/services/work-page-router';
 import {PrWatchService, type WatchedSession} from '../application/services/pr-watch-service';
 import {SettingsService} from '../application/services/settings-service';
 import {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
+import {VmWorktreeProjectSweep} from '../application/services/vm-worktree-project-sweep';
 import {UpdateService} from '../application/services/update-service';
 import {WeatherService} from '../application/services/weather-service';
 import {InboxSettingsService} from '../application/services/inbox-settings-service';
@@ -1116,7 +1117,30 @@ export function buildContainer(): Container {
             return paths;
         },
         log,
+        // A VM worktree's project record goes with it, or it stays listed with no sessions.
+        removed: (worktree) => {
+            const vm = splitVmPath(worktree);
+            if (!vm) return;
+            const gone = settings.forgetRemoteProjectsIn(worktree, agents.connection(vm.host).home);
+            if (gone.length > 0) renderer.projectsChanged();
+        },
     });
+    // Worktree projects whose worktree went before the above did, swept on every connect.
+    const worktreeProjectSweep = new VmWorktreeProjectSweep({
+        settings,
+        git: workspace,
+        archived: (sessionId) => !!repository.getAllMeta().get(sessionId)?.archived,
+        renderer,
+        log,
+    });
+    agents.onConnected(
+        (connection) =>
+            void worktreeProjectSweep.connected({
+                user: connection.host.user,
+                host: connection.host.host,
+                port: Number(connection.host.port) || 22,
+            }),
+    );
 
     const inboxSettings = new InboxSettingsService({
         settings,

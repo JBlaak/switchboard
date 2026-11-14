@@ -12,7 +12,8 @@
  * that refuses is logged, and the archive stands either way. Sessions on a
  * remote without an agent are left alone: their worktrees are on a machine
  * git cannot reach. A VM session's are cleaned on the VM, through the git
- * that its VM-named paths route there (#276 stage 4).
+ * that its VM-named paths route there (#276 stage 4), and the project record
+ * the VM worktree's session left is dropped with it, through `removed`.
  */
 import {isRemoteProjectPath, parseRemoteProjectPath} from '../../domain/project/remote-target';
 import {worktreeVerdicts} from '../../domain/session-work/worktree-cleanup';
@@ -39,6 +40,13 @@ export interface WorktreeCleanupDeps {
      * as before #276 stage 4.
      */
     agentlessRemote?: (path: string) => boolean;
+    /**
+     * A worktree was removed: drop what lists it. A VM worktree's folder has a
+     * project record of its own (made when its session started), which would
+     * otherwise stay listed with no sessions once the folder is gone. A local
+     * worktree's row goes with its sessions, so nothing is needed for it.
+     */
+    removed?: (worktree: string) => void;
 }
 
 export class WorktreeCleanupService {
@@ -86,6 +94,7 @@ export class WorktreeCleanupService {
                     continue;
                 }
                 const removed = await this.deps.git.removeWorktree(repository, verdict.path);
+                if (removed.ok) this.deps.removed?.(verdict.path);
                 this.deps.log.info(
                     `[worktree-cleanup] ${sessionId}: ${
                         removed.ok ? `removed ${verdict.path}` : `could not remove ${verdict.path}: ${removed.reason}`

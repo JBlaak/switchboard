@@ -307,7 +307,7 @@ test('a session on an issue may start in a VM project, not in an agentless remot
 
 // ── Worktree cleanup ──
 
-function cleanup(projectPath: string, calls: string[], otherPaths: string[] = []) {
+function cleanup(projectPath: string, calls: string[], otherPaths: string[] = [], removed: string[] = []) {
     const git = vmGit(calls);
     return new WorktreeCleanupService({
         enabled: () => true,
@@ -348,6 +348,7 @@ function cleanup(projectPath: string, calls: string[], otherPaths: string[] = []
         otherSessionPaths: () => otherPaths,
         log: silent,
         agentlessRemote: agentless,
+        removed: (worktree) => removed.push(worktree),
     });
 }
 
@@ -363,6 +364,17 @@ test('archiving a VM session removes its worktree on the VM; an agentless remote
     /* Then */
     assert.ok(vmCalls.includes('remove ' + VM_WORKTREE));
     assert.deepEqual(boxCalls, []);
+});
+
+test('a removed VM worktree is reported, so its project record can go with it', async () => {
+    /* Given */
+    const removed: string[] = [];
+
+    /* When */
+    await cleanup(VM_PROJECT, [], [], removed).afterArchive('s1');
+
+    /* Then */
+    assert.deepEqual(removed, [VM_WORKTREE]);
 });
 
 test('a VM worktree another session works in, under its other name, is kept', async () => {
