@@ -3,7 +3,8 @@
  * next or previous issue, and on the selected one C focuses your notes, M
  * polishes them into a comment to preview, ⇧M polishes and posts at once,
  * ⏎ starts and claims it (or, once started, opens its session), S snoozes,
- * B puts it in the backlog and O opens it on GitHub.
+ * B puts it in the backlog, O opens it on GitHub and F folds the list away
+ * to read it alone (or brings the list back).
  *
  * Only keys without ⌘, ⌃ or ⌥ reach this, never one typed into a field.
  * Pure, so it is tested in node; the page carries the answer out.
@@ -13,7 +14,8 @@ import type {InboxItem} from '../../../domain/inbox/model';
 export type IssueKeyAction =
     | {readonly kind: 'step'; readonly step: 1 | -1}
     | {
-          readonly kind: 'notes' | 'comment' | 'postNow' | 'start' | 'openSession' | 'snooze' | 'backlog' | 'github';
+          readonly kind:
+              'notes' | 'comment' | 'postNow' | 'start' | 'openSession' | 'snooze' | 'backlog' | 'github' | 'focus';
           readonly item: InboxItem;
       };
 
@@ -44,6 +46,8 @@ export function issueKeyAction(key: string, selected: InboxItem | null): IssueKe
             return inInbox ? {kind: 'backlog', item: selected} : null;
         case 'o':
             return {kind: 'github', item: selected};
+        case 'f':
+            return {kind: 'focus', item: selected};
         default:
             return null;
     }

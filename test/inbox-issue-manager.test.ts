@@ -2,8 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    chipLabel,
     issueChip,
     issueWorkStage,
+    newSinceAt,
     polishArgs,
     polishFooter,
     readPolishRun,
@@ -150,6 +152,28 @@ test('an issue never seen is new; seen and commented on since, it has new commen
     assert.equal(issueChip(fresh!), 'new');
     assert.equal(issueChip(read), null);
     assert.equal(issueChip(woken), 'comments');
+});
+
+test('a chip says how many comments came since you looked', () => {
+    /* Given */
+    const [fresh, seen] = arrived(issue(1), issue(2, {comments: 2}));
+    const context = {now: NOW, complete: true, watchingSince: NOW, thresholds: THRESHOLDS, viewer: ME};
+
+    /* When */
+    const one = syncSource([markRead(seen!)], [issue(2, {comments: 3, lastCommentBy: 'colleague'})], context).items[0]!;
+    const two = syncSource([markRead(seen!)], [issue(2, {comments: 4, lastCommentBy: 'colleague'})], context).items[0]!;
+
+    /* Then */
+    assert.equal(chipLabel('new', fresh!), 'New');
+    assert.equal(chipLabel('comments', one), '1 new comment');
+    assert.equal(chipLabel('comments', two), '2 new comments');
+});
+
+test('"new since you looked" goes before the first new comment read, and nowhere when it was not read', () => {
+    assert.equal(newSinceAt(5, 2), 3);
+    assert.equal(newSinceAt(5, 5), 0);
+    assert.equal(newSinceAt(5, 0), null);
+    assert.equal(newSinceAt(3, 4), null);
 });
 
 // ── Where a started issue stands ──

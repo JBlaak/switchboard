@@ -131,3 +131,38 @@ test('a row offers Backlog while it is in the inbox or snoozed, not once it is i
     /* Then */
     assert.deepEqual(offered, [true, true, true, false, false]);
 });
+
+test('opening an issue with new comments keeps how many were new, though opening marks them seen', () => {
+    /* Given */
+    const context = {now: NOW, complete: true, watchingSince: NOW, thresholds: THRESHOLDS, viewer: ME};
+    const seen = markRead(syncSource([], [issue(7, {comments: 1})], context).items[0]!);
+    const woken = syncSource([seen], [issue(7, {comments: 3, lastCommentBy: 'colleague'})], context).items[0]!;
+    const loaded = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerItemsLoaded', items: [woken]});
+
+    /* When */
+    const opened = issueManagerReducer(loaded, {type: 'issueManagerSelected', key: woken.key});
+    const read = issueManagerReducer(opened, {type: 'issueManagerItemChanged', item: markRead(woken)});
+
+    /* Then */
+    assert.equal(read.fresh[woken.key], 2);
+});
+
+test('F folds the list away only while an issue is open, and closing the issue brings it back', () => {
+    /* Given */
+    const loaded = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerItemsLoaded', items: items()});
+    const key = loaded.items![0]!.key;
+
+    /* When */
+    const nothingOpen = issueManagerReducer(loaded, {type: 'issueManagerFocusToggled'});
+    const focused = issueManagerReducer(issueManagerReducer(loaded, {type: 'issueManagerSelected', key}), {
+        type: 'issueManagerFocusToggled',
+    });
+    const closed = issueManagerReducer(focused, {type: 'issueManagerSelected', key: null});
+
+    /* Then */
+    assert.equal(nothingOpen.focus, false);
+    assert.equal(focused.focus, true);
+    assert.equal(closed.focus, false);
+    assert.deepEqual(issueKeyAction('f', loaded.items![0]!), {kind: 'focus', item: loaded.items![0]!});
+    assert.equal(issueKeyAction('f', null), null);
+});

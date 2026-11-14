@@ -1,9 +1,10 @@
 /**
  * The Issue manager page (#415): what the main area shows while its route is
  * `issueManager`. The loose issues of the repositories with Watch issues on,
- * unassigned or yours: tabs (Inbox, In progress, Done, Snoozed, Backlog),
- * filters over the inbox (Unread, New, New comments), the list grouped by repository, and the selected issue's
- * detail beside it.
+ * unassigned or yours: tabs (Inbox, In progress, Done, Snoozed, Backlog)
+ * with the inbox's filters beside them (Unread, New, New comments), the
+ * list grouped by repository, and the selected issue. While one is open the
+ * list folds into a rail of titles beside it, and F folds the rail away too.
  *
  * Its keys, while it has the focus and never in a field, are `page-keys`;
  * Esc puts away what is open (a menu, a question, the issue's detail), then
@@ -18,7 +19,7 @@ import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
 import {selectedItem, visibleGroups, type IssueManagerState} from '../../state/issue-manager-slice';
 import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tabs';
-import {issueChip, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
+import {chipLabel, issueChip, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
 import type {InboxItem} from '../../../domain/inbox/model';
 import {IssueDetail, StagePill} from './IssueDetail';
 import {ManagerFigure} from '../bug-manager/ManagerFigure';
@@ -38,6 +39,7 @@ import {
     selectIssue,
     startIssue,
     stepSelection,
+    toggleFocus,
 } from './actions';
 
 export function IssueManagerPage(): JSX.Element | null {
@@ -125,6 +127,9 @@ function IssueManagerView(): JSX.Element {
             case 'github':
                 openOnGitHub(action.item);
                 break;
+            case 'focus':
+                toggleFocus();
+                break;
         }
     };
 
@@ -170,31 +175,32 @@ function IssueManagerView(): JSX.Element {
                 </div>
             </header>
 
-            <nav className="tk-tabs" role="tablist" aria-label="Issues">
-                {INBOX_TABS.map((tab) => (
-                    <button
-                        type="button"
-                        key={tab}
-                        role="tab"
-                        aria-selected={page.tab === tab}
-                        className={'tk-tab' + (page.tab === tab ? ' is-on' : '')}
-                        onClick={() => {
-                            chooseTab(tab);
-                            root.current?.focus({preventScroll: true});
-                        }}>
-                        {INBOX_TAB_LABELS[tab]}
-                        {counts[tab] > 0 && <span className="im-tab-count">{counts[tab]}</span>}
-                        {tab === 'inProgress' && inProgressNeedsYou && (
-                            <span className="im-tab-dot" aria-label="A landed PR needs you" />
-                        )}
-                    </button>
-                ))}
-            </nav>
-
-            <div className="im-filters" role="group" aria-label="Filters">
-                <Filter filter="unread" page={page} label="Unread" />
-                <Filter filter="new" page={page} label="New" tone="cool" />
-                <Filter filter="comments" page={page} label="New comments" tone="hot" />
+            <div className="im-bar">
+                <nav className="tk-tabs im-tabs" role="tablist" aria-label="Issues">
+                    {INBOX_TABS.map((tab) => (
+                        <button
+                            type="button"
+                            key={tab}
+                            role="tab"
+                            aria-selected={page.tab === tab}
+                            className={'tk-tab' + (page.tab === tab ? ' is-on' : '')}
+                            onClick={() => {
+                                chooseTab(tab);
+                                root.current?.focus({preventScroll: true});
+                            }}>
+                            {INBOX_TAB_LABELS[tab]}
+                            {counts[tab] > 0 && <span className="im-tab-count">{counts[tab]}</span>}
+                            {tab === 'inProgress' && inProgressNeedsYou && (
+                                <span className="im-tab-dot" aria-label="A landed PR needs you" />
+                            )}
+                        </button>
+                    ))}
+                </nav>
+                <div className="im-filters" role="group" aria-label="Filters">
+                    <Filter filter="unread" page={page} label="Unread" />
+                    <Filter filter="new" page={page} label="New" tone="cool" />
+                    <Filter filter="comments" page={page} label="New comments" tone="hot" />
+                </div>
             </div>
 
             {page.notice && (
@@ -203,12 +209,15 @@ function IssueManagerView(): JSX.Element {
                 </div>
             )}
 
-            <div className={'im-body' + (selected ? ' has-detail' : '')}>
-                <div className="im-list" role="listbox" aria-label="Issues">
+            <div className={'im-body' + (selected ? ' has-detail' : '') + (selected && page.focus ? ' is-focus' : '')}>
+                <div className="im-list" role="listbox" aria-label="Issues" hidden={!!selected && page.focus}>
                     <EmptyLine page={page} count={groups.length} />
                     {groups.map((group) => (
                         <div key={group.repository} role="group" aria-label={group.repository}>
-                            <div className="im-group">{group.repository}</div>
+                            <div className="im-group">
+                                <span>{group.repository}</span>
+                                <GroupCounts items={group.items} />
+                            </div>
                             {group.items.map((item) => (
                                 <IssueRow
                                     key={item.key}
@@ -252,6 +261,11 @@ function IssueManagerView(): JSX.Element {
                 <span>
                     <kbd className="sw-kbd">O</kbd> open on GitHub
                 </span>
+                {selected && (
+                    <span>
+                        <kbd className="sw-kbd">F</kbd> {page.focus ? 'show the list' : 'read it alone'}
+                    </span>
+                )}
             </footer>
         </div>
     );
@@ -280,7 +294,16 @@ function Filter({
     );
 }
 
-const CHIP_LABELS = {new: 'New', comments: 'Comment', changed: 'Changed'} as const;
+/** A group's line: how many it lists, and how many of them are unread. */
+function GroupCounts({items}: {items: readonly InboxItem[]}): JSX.Element {
+    const unread = items.filter((item) => issueChip(item) !== null).length;
+    return (
+        <span className="im-group-counts">
+            {items.length}
+            {unread > 0 ? ` · ${unread} unread` : ''}
+        </span>
+    );
+}
 
 function IssueRow({
     item,
@@ -303,29 +326,33 @@ function IssueRow({
         <div
             role="option"
             aria-selected={selected}
+            aria-label={`#${facts.number} ${facts.title}`}
             data-issue-key={item.key}
             className={'im-row' + (selected ? ' is-selected' : '') + (chip ? '' : ' is-read')}
             onClick={onClick}>
             <span className="im-dot" aria-label={chip ? 'Unread' : undefined} />
-            <span className="im-chip-slot">
-                {chip && <span className={'im-chip is-' + chip}>{CHIP_LABELS[chip]}</span>}
-                {item.state.kind === 'inProgress' && <StagePill item={item} stage={item.state.stage} />}
-                {item.state.kind === 'done' && <span className="im-chip is-done">Done</span>}
-            </span>
             <span className="im-row-text">
-                <span className="im-row-title">
-                    <span className="im-row-name">
-                        #{facts.number} {facts.title}
-                    </span>
-                    {shown.map((label) => (
-                        <span key={label.name} className="im-label">
-                            {label.name}
+                {(chip ||
+                    item.state.kind === 'inProgress' ||
+                    item.state.kind === 'done' ||
+                    facts.labels.length > 0) && (
+                    <span className="im-row-tags">
+                        {chip && <span className={'im-chip is-' + chip}>{chipLabel(chip, item)}</span>}
+                        {item.state.kind === 'inProgress' && <StagePill item={item} stage={item.state.stage} />}
+                        {item.state.kind === 'done' && <span className="im-chip is-done">Done</span>}
+                        <span className="im-row-labels">
+                            {shown.map((label) => (
+                                <span key={label.name} className="im-label">
+                                    {label.name}
+                                </span>
+                            ))}
+                            {more > 0 && <span className="im-label">+{more}</span>}
                         </span>
-                    ))}
-                    {more > 0 && <span className="im-label">+{more}</span>}
-                </span>
+                    </span>
+                )}
+                <span className="im-row-title">{facts.title}</span>
                 <span className="im-row-meta">
-                    {facts.author ?? 'ghost'} · {formatDate(new Date(facts.createdAt), now)} ·{' '}
+                    #{facts.number} · {facts.author ?? 'ghost'} · {formatDate(new Date(facts.createdAt), now)} ·{' '}
                     {mine ? 'assigned to you' : 'unassigned'}
                     {item.state.kind === 'done' && item.work?.pullRequest
                         ? ` · Closed by #${item.work.pullRequest}`
@@ -350,7 +377,10 @@ function IssueRow({
                     'Starting…'
                 ) : (
                     <>
-                        <b>{facts.comments}</b> {facts.comments === 1 ? 'comment' : 'comments'}
+                        <b>{formatDate(new Date(facts.updatedAt), now)}</b>
+                        <span>
+                            {facts.comments} {facts.comments === 1 ? 'comment' : 'comments'}
+                        </span>
                     </>
                 )}
             </span>
