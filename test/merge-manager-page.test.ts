@@ -22,7 +22,7 @@ import {
 } from '../src/domain/merge-manager/page';
 import {landedFacts} from '../src/domain/merge-manager/stages';
 import {landedKey, type LandedPullRequest, type LaneStage} from '../src/domain/merge-manager/model';
-import {MergeManagerPageService} from '../src/application/services/merge-manager-page-service';
+import {MergeManagerPageService, RUN_TIMES_FRESH_MS} from '../src/application/services/merge-manager-page-service';
 import {mergeKeyAction} from '../src/renderer/ui/merge-manager/page-keys';
 import {initialMergeManagerState, mergeManagerReducer} from '../src/renderer/state/merge-manager-slice';
 import type {FixErrand} from '../src/domain/merge-manager/errands';
@@ -290,6 +290,7 @@ test("the page's facts: this week's savings in all and by repository, the errand
             byRepository: () => ({[REPO]: {'update-not-pushed': 3, 'run-cancelled': 1, 'conflict-found': 0}}),
         },
         checkoutOf: async (repository) => (repository === REPO ? '/dev/connect' : null),
+        ciRunDurations: async (repository) => (repository === REPO ? [10 * MIN, 12 * MIN, 11 * MIN] : null),
         clock: {now: () => NOW},
     });
 
@@ -311,6 +312,42 @@ test("the page's facts: this week's savings in all and by repository, the errand
         },
     ]);
     assert.deepEqual(facts.checkouts, {[REPO]: '/dev/connect'});
+    assert.deepEqual(facts.runMs, {[REPO]: 11 * MIN, [QUEUE]: null});
+});
+
+test("a repository's CI run times are read once a quarter of an hour, and a failed read keeps the last good one", async () => {
+    /* Given */
+    let now = NOW;
+    const reads: string[] = [];
+    let answer: number[] | null = [10 * MIN, 11 * MIN, 12 * MIN];
+    const service = new MergeManagerPageService({
+        manager: {state: () => mergeManagerState([], new Map())},
+        errands: {errands: () => []},
+        savings: {
+            since: () => ({'update-not-pushed': 0, 'run-cancelled': 0, 'conflict-found': 0}),
+            byRepository: () => ({}),
+        },
+        checkoutOf: async () => null,
+        ciRunDurations: async (repository) => {
+            reads.push(repository);
+            return answer;
+        },
+        clock: {now: () => now},
+    });
+
+    /* When */
+    const first = await service.runTimes([REPO]);
+    now += 5 * MIN;
+    const kept = await service.runTimes([REPO]);
+    now += RUN_TIMES_FRESH_MS;
+    answer = null;
+    const failed = await service.runTimes([REPO]);
+
+    /* Then */
+    assert.deepEqual(reads, [REPO, REPO]);
+    assert.deepEqual(first, {[REPO]: 11 * MIN});
+    assert.deepEqual(kept, first);
+    assert.deepEqual(failed, first);
 });
 
 // ── The page's part of the slice ──
@@ -347,4 +384,24 @@ test('asking for the page again without a PR keeps the selection, and changes no
 
     /* Then */
     assert.strictEqual(again, opened);
+});
+
+test('the side view is closed as the page opens, opens on a row or a PR asked for, and Esc closes it', () => {
+    /* Given */
+    const key = landedKey(REPO, 3);
+    const opened = mergeManagerReducer(initialMergeManagerState, {type: 'mergeManagerPageRequested'});
+
+    /* When */
+    const chosen = mergeManagerReducer(opened, {type: 'mergeManagerRowSelected', key});
+    const closed = mergeManagerReducer(chosen, {type: 'mergeManagerDetailClosed'});
+    const asked = mergeManagerReducer(closed, {type: 'mergeManagerPageRequested', key});
+    const left = mergeManagerReducer(asked, {type: 'mergeManagerPageClosed'});
+
+    /* Then */
+    assert.equal(opened.page.detailOpen, false);
+    assert.equal(chosen.page.detailOpen, true);
+    assert.equal(closed.page.detailOpen, false);
+    assert.equal(closed.page.selected, key);
+    assert.equal(asked.page.detailOpen, true);
+    assert.equal(left.page.detailOpen, false);
 });

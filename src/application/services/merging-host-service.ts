@@ -95,7 +95,10 @@ export interface MergingHostServiceDeps {
         'state' | 'land' | 'unland' | 'start' | 'pause' | 'focused' | 'adopt' | 'all' | 'onTransitions'
     >;
     errands: Pick<FixErrandService, 'tryAgain' | 'handOver'>;
-    page: {facts(): Promise<MergeManagerPageFacts>};
+    page: {
+        facts(): Promise<MergeManagerPageFacts>;
+        runTimes(repositories: readonly string[]): Promise<Record<string, number | null>>;
+    };
     /** The registered VMs. */
     vms(): VmChoice[];
     /** The link to a VM's agent, by its key; null when it is not registered. */
@@ -217,6 +220,7 @@ export class MergingHostService {
             savedByRepository: byRepository,
             errands: this.remote.errands.map(errandView),
             checkouts: local.checkouts,
+            runMs: await this.deps.page.runTimes(this.remote.state.lanes.map((lane) => lane.repository)),
         };
     }
 

@@ -1,6 +1,7 @@
 /**
  * What the Merge manager's page does (#439): open and close it (⌘⇧L, Esc),
- * read what it shows besides the lanes, move the selection (J/K), and the
+ * read what it shows besides the lanes, move the selection (J/K) and open or
+ * close the selected row's side view, and the
  * selected row's actions: ⏎ opens the PR's session or its fix errand, T
  * Try again with the note typed for it, N Nudge the reviewer it waits on, U
  * Unland, O the PR on GitHub.
@@ -49,16 +50,35 @@ function notice(text: string | null): void {
 
 // ── Going through ──
 
+/** A row chosen, with its side view open. */
 export function selectMergeRow(key: string | null): void {
     dispatch({type: 'mergeManagerRowSelected', key});
 }
 
-/** J/K: the next or previous row, top to bottom across the lanes. */
+/** A click on a row: its side view, or closed again when it was showing it. */
+export function toggleMergeRow(key: string): void {
+    const page = getState().mergeManager.page;
+    if (page.detailOpen && page.selected === key) closeMergeDetail();
+    else selectMergeRow(key);
+}
+
+/** Esc or the ×: the side view closed, the page kept. */
+export function closeMergeDetail(): void {
+    dispatch({type: 'mergeManagerDetailClosed'});
+}
+
+/** J/K: the next or previous row, top to bottom across the lanes; while no side view is open, the selected one's. */
 export function stepMergeRow(step: 1 | -1): void {
     const lanes = pageLanes(getState().mergeManager.state);
     const keys = rowKeys(lanes);
     if (keys.length === 0) return;
-    const at = keys.indexOf(selectedRow(lanes, getState().mergeManager.page.selected)?.key ?? '');
+    const page = getState().mergeManager.page;
+    const current = selectedRow(lanes, page.selected)?.key ?? '';
+    if (!page.detailOpen && current) {
+        selectMergeRow(current);
+        return;
+    }
+    const at = keys.indexOf(current);
     const next = at === -1 ? (step === 1 ? 0 : keys.length - 1) : Math.min(keys.length - 1, Math.max(0, at + step));
     selectMergeRow(keys[next]!);
 }

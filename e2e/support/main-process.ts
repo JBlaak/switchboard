@@ -52,6 +52,7 @@ import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/applica
 import type {SessionBringBackPhase, SessionBringBackPreview} from '../../src/application/services/session-bring-back';
 import type {SessionLink} from '../../src/domain/session/links';
 import type {LandedView, MergeManagerState} from '../../src/domain/merge-manager/model';
+import type {MergeManagerPageFacts} from '../../src/domain/merge-manager/page';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -1663,6 +1664,21 @@ export async function stubLandIt(
             },
             stub,
         },
+    );
+}
+
+/**
+ * What the Merge manager's page asks main for besides the lanes (#439),
+ * standing in for the savings, the errands and `gh`'s CI run times: answers
+ * `facts` from now on.
+ */
+export async function stubMergeManagerPage(app: ElectronApplication, facts: MergeManagerPageFacts): Promise<void> {
+    await app.evaluate(
+        ({ipcMain}, {channel, facts}) => {
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, () => facts);
+        },
+        {channel: INVOKE.mergeManagerPage, facts},
     );
 }
 

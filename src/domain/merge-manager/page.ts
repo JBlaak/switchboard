@@ -42,6 +42,8 @@ export interface MergeManagerPageFacts {
     readonly errands: readonly ErrandView[];
     /** The local checkout of each lane's repository (by lower-case `owner/repo`), where a nudge's session starts. */
     readonly checkouts: Readonly<Record<string, string>>;
+    /** One CI run in each lane's repository (by lower-case `owner/repo`), for the times; null with too few runs. */
+    readonly runMs: Readonly<Record<string, number | null>>;
 }
 
 // ── Days and weeks ──
@@ -61,6 +63,12 @@ export function weekStart(now: number): number {
 }
 
 // ── CI saved ──
+
+/** CI runs saved: one per update not pushed, run cancelled and conflict found locally. An estimate. */
+export function ciRunsSaved(saved: Readonly<Record<LaneSaving, number>> | null | undefined): number {
+    if (!saved) return 0;
+    return Object.values(saved).reduce((sum, n) => sum + (Number.isFinite(n) && n > 0 ? n : 0), 0);
+}
 
 /** "2 updates not pushed, 1 run cancelled, 1 conflict found by a local test rebase"; null when nothing was saved. */
 export function savedText(saved: Readonly<Record<LaneSaving, number>> | null | undefined): string | null {

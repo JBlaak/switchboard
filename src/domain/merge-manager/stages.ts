@@ -228,11 +228,11 @@ function failOut(read: LanePullRequestRead, rules: TrunkRules): 'conflict' | 'ch
 export function landedFacts(read: LanePullRequestRead, rules: TrunkRules): LandedFacts {
     const checks: DecidingCheck[] =
         rules.requiredChecks.length === 0
-            ? read.checks.map(({name, state}) => ({name, state}))
-            : rules.requiredChecks.map((name) => ({
-                  name,
-                  state: read.checks.find((check) => check.name === name)?.state ?? 'missing',
-              }));
+            ? read.checks.map(({name, state, startedAt}) => ({name, state, startedAt}))
+            : rules.requiredChecks.map((name) => {
+                  const check = read.checks.find((candidate) => candidate.name === name);
+                  return {name, state: check?.state ?? 'missing', startedAt: check?.startedAt ?? null};
+              });
     return {approvedBy: read.approvedBy, checks};
 }
 

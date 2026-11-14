@@ -1316,6 +1316,7 @@ export function buildContainer(): Container {
         errands: fixErrands,
         savings: laneSavings,
         checkoutOf,
+        ciRunDurations: (repository) => github.ciRunDurations(repository),
         clock,
     });
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
