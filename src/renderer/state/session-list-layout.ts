@@ -26,6 +26,7 @@ import {cleanDisplayName} from '../../domain/session/title';
 import {TIER_ORDER, TIER_REST, TIER_RUNNING, itemTier, rowSurvivesTruncation} from '../../domain/session/tiers';
 import {formatDate, localDateKey} from '../lib/format';
 import type {Project} from '../../domain/project/project';
+import type {ErrandEntry} from '../../domain/session/errand-shelf';
 import type {SessionRow} from '../../domain/session/session';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 
@@ -93,6 +94,12 @@ export interface LaidEntry {
     readonly tier: number;
 }
 
+/** An errand's session on the Errands shelf. */
+export interface LaidErrand {
+    readonly entry: SessionListRow;
+    readonly errand: ErrandEntry;
+}
+
 /** One entry of the full render order, the thing the next layout anchors against. */
 export interface OrderedEntry {
     readonly id: string;
@@ -103,6 +110,12 @@ export interface OrderedEntry {
 export interface SessionListLayout {
     readonly visible: readonly LaidEntry[];
     readonly older: readonly LaidEntry[];
+    /**
+     * The Errands shelf, docked under the list: every errand's session, the
+     * ones that need you first, then the rest newest started first. Empty
+     * while filtering, when errands show inline among the matches.
+     */
+    readonly errands: readonly LaidErrand[];
     /** A filter or a search is on: no section labels, and nothing folded away. */
     readonly filtering: boolean;
 }
@@ -568,7 +581,7 @@ export function layoutSessionList(
         ? {visible: ordered, older: []}
         : truncateEntries(ordered, byId, options.activeItemId, options);
     return {
-        layout: {visible, older, filtering: options.filtering},
+        layout: {visible, older, errands: [], filtering: options.filtering},
         // The full order, folded rows included: a row coming back from "older"
         // anchors like any other.
         order: ordered.map(({entry, tier}) => ({id: entry.id, tier})),

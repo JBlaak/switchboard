@@ -61,7 +61,7 @@ const laid = (entry: Entry): LaidEntry => ({entry, tier: TIER_REST});
 function list(visible: Entry[], older: Entry[] = [], extra: Partial<SessionListState> = {}): SessionListState {
     return {
         ...initialSessionListState,
-        layout: {visible: visible.map(laid), older: older.map(laid), filtering: false},
+        layout: {visible: visible.map(laid), older: older.map(laid), errands: [], filtering: false},
         ...extra,
     };
 }
@@ -359,6 +359,7 @@ function pinnedList(extra: Partial<SessionListState> = {}, filtering = false): S
                 {entry: row('a'), tier: TIER_REST},
             ],
             older: [],
+            errands: [],
             filtering,
         },
         ...extra,
