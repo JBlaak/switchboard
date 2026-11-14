@@ -2,7 +2,9 @@
  * A row's compact meta line: what it is asking, the project, the time and
  * message count, the agents badge, the PR chips and the merge queue's pill
  * (#315). An errand's row says so first ("errand · "), since its name is
- * the PR it works on rather than anything the user typed.
+ * the PR it works on rather than anything the user typed. A Fix session's
+ * project reads as a bug and the repository it fixes, not its
+ * `fix/bugsnag-…` worktree (#414).
  *
  * The whole line is one button that opens the session's Session work page
  * (D2), unless the page cannot open for it — a session on an agentless
@@ -14,6 +16,8 @@
 import {useEffect} from 'react';
 import {pullRequestChips, pullRequestLabel} from '../../../domain/session/pull-requests';
 import {projectLabel} from '../../features/sessions/project-label';
+import {fixRepository} from '../../../domain/inbox/fix';
+import {BugGlyph} from './BugGlyph';
 import {agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel} from '../../state/session-list-layout';
 import {useStore} from '../use-store';
 import {isVmProjectIn} from '../../state/agent-host-slice';
@@ -98,6 +102,17 @@ export function useCanOpenWork(sessionId: string, off: boolean): boolean | undef
  * ⌘-click opens GitHub.
  */
 function ProjectLabel({path}: {path: string | null | undefined}): JSX.Element | null {
+    const fixing = fixRepository(path);
+    if (fixing) {
+        return (
+            <ProjectLink path={fixing} className="session-project is-bug-fix">
+                <span className="session-bug-fix-mark" title="Fixing a Bugsnag error">
+                    <BugGlyph />
+                </span>
+                {projectLabel(fixing)}
+            </ProjectLink>
+        );
+    }
     const label = projectLabel(path);
     if (!path || !label) return null;
     return (

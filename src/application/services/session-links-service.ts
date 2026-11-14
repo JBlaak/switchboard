@@ -1,6 +1,7 @@
 /**
  * A session's links for the session tray (#340): its PRs, the issues it
- * mentioned, the artifacts it published, the pages it showed and its task, in
+ * mentioned, the artifacts it published, the pages it showed, the Bugsnag
+ * error a Fix session works on and its task, in
  * one answer (`sessionLinks` puts them in order).
  *
  * The tray opens on a hover, so the answer waits on `gh` only once per
@@ -16,7 +17,7 @@
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {byRepository} from '../../domain/session-work/issues';
-import {sessionLinks, type SessionLink, type TaskFacts} from '../../domain/session/links';
+import {sessionLinks, type BugLinkFacts, type SessionLink, type TaskFacts} from '../../domain/session/links';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {IssueRef, IssueStatus, PullRequestStatus} from '../../domain/session-work/model';
 import type {BlaakTasksResult, TaskDetail} from '../../domain/tasks/model';
@@ -58,6 +59,8 @@ export interface SessionLinksServiceDeps {
         sessionTask(sessionId: string): string | null;
         get(taskId: string): Promise<BlaakTasksResult<TaskDetail>>;
     };
+    /** The Bugsnag error a Fix session in this worktree works on, from what is known now; null for any other. */
+    bug?(projectPath: string): BugLinkFacts | null;
     /** Whether a path is on a remote with no Switchboard agent: no git to ask its origin. */
     agentlessRemote?: (path: string) => boolean;
     clock: Clock;
@@ -171,6 +174,7 @@ export class SessionLinksService {
             issueStatuses: entry.github?.issues ?? null,
             artifacts: entry.transcript?.products.artifacts ?? [],
             pages: entry.transcript?.products.pages ?? [],
+            bug: entry.target ? (this.deps.bug?.(entry.target.projectPath) ?? null) : null,
             task: taskId ? {id: taskId, detail: this.tasks.get(taskId)?.detail ?? null} : null,
         });
     }

@@ -223,6 +223,17 @@ test('a PR row says how it is doing, as the sidebar chip does', () => {
     ]);
 });
 
+test("a Bugsnag error's row says bugsnag and its project", () => {
+    /* When */
+    const meta = linkMeta(
+        {kind: 'bug', key: 'bug:u', title: 'ImageSourceNotReadyException', url: 'u', project: 'App', status: null},
+        NOW,
+    );
+
+    /* Then */
+    assert.deepEqual(meta, {dot: 'bug', chip: 'bugsnag', text: 'App'});
+});
+
 test('only the newest page is listed, and it opens only when this window still has it', () => {
     /* Given */
     const links = [page('new', NOW - 120_000), page('old', NOW - 600_000), task];

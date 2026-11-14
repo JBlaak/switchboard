@@ -233,6 +233,32 @@ test('the kinds come PRs, issues, artifacts, pages, task; each newest first', ()
     );
 });
 
+test("a Fix session's Bugsnag error comes after the pages and before the task", () => {
+    /* Given */
+    const input = facts({
+        pages: [{id: 'p1', title: 'One', shownAt: 1}],
+        bug: {title: 'ImageSourceNotReadyException', url: 'https://app.bugsnag.com/m/a/errors/e1', project: 'App'},
+        task: {id: 'task-1', detail: null},
+    });
+
+    /* When */
+    const links = sessionLinks(input);
+
+    /* Then */
+    assert.deepEqual(
+        links.map((link) => link.kind),
+        ['page', 'bug', 'task'],
+    );
+    assert.deepEqual(links[1], {
+        kind: 'bug',
+        key: 'bug:https://app.bugsnag.com/m/a/errors/e1',
+        title: 'ImageSourceNotReadyException',
+        url: 'https://app.bugsnag.com/m/a/errors/e1',
+        project: 'App',
+        status: null,
+    });
+});
+
 test("a PR carries gh's title and state, with its checks folded and the sidebar's dot", () => {
     /* Given */
     const status: PullRequestStatus = {

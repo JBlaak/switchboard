@@ -2,11 +2,12 @@
  * A session's links (#340): what it produced or refers to, for the session
  * tray's Links group (#338).
  *
- * Five sources each know one kind: the transcript's `pr-link` lines (with
+ * Six sources each know one kind: the transcript's `pr-link` lines (with
  * `gh` for how each PR is doing), the issues the conversation mentions, the
- * claude.ai artifacts it published, the pages it showed with `show_page`, and
- * the BlaakTasks task it is linked to. This puts them in one list, PRs first,
- * then issues, artifacts, pages and the task, each kind newest first.
+ * claude.ai artifacts it published, the pages it showed with `show_page`, the
+ * Bugsnag error a Fix session works on, and the BlaakTasks task it is linked
+ * to. This puts them in one list, PRs first, then issues, artifacts, pages,
+ * the bug and the task, each kind newest first.
  *
  * PRs and issues go through the Session work page's own rules
  * (`deriveWorkItems`), so a PR in another repository that `gh` does not know
@@ -25,7 +26,7 @@ import type {ShownPageRef} from './page-tool';
 import type {SessionPullRequest} from './session';
 
 /** The kinds of link, in the order the list gives them. */
-export type SessionLinkKind = 'pr' | 'issue' | 'artifact' | 'page' | 'task';
+export type SessionLinkKind = 'pr' | 'issue' | 'artifact' | 'page' | 'bug' | 'task';
 
 /** How a PR is doing, once `gh` has said. */
 export interface LinkedPrStatus {
@@ -95,6 +96,20 @@ export interface LinkedPage {
     status: null;
 }
 
+/** The Bugsnag error a Fix session (#414) works on. */
+export interface LinkedBug {
+    kind: 'bug';
+    /** `bug:<url>`. */
+    key: string;
+    /** The error's class and message. */
+    title: string;
+    /** The error on the Bugsnag dashboard. */
+    url: string;
+    /** The Bugsnag project's name. */
+    project: string;
+    status: null;
+}
+
 /** The BlaakTasks task the session is linked to. */
 export interface LinkedTask {
     kind: 'task';
@@ -110,7 +125,14 @@ export interface LinkedTask {
     status: TaskStatus | null;
 }
 
-export type SessionLink = LinkedPr | LinkedIssue | LinkedArtifact | LinkedPage | LinkedTask;
+export type SessionLink = LinkedPr | LinkedIssue | LinkedArtifact | LinkedPage | LinkedBug | LinkedTask;
+
+/** What a bug link is made of: the error, where it is on Bugsnag, and its project's name. */
+export interface BugLinkFacts {
+    title: string;
+    url: string;
+    project: string;
+}
 
 /** What a task link is made of: its id, and what BlaakTasks said about it once it has. */
 export interface TaskFacts {
@@ -132,10 +154,12 @@ export interface SessionLinkFacts {
     issueStatuses: ReadonlyMap<string, IssueStatus[] | null> | null;
     artifacts: readonly ArtifactRef[];
     pages: readonly ShownPageRef[];
+    /** The Bugsnag error, for a Fix session whose error's dashboard URL is known; absent otherwise. */
+    bug?: BugLinkFacts | null;
     task: TaskFacts | null;
 }
 
-/** The session's links: PRs, issues, artifacts, pages, then its task; each kind newest first. */
+/** The session's links: PRs, issues, artifacts, pages, its bug, then its task; each kind newest first. */
 export function sessionLinks(facts: SessionLinkFacts): SessionLink[] {
     const {repository} = facts;
     const items = deriveWorkItems({
@@ -189,6 +213,8 @@ export function sessionLinks(facts: SessionLinkFacts): SessionLink[] {
         }))
         .reverse();
 
+    const bug: LinkedBug[] = facts.bug ? [{kind: 'bug', key: 'bug:' + facts.bug.url, ...facts.bug, status: null}] : [];
+
     const task: LinkedTask[] = facts.task
         ? [
               {
@@ -202,7 +228,7 @@ export function sessionLinks(facts: SessionLinkFacts): SessionLink[] {
           ]
         : [];
 
-    return [...prs, ...issues, ...artifacts, ...pages, ...task];
+    return [...prs, ...issues, ...artifacts, ...pages, ...bug, ...task];
 }
 
 function linkedPr(pr: PullRequestStatus): LinkedPr {
