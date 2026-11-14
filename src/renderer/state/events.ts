@@ -205,8 +205,6 @@ export type LocalEvent =
     | {type: 'projectSettingsLoaded'; projectPath: string; current: SettingsRecord; globalSettings: SettingsRecord}
     /** A change on a project's settings view was stored; `current` is the project's blob as written. */
     | {type: 'projectSettingsSaved'; projectPath: string; current: SettingsRecord}
-    /** The project list loaded with this many sessions running. */
-    | {type: 'runningCounted'; running: number}
     /** A done status message has lingered long enough. */
     | {type: 'statusActivityExpired'}
     /** The renderer asked main for a waiting update at launch. */

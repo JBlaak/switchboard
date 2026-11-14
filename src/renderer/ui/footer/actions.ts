@@ -31,11 +31,6 @@ export async function checkForUpdate(): Promise<void> {
     dispatch({type: 'updateOutcomeChecked', outcome});
 }
 
-/** Take the footer's running count, after the project list has loaded. */
-export function countRunning(): void {
-    dispatch({type: 'runningCounted', running: getState().view.activePtyIds.size});
-}
-
 /**
  * Download the update, swap it in and restart.
  *

@@ -20,25 +20,6 @@ const status = (text: string, kind: 'active' | 'done'): RendererEvent => ({type:
 
 // ── Status line ──
 
-test('status: the running count is what the last load counted', () => {
-    /* When */
-    const counted = run(initialRendererState(), {type: 'runningCounted', running: 2});
-
-    /* Then */
-    assert.strictEqual(counted.status.running, 2);
-});
-
-test('status: the same running count again leaves the state as it was', () => {
-    /* Given */
-    const counted = run(initialRendererState(), {type: 'runningCounted', running: 2});
-
-    /* When */
-    const again = run(counted, {type: 'runningCounted', running: 2});
-
-    /* Then */
-    assert.strictEqual(again, counted);
-});
-
 test('status: an active message shows as not done', () => {
     /* When */
     const progress = run(initialRendererState(), status('Indexing…', 'active'));

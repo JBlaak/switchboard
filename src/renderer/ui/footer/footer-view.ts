@@ -140,6 +140,11 @@ export function updateOutcomeView(outcome: UpdateOutcome): {label: string; detai
     };
 }
 
+/** The footer's count of running sessions, or nothing when none are. */
+export function runningLabel(running: number): string {
+    return running > 0 ? `${running} running` : '';
+}
+
 /**
  * What to ask before installing, or null to install straight away: the
  * restart stops every running session, so that is asked first when any are.
