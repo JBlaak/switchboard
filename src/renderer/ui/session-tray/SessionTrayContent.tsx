@@ -3,7 +3,7 @@
  * four tinted groups side by side, from what it is given.
  *
  * - Ask: the saved prompts with their ⌘ keys, and Edit (the Settings editor).
- * - Links: the session's PRs, issues, artifacts, latest page and task.
+ * - Links: the session's PRs, issues, artifacts, latest page, Bugsnag error and task.
  * - Workspace: Editor, Finder, Shell here, Hand off….
  * - Session: context used with its meter, shell · running time · messages,
  *   Copy session id, Archive and Stop.
@@ -185,6 +185,7 @@ function linkUrl(link: SessionLink): string | null {
         case 'pr':
         case 'issue':
         case 'artifact':
+        case 'bug':
             return link.url;
         default:
             return null;

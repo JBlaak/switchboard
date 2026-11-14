@@ -43,6 +43,7 @@ import type {BugFacts, InboxItem, InboxStage, BugFix} from '../../domain/inbox/m
 import type {BranchPullRequest, WorkSession} from '../../domain/inbox/stage';
 import type {FixTag} from '../../domain/inbox/seen-again';
 import type {BugsnagEventDetail, BugsnagProject} from '../../domain/bugsnag/model';
+import type {BugLinkFacts} from '../../domain/session/links';
 import type {BugsnagApi} from '../ports/bugsnag-api';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli} from '../ports/github-cli';
@@ -464,6 +465,33 @@ export class BugFixService {
         };
         this.details.set(key, {at: now, detail});
         return detail;
+    }
+
+    /**
+     * The session tray's link to the error a Fix in this worktree works on,
+     * from what is kept now: the tray never waits on Bugsnag. Until the
+     * Bugsnag project list is kept (it is read for the detail pane and every
+     * Fix), there is no dashboard URL, so no link; the list is read behind
+     * the answer for the next one.
+     */
+    public fixLink(worktree: string): BugLinkFacts | null {
+        const item = this.deps.inbox
+            .list('bug')
+            .find((candidate) => candidate.state.kind === 'inProgress' && candidate.fix?.worktree === worktree);
+        if (!item || item.facts.kind !== 'bug') return null;
+        const facts = item.facts;
+        const kept = this.projects?.list.find((project) => project.id === facts.projectId);
+        if (!kept) {
+            const api = this.deps.bugsnag.api();
+            if (api) void this.project(api, facts.projectId);
+        }
+        const url = bugsnagErrorUrl(kept?.htmlUrl ?? null, facts.errorId);
+        if (!url) return null;
+        return {
+            title: [facts.errorClass, facts.message].filter(Boolean).join(': ') || facts.errorId,
+            url,
+            project: this.projectName(facts.projectId),
+        };
     }
 
     /** A row's sparkline: events per day for the last 7 days, oldest first; empty when unknown. */

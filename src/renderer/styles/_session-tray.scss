@@ -362,6 +362,9 @@ $tray-height: 240px;
     &.is-page {
         background: var(--sb-accent);
     }
+    &.is-bug {
+        background: var(--sb-red);
+    }
     &.is-task {
         background: var(--sb-lav-ink);
     }

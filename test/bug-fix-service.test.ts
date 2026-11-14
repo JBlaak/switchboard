@@ -232,6 +232,45 @@ test('the started Fix session puts the bug in progress, working, on its branch',
     assert.equal(h.item().fix?.sessionId, 'session-1');
 });
 
+test("the session tray's link to the error a Fix works on names it, its project and its Bugsnag URL", async () => {
+    /* Given */
+    const h = harness();
+    await fixing(h);
+    const facts = h.item().facts;
+    assert.equal(facts.kind, 'bug');
+
+    /* When */
+    const link = h.service.fixLink(WORKTREE);
+
+    /* Then */
+    assert.deepEqual(link, {
+        title: [facts.errorClass, facts.message].filter(Boolean).join(': '),
+        url: `https://app.bugsnag.com/movelab/connect-api/errors/${ERROR}`,
+        project: 'Connect API',
+    });
+});
+
+test('no Fix link for another worktree, nor before the Bugsnag project list is kept, which is then read for the next', async () => {
+    /* Given */
+    const h = harness();
+    h.items.set(KEY, {
+        ...h.item(),
+        state: {kind: 'inProgress', stage: 'working'},
+        fix: {worktree: WORKTREE} as InboxItem['fix'],
+    });
+
+    /* When */
+    const before = h.service.fixLink(WORKTREE);
+    const other = h.service.fixLink(`${ROOT}/.claude/worktrees/feat/other`);
+    await new Promise((resolve) => setImmediate(resolve));
+    const after = h.service.fixLink(WORKTREE);
+
+    /* Then */
+    assert.equal(before, null);
+    assert.equal(other, null);
+    assert.equal(after?.url, `https://app.bugsnag.com/movelab/connect-api/errors/${ERROR}`);
+});
+
 // ── Following ──
 
 test("the stage follows the branch's PR through CI, failing checks and the queue", async () => {

@@ -14,6 +14,18 @@ export function fixBranch(errorId: string): string {
     return `fix/bugsnag-${errorId.slice(0, 8)}`;
 }
 
+/** A Fix's worktree: `<repository>/.claude/worktrees/fix/bugsnag-<8 of the error id>`. */
+const FIX_WORKTREE = /^(.+?)\/\.claude\/worktrees\/fix\/bugsnag-[^/]+\/?$/;
+
+/**
+ * The repository a Fix session works in, read off its worktree's path; null
+ * for any other path. A Fix's branch has a slash in it, so the generic
+ * worktree label would read only `fix/bugsnag-…` and never name the project.
+ */
+export function fixRepository(projectPath: string | null | undefined): string | null {
+    return projectPath?.match(FIX_WORKTREE)?.[1] ?? null;
+}
+
 /** The trailer every Fix commit carries. */
 export function bugsnagTrailer(facts: Pick<BugFacts, 'projectId' | 'errorId'>): string {
     return `Bugsnag-Error: ${facts.projectId} ${facts.errorId}`;

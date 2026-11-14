@@ -279,3 +279,25 @@ test('the task shows before BlaakTasks answers, by its id alone', async () => {
     /* Then */
     assert.deepEqual(links, [{kind: 'task', key: 'task:task-1', title: 'Task', id: 'task-1', url: null, status: null}]);
 });
+
+test("a Fix session's Bugsnag error is listed, as the Bug manager knows it for the session's worktree", async () => {
+    /* Given */
+    const w = world();
+    w.pullRequests = [];
+    const asked: string[] = [];
+    w.deps.bug = (projectPath) => {
+        asked.push(projectPath);
+        return {title: 'ImageSourceNotReadyException', url: 'https://app.bugsnag.com/m/a/errors/e1', project: 'App'};
+    };
+    const service = new SessionLinksService(w.deps);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.deepEqual(asked, ['/repo']);
+    assert.deepEqual(
+        links.map((link) => [link.kind, link.title]),
+        [['bug', 'ImageSourceNotReadyException']],
+    );
+});

@@ -1467,6 +1467,7 @@ export function buildContainer(): Container {
         github,
         watchedStatus: (url) => prWatch.statusOf(url),
         tasks,
+        bug: (projectPath) => bugFixService.fixLink(projectPath),
         agentlessRemote,
         clock,
         log,

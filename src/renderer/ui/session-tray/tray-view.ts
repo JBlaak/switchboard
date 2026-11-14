@@ -48,7 +48,7 @@ export function agoLabel(at: number, now: number): string {
 }
 
 /** The dot a link's chip carries: a PR's status (as the sidebar's chip), or its kind's colour. */
-export type LinkDot = StatusDot | 'issue' | 'artifact' | 'page' | 'task';
+export type LinkDot = StatusDot | 'issue' | 'artifact' | 'page' | 'bug' | 'task';
 
 /** A link row's second line: the chip (dot and label) and the words after it. */
 export interface LinkMeta {
@@ -68,6 +68,8 @@ export function linkMeta(link: SessionLink, now: number): LinkMeta {
             return {dot: 'artifact', chip: 'artifact', text: 'claude.ai'};
         case 'page':
             return {dot: 'page', chip: 'page', text: link.shownAt === null ? '' : agoLabel(link.shownAt, now)};
+        case 'bug':
+            return {dot: 'bug', chip: 'bugsnag', text: link.project};
         case 'task':
             return {dot: 'task', chip: 'task', text: link.status ?? ''};
     }
