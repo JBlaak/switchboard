@@ -6,6 +6,7 @@
  * null means "inherit", which keys have defaults, and that hidden projects and
  * remote projects live inside the global blob rather than beside it — is here.
  */
+import {parseMergingHostRecord, type MergingHostRecord} from '../../domain/merge-manager/merging-host';
 import {
     GLOBAL_SETTINGS_KEY,
     mergeEffectiveSettings,
@@ -456,6 +457,15 @@ export class SettingsService {
         return result;
     }
 
+    /** Where merging runs, this Mac or a VM it was handed off to (#442). */
+    public mergingHost(): MergingHostRecord {
+        return parseMergingHostRecord(this.store.get<unknown>(MERGING_HOST_KEY));
+    }
+
+    public setMergingHost(record: MergingHostRecord): void {
+        this.store.set(MERGING_HOST_KEY, record);
+    }
+
     /** The copy `localPath`'s schedules run in, or null when they run on this Mac. */
     public scheduleChoice(localPath: string): ScheduleChoice | null {
         return this.vmSchedules().choices[localPath] ?? null;
@@ -533,6 +543,9 @@ export function handoffFilesKey(localPath: string): string {
 
 /** The settings-store key where-schedules-run is kept under. */
 export const VM_SCHEDULES_KEY = 'vm-schedules';
+
+/** Where merging runs (#442). */
+export const MERGING_HOST_KEY = 'merging-host';
 
 /** A local project's schedules running in one of its copies on a VM. */
 export interface ScheduleChoice {

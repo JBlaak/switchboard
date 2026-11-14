@@ -22,6 +22,7 @@ import {
     type AgentCloseCode,
     type HelloMessage,
     type MacMessage,
+    type MergeCallMessage,
 } from '../../../domain/agent/protocol';
 import {parseMacMessage} from '../../../domain/agent/validate';
 import type {
@@ -35,6 +36,7 @@ import type {
     HookForwarderPart,
     HostConfigMessage,
     HostConfigPart,
+    MergePart,
     SessionHostMessage,
     SessionHostPart,
 } from './handlers';
@@ -47,6 +49,8 @@ export interface AgentParts {
     copies: CopiesPart;
     transcripts: TranscriptsPart;
     tools: ToolsPart;
+    /** The Merge manager (#442); an agent built without one refuses its calls. */
+    merge?: MergePart;
 }
 
 export interface AgentHostDeps {
@@ -59,7 +63,7 @@ export interface AgentHostDeps {
 }
 
 /** Which part owns each message type. `hello` and `bye` are the router's own. */
-type Owner = 'sessions' | 'hooks' | 'config' | 'copies' | 'transcripts' | 'tools';
+type Owner = 'sessions' | 'hooks' | 'config' | 'copies' | 'transcripts' | 'tools' | 'merge';
 
 /**
  * Keyed by every routed type, so a message added to `handlers.ts` without a
@@ -102,6 +106,7 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'transcript-query': 'tools',
     'list-transcripts': 'transcripts',
     'place-upload': 'copies',
+    'merge-call': 'merge',
 };
 
 /** Where one client's link is: waiting for `hello`, handed to the parts, or ended. */
@@ -238,6 +243,16 @@ export class AgentHost {
                     return transcripts.handle(client, message as TranscriptsMessage);
                 case 'tools':
                     return tools.handle(client, message as ToolsMessage);
+                case 'merge': {
+                    const call = message as MergeCallMessage;
+                    if (this.deps.parts.merge) return this.deps.parts.merge.handle(client, call);
+                    return client.send({
+                        type: 'merge-answer',
+                        requestId: call.requestId,
+                        ok: false,
+                        error: 'this agent does not run the Merge manager',
+                    });
+                }
             }
         } catch (err) {
             this.deps.log.error(`agent: ${message.type} failed`, err);
@@ -255,12 +270,19 @@ export class AgentHost {
     /** Tell every part something, so one part's failure does not keep it from the others. */
     private eachPart(
         call: (
-            part: SessionHostPart | HookForwarderPart | HostConfigPart | CopiesPart | TranscriptsPart | ToolsPart,
+            part:
+                | SessionHostPart
+                | HookForwarderPart
+                | HostConfigPart
+                | CopiesPart
+                | TranscriptsPart
+                | ToolsPart
+                | MergePart,
         ) => void,
         what: string,
     ): void {
-        const {sessions, hooks, config, copies, transcripts, tools} = this.deps.parts;
-        for (const part of [sessions, hooks, config, copies, transcripts, tools]) {
+        const {sessions, hooks, config, copies, transcripts, tools, merge} = this.deps.parts;
+        for (const part of [sessions, hooks, config, copies, transcripts, tools, ...(merge ? [merge] : [])]) {
             try {
                 call(part);
             } catch (err) {

@@ -183,12 +183,23 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
  * this repository: the page, with the first of them selected.
  */
 function OpenInMergeManager({lane}: {lane: LaneView | undefined}): JSX.Element | null {
+    const vm = useStore((state) => {
+        const host = state.mergeManager.state.merging;
+        return host?.kind === 'vm' ? host.vm.name : null;
+    });
     const first = lane?.pullRequests.find((pr) => pr.stage.kind !== 'merged') ?? lane?.pullRequests[0];
     if (!first) return null;
     return (
-        <button type="button" className="pp-link pp-mq-open" onClick={() => openMergeManager(first.key)}>
-            Open in Merge manager →
-        </button>
+        <>
+            {vm && (
+                <span className="pp-mq-host" title="The VM runs this lane while merging is handed off to it (#442)">
+                    Merging on {vm}
+                </span>
+            )}
+            <button type="button" className="pp-link pp-mq-open" onClick={() => openMergeManager(first.key)}>
+                Open in Merge manager →
+            </button>
+        </>
     );
 }
 
@@ -294,7 +305,8 @@ function SwitchboardLane({lane, cursor}: {lane: SwitchboardLaneSection; cursor: 
 
 /**
  * A Switchboard lane row's fix errand (#437): Open errand while one works on
- * it, Open and Try again once it gave up; nothing otherwise.
+ * it, Open and Try again once it gave up, Try again on any other Needs you;
+ * nothing otherwise.
  */
 function ErrandButtons({repository, pr}: {repository: string; pr: LandedView}): JSX.Element | null {
     const tryAgain = useStore((state) => state.projectPage.queueActions[queueActionKey('try-again', pr.number)]);
@@ -306,10 +318,11 @@ function ErrandButtons({repository, pr}: {repository: string; pr: LandedView}): 
             </RowButton>
         ) : null;
     }
-    if (!stopped) return null;
+    // Try again clears Needs you for any reason (#432 story 14).
+    if (pr.stage.kind !== 'needsYou') return null;
     return (
         <>
-            {pr.errand && (
+            {stopped && pr.errand && (
                 <RowButton accent onClick={() => openProjectSession(pr.errand!)}>
                     Open
                 </RowButton>

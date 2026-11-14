@@ -1,7 +1,8 @@
 /**
  * The Merge manager (#434): its lanes, Land and Unland from the renderer, and
  * Try again on a fix errand that gave up (#437), and what its page shows
- * besides the lanes (#439). Setting a PR aside and
+ * besides the lanes (#439), and moving merging to a VM and back (#442),
+ * all through the Merging host. Setting a PR aside and
  * linking its errand are main's own, from the lane runner and the fix errands
  * (#435, #437).
  */
@@ -10,17 +11,24 @@ import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
 
 export function registerMergeManagerHandlers(ipc: IpcRegistrar, app: Container): void {
-    ipc.handle(INVOKE.mergeManagerState, () => app.mergeManager.state());
+    // Through the Merging host (#442): answered here, or forwarded to the VM that merges.
+    ipc.handle(INVOKE.mergeManagerState, () => app.mergingHost.state());
     ipc.handle(INVOKE.mergeManagerLand, (repository: unknown, number: unknown) =>
-        app.mergeManager.land(asRepository(repository), asNumber(number)),
+        app.mergingHost.land(asRepository(repository), asNumber(number)),
     );
     ipc.handle(INVOKE.mergeManagerUnland, (repository: unknown, number: unknown) =>
-        app.mergeManager.unland(asRepository(repository), asNumber(number)),
+        app.mergingHost.unland(asRepository(repository), asNumber(number)),
     );
     ipc.handle(INVOKE.mergeManagerTryAgain, (repository: unknown, number: unknown, note: unknown) =>
-        app.fixErrands.tryAgain(asRepository(repository), asNumber(number), typeof note === 'string' ? note : null),
+        app.mergingHost.tryAgain(asRepository(repository), asNumber(number), typeof note === 'string' ? note : null),
     );
-    ipc.handle(INVOKE.mergeManagerPage, () => app.mergeManagerPage.facts());
+    ipc.handle(INVOKE.mergeManagerPage, () => app.mergingHost.pageFacts());
+    ipc.handle(INVOKE.mergeManagerHandOff, (vmKey: unknown) =>
+        app.mergingHost.handOff(typeof vmKey === 'string' && vmKey ? vmKey : undefined),
+    );
+    ipc.handle(INVOKE.mergeManagerBringBack, () => app.mergingHost.bringBack());
+    ipc.handle(INVOKE.mergeManagerTakeBack, () => app.mergingHost.takeBackAnyway());
+    ipc.handle(INVOKE.mergeManagerDismissAway, () => app.mergingHost.dismissSummary());
 }
 
 function asRepository(repository: unknown): string {

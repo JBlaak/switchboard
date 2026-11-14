@@ -6,6 +6,7 @@
  * rather than a runtime `undefined`. The main process registers handlers named
  * from the same channel table, so the two sides cannot drift apart silently.
  */
+import type {MergingBringBackResult, HandOffResult} from '../application/services/merging-host-service';
 import type {Project} from '../domain/project/project';
 import type {RemoteConfig} from '../domain/project/remote-target';
 import type {ProjectFolderCheck} from '../domain/project/folder-check';
@@ -277,10 +278,18 @@ export interface SwitchboardApi {
     mergeManagerLand(repository: string, number: number): Promise<LandResult>;
     /** Unland a PR: it leaves its lane without merging. */
     mergeManagerUnland(repository: string, number: number): Promise<GitHubWrite>;
-    /** Try again (#437): a new fix errand for a PR an errand gave up on, with an optional note for it. */
+    /** Try again for any Needs you (#437, #432 story 14): a new fix errand with an optional note, or back to its place. */
     mergeManagerTryAgain(repository: string, number: number, note: string | null): Promise<TryAgainResult>;
     /** What the Merge manager's page shows besides the lanes (#439): CI saved this week, the errands, the checkouts. */
     mergeManagerPage(): Promise<MergeManagerPageFacts>;
+    /** Hand merging off to a VM (#442), the one offered first when none is named. */
+    mergeManagerHandOff(vmKey?: string): Promise<HandOffResult>;
+    /** Bring merging back from the VM: it finishes its step and stops its errands. */
+    mergeManagerBringBack(): Promise<MergingBringBackResult>;
+    /** Take merging back while the VM cannot be reached; it stands down when it reconnects. */
+    mergeManagerTakeBack(): Promise<{ok: true}>;
+    /** Dismiss the "While merging was on <VM>" summary. */
+    mergeManagerDismissAway(): Promise<void>;
     /** When the inbox last polled Bugsnag and GitHub, epoch ms (#414); null before it did. */
     inboxPolledAt(): Promise<number | null>;
     /** Fix (#414): the worktree and prompt of a Fix session on a bug, or why not ("Link a project first"). */

@@ -73,3 +73,32 @@ test('the bubble is quiet when nothing merged lately, and says when it goes quie
     assert.equal(mergedBubble(lanes(HEAD), NOW), null);
     assert.equal(mergedBubbleExpiry(lanes(HEAD), NOW), null);
 });
+
+// ── While a VM merges (#442) ──
+
+test('while a VM merges it takes its remote pose, still counting Needs you, and the bubble says what happened there', () => {
+    /* Given */
+    const base = lanes(NEEDS_YOU, merged(5));
+    const state = {
+        ...base,
+        merging: {
+            kind: 'vm' as const,
+            vm: {key: 'dev@devbox:22', name: 'devbox'},
+            since: NOW - 60 * MIN,
+            warning: null,
+            reachable: true,
+            vms: [],
+            summary: {
+                vm: 'devbox',
+                merged: [{key: 'a', repository: 'r/r', number: 2, title: 't', url: 'u'}],
+                needsYou: [{key: 'b', repository: 'r/r', number: 1, title: 't', url: 'u', question: null}],
+                running: [],
+            },
+        },
+    };
+
+    /* Then */
+    assert.deepEqual(mergeFigureOf(state), {pose: 'remote', count: 1});
+    assert.equal(mergedBubble(state, NOW), '1 merged · 1 needs you');
+    assert.equal(mergedBubbleExpiry(state, NOW), null);
+});

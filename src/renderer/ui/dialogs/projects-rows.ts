@@ -23,7 +23,11 @@ export type ProjectsRow =
     | {readonly kind: 'add-project'};
 
 /** Every row, top to bottom, for the search as classified, projects ordered by `recency`. */
-export function projectsRows(projects: readonly Project[], query: ProjectsQuery, recency: SessionRecency): ProjectsRow[] {
+export function projectsRows(
+    projects: readonly Project[],
+    query: ProjectsQuery,
+    recency: SessionRecency,
+): ProjectsRow[] {
     const rows: ProjectsRow[] = [];
     let filter: string;
     switch (query.kind) {

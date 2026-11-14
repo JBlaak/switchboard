@@ -1,10 +1,10 @@
 {
-  "type": "chat",
-  "sessionId": "s-1",
-  "available": true,
-  "messages": [
-    {"id": "u1:0", "role": "user", "text": "Fix the login"},
-    {"id": "a1:0", "role": "tool", "text": "Ran: git status"},
-    {"id": "a2:0", "role": "assistant", "text": "Fixed it."}
-  ]
+    "type": "chat",
+    "sessionId": "s-1",
+    "available": true,
+    "messages": [
+        {"id": "u1:0", "role": "user", "text": "Fix the login"},
+        {"id": "a1:0", "role": "tool", "text": "Ran: git status"},
+        {"id": "a2:0", "role": "assistant", "text": "Fixed it."}
+    ]
 }

@@ -7,6 +7,7 @@ package-lock.json
 android/app/src/main/assets/terminal/xterm.js
 android/app/src/main/assets/terminal/xterm.css
 android/app/src/main/assets/terminal/addon-fit.js
+android/app/src/main/assets/terminal/addon-web-links.js
 
 # Android build output (ignored in android/.gitignore, which Prettier does not read).
 android/**/build/

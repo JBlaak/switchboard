@@ -1746,3 +1746,13 @@
     opacity: 0.6;
     cursor: default;
 }
+
+/* "Merging on <VM>" beside Open in Merge manager while a VM runs the lanes (#442). */
+.pp-mq-host {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--sb-blue-tint);
+    font: 700 11px var(--sb-font-head);
+    color: var(--sb-text-strong);
+    white-space: nowrap;
+}

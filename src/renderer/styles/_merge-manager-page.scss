@@ -318,3 +318,110 @@
         color: var(--sb-text-strong);
     }
 }
+
+/* ---- Where merging runs (#442): the pill, hand off and bring back ---- */
+.mm-host-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+    max-width: 60%;
+
+    .mm-host {
+        margin-left: 0;
+    }
+}
+
+.mm-host.is-vm i {
+    background: var(--sb-blue);
+}
+
+.mm-host.is-away i {
+    background: var(--sb-text-muted);
+}
+
+.mm-host-note {
+    flex-basis: 100%;
+    font: 500 12px/1.4 var(--sb-font-body);
+    color: var(--sb-text-muted);
+    text-align: right;
+
+    &.is-error {
+        color: var(--sb-text-strong);
+    }
+
+    code {
+        display: block;
+        margin-top: 2px;
+        font: 12px var(--sb-font-mono, monospace);
+    }
+}
+
+/* ---- While merging was on <VM> (#442) ---- */
+.mm-away {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--sb-blue-tint);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+
+    header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    h2 {
+        margin: 0;
+        font: 700 13px var(--sb-font-head);
+        color: var(--sb-text-strong);
+    }
+
+    h3 {
+        margin: 10px 0 4px;
+        font: 700 11.5px var(--sb-font-head);
+        color: var(--sb-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+
+        span {
+            font-weight: 600;
+        }
+    }
+
+    ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    li {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: baseline;
+        padding: 2px 0;
+    }
+
+    q {
+        font: italic 500 12px var(--sb-font-body);
+        color: var(--sb-text-muted);
+    }
+}
+
+.mm-away-pr {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: 600 12.5px var(--sb-font-body);
+    color: var(--sb-text-strong);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}

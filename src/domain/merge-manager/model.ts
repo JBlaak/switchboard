@@ -18,6 +18,7 @@
  */
 import type {AutomergeStatus, QueueCheckRun} from '../project/merge-queue';
 import type {ReviewDecision} from '../project/overview';
+import type {MergingHostView} from './merging-host';
 
 export type LaneKind = 'queue' | 'switchboard';
 
@@ -35,8 +36,12 @@ export type HeldReason =
 export type NeedsYouReason =
     | {readonly kind: 'changes-requested'}
     | {readonly kind: 'unresolved-thread'}
-    /** A fix errand stopped without pushing a fix or judging the failure flaky. */
-    | {readonly kind: 'errand-stopped'}
+    /**
+     * A fix errand stopped without pushing a fix or judging the failure flaky;
+     * `question` is what it asked when it stopped on a question (an errand on
+     * a VM decides for itself, and one that still asks stops, #442).
+     */
+    | {readonly kind: 'errand-stopped'; readonly question?: string}
     /** GitHub refused the merge, or the queue failed it, for a reason nothing here can fix. */
     | {readonly kind: 'merge-refused'; readonly reason: string};
 
@@ -255,6 +260,11 @@ export interface LaneView {
 export interface MergeManagerState {
     readonly lanes: readonly LaneView[];
     readonly needsYou: number;
+    /**
+     * Where merging runs (#442): this Mac, or a VM it was handed off to, whose
+     * lanes these are then. Absent means this Mac (main adds it as it pushes).
+     */
+    readonly merging?: MergingHostView;
 }
 
 export const EMPTY_MERGE_MANAGER_STATE: MergeManagerState = {lanes: [], needsYou: 0};

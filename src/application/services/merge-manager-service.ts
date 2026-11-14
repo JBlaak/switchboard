@@ -28,7 +28,7 @@
  * in its lane from the same read. **Unland** takes the queue's labels off in
  * a queue lane and drops the PR in both; running CI and errands are left alone.
  *
- * **The lane runner** (#435), when wired, takes each Switchboard lane after
+ * **The lane runner** (#435) takes each Switchboard lane after
  * its read is folded in: it updates, tests and merges the head, cancels CI
  * behind it and test-rebases waiting PRs. What it sets aside (Fixing, Needs
  * you) is written here and the lane placed again from the same read, so the
@@ -122,6 +122,8 @@ export class MergeManagerService {
     private polling: Promise<void> | null = null;
     /** A poll asked for while one ran: run once more after it. */
     private again = false;
+    /** Merging runs on another host now (#442): nothing is read or run here. */
+    private paused = false;
     /** What was last pushed. */
     private published: string | null = null;
     private readonly followers: Array<(transitions: LandedTransitions) => void> = [];
@@ -134,6 +136,7 @@ export class MergeManagerService {
 
     /** Poll now and every minute after. */
     public start(): void {
+        this.paused = false;
         if (this.interval) return;
         this.interval = this.deps.timers.setInterval(() => void this.poll(), MERGE_MANAGER_INTERVAL_MS);
         void this.poll();
@@ -144,13 +147,49 @@ export class MergeManagerService {
         this.interval = null;
     }
 
+    /**
+     * Stop running the lanes here, for merging moving to another host (#442):
+     * no more polls, and the one under way finishes its step first (never
+     * mid-merge). `start` takes it up again.
+     */
+    public async pause(): Promise<void> {
+        this.stop();
+        this.paused = true;
+        this.again = false;
+        await this.polling;
+    }
+
+    /** Take the lanes up again after `pause`, without a cadence of its own: whoever resumes polls (the VM's Merge host). */
+    public resume(): void {
+        this.paused = false;
+    }
+
+    /** Every landed PR as kept, merged ones still shown included: what a hand-off carries to the other host (#442). */
+    public all(): LandedPullRequest[] {
+        return [...this.landed.values()];
+    }
+
+    /**
+     * Take over another host's landed PRs (#442): these replace what is kept
+     * here, as they are. The next poll reads their lanes again.
+     */
+    public adopt(landed: readonly LandedPullRequest[]): void {
+        const keep = new Set(landed.map((pr) => pr.key));
+        this.commit(
+            landed.filter((pr) => JSON.stringify(this.landed.get(pr.key)) !== JSON.stringify(pr)),
+            [...this.landed.keys()].filter((key) => !keep.has(key)),
+        );
+        this.publish();
+    }
+
     /** The window got focus: poll once more, when polling is on. */
     public focused(): void {
         if (this.interval) void this.poll();
     }
 
-    /** Read every lane once. A poll asked for while one runs runs once more after it. */
+    /** Read every lane once. A poll asked for while one runs runs once more after it. None while paused (#442). */
     public poll(): Promise<void> {
+        if (this.paused) return Promise.resolve();
         if (this.polling) {
             this.again = true;
             return this.polling;

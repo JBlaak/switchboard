@@ -109,6 +109,12 @@ export interface SessionHookListener {
     turnEnded?(launchId: string): void;
     /** A session called `archive_session`. */
     archiveRequested?(launchId: string): void;
+    /**
+     * A session asked a question (AskUserQuestion). Answering true takes it:
+     * no Mac is asked, and the CLI is left to ask in its terminal (#442: a fix
+     * errand on the VM that asks stops, and its question goes to Needs you).
+     */
+    asked?(launchId: string, asked: AskedQuestions): boolean;
 }
 
 /** What the hook server hands archive tool calls and turn ends to; its `archiveTool` dep. */
@@ -161,6 +167,8 @@ export class HookForwarder implements HookForwarderPart {
     /** Sessions (by launch id) whose archive call was accepted here, archived when their turn ends. */
     private readonly selfArchives = new Set<string>();
     private readonly listeners: SessionHookListener[] = [];
+    /** Sessions archived on the VM at their turn's end whatever client is connected (`archiveAtTurnEnd`). */
+    private readonly hereArchives = new Set<string>();
 
     /** Give this to the agent's `QuestionHookServer` as its `receiver`. */
     public readonly receiver: HookReceiver = {
@@ -257,6 +265,10 @@ export class HookForwarder implements HookForwarderPart {
     }
 
     private receive(launchId: string, asked: AskedQuestions, reply: QuestionReply): PendingQuestionsHandle {
+        if (this.taken(launchId, asked)) {
+            reply(NO_DECISION);
+            return {withdraw() {}};
+        }
         const client = this.current();
         if (!client) {
             reply(NO_DECISION);
@@ -313,6 +325,12 @@ export class HookForwarder implements HookForwarderPart {
      */
     private turnEnded(launchId: string): void {
         this.tell(launchId, 'turnEnded');
+        if (this.hereArchives.delete(launchId)) {
+            this.selfArchives.delete(launchId);
+            this.archiveHere(launchId);
+            this.notify({type: 'turn-ended', launchId});
+            return;
+        }
         if (this.selfArchives.delete(launchId)) {
             const client = this.current();
             if (!client) {
@@ -387,8 +405,31 @@ export class HookForwarder implements HookForwarderPart {
         else this.deps.log.debug(`[agent-hooks] no client; dropped ${message.type} for ${message.launchId}`);
     }
 
+    /** Whether an in-process listener takes this question from the Mac. */
+    private taken(launchId: string, asked: AskedQuestions): boolean {
+        let taken = false;
+        for (const listener of this.listeners) {
+            try {
+                if (listener.asked?.(launchId, asked)) taken = true;
+            } catch (err) {
+                this.deps.log.error(`[agent-hooks] a listener failed on asked for ${launchId}`, err);
+            }
+        }
+        return taken;
+    }
+
+    /**
+     * Archive a session on the VM when its turn ends, Mac or no Mac: a fix
+     * errand that finished (#442), which no Mac row stands for. Recorded as
+     * self-archived, so a Mac that shows it archives its row on its next connect.
+     */
+    public archiveAtTurnEnd(launchId: string): ArchiveToolOutcome {
+        this.hereArchives.add(launchId);
+        return SELF_ARCHIVE_OUTCOME;
+    }
+
     /** Tell the in-process listeners; one that throws is logged and the rest still hear it. */
-    private tell(launchId: string, event: keyof SessionHookListener): void {
+    private tell(launchId: string, event: 'turnEnded' | 'archiveRequested'): void {
         for (const listener of this.listeners) {
             try {
                 listener[event]?.(launchId);

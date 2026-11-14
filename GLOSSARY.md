@@ -40,7 +40,7 @@ The one pull request in a lane that is brought up to date, tested and merged. No
 _Avoid_: Front, current
 
 **Held**:
-A landed pull request that keeps its place in a lane but is passed over until it is approved, a requested review is given, or the pull request it is stacked on merges.
+A landed pull request that keeps its place in a lane but is passed over until it is approved, a requested review is given, the pull request it is stacked on merges, or it is marked ready for review again after being turned back into a draft.
 _Avoid_: Blocked, paused
 
 **Waiting**:

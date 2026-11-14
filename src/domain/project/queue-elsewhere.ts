@@ -15,6 +15,7 @@
  *
  * Pure, so main and the renderer share it and the tests hold it still.
  */
+import {ordinal} from '../merge-manager/stage-words';
 import {ERRAND_LABEL, type QueueErrandView} from './queue-errands';
 import type {FailedEntry, MergeQueue, QueueEntry} from './merge-queue';
 import type {SessionPullRequest} from '../session/session';
@@ -99,12 +100,6 @@ export interface SessionQueueMark {
 
 export const NO_QUEUE_MARK: SessionQueueMark = {pill: null, errand: null};
 
-function ordinal(n: number): string {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 13) return `${n}th`;
-    return `${n}${n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'}`;
-}
-
 /** The sidebar's pill for one PR of a queue; null when the PR is not in it (or only "kept rebased" and the like). */
 export function sidebarPill(queue: MergeQueue, number: number): SidebarQueuePill | null {
     const pill = queue.pills[number];
@@ -169,16 +164,20 @@ export interface SessionQueueFailure {
 /**
  * The panel over a session's terminal: shown when one of the session's own
  * PRs is in its repository's `failed` list, for the newest such PR; null
- * otherwise.
+ * otherwise. A PR landed with the Merge manager is left out (`landed`): its
+ * fix errand has it, and Fix in session or Retry would compete with it
+ * (#437); the header's landed pill says where it is.
  */
 export function sessionQueueFailure(
     prs: readonly SessionPullRequest[],
     queues: Readonly<Record<string, MergeQueue>>,
+    landed: (repository: string, number: number) => boolean = () => false,
 ): SessionQueueFailure | null {
     for (const {pr, repository} of newestFirst(prs)) {
         const entry = queues[repository]?.failed.find((candidate) => hasMember(candidate, pr.number));
         if (!entry) continue;
         const number = entry.failedMember ?? entry.number;
+        if (landed(repository, number)) continue;
         return {
             repository,
             number,

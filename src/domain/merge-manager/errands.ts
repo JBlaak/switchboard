@@ -195,6 +195,13 @@ export interface ErrandPromptRequest {
     readonly earlier: readonly EarlierErrand[];
     /** What the user added when they pressed Try again. */
     readonly userNote: string | null;
+    /**
+     * It runs on a VM that merging was handed off to (#442), with nobody at
+     * the Mac: it decides for itself, and one that still asks stops.
+     */
+    readonly unattended?: boolean;
+    /** The VM's GitHub login has no `workflow` scope: a fix to a workflow file cannot be pushed (#442). */
+    readonly noWorkflowScope?: boolean;
 }
 
 /** What an errand is allowed, word for word as the prompt says it. */
@@ -255,6 +262,19 @@ export function errandPrompt(request: ErrandPromptRequest): string {
             `If you are stuck, or a fix needs a decision from me, say why in one line and stop: do not call it, ` +
             `and do not call ${ARCHIVE_TOOL_QUALIFIED_NAME}.`,
     );
+    if (request.unattended) {
+        parts.push(
+            'Merging runs on this VM while I am away from my Mac, so nobody can answer you: decide for yourself ' +
+                'wherever you reasonably can. Only when a fix truly needs a decision from me, ask it as one question ' +
+                'and stop; the pull request then waits for me with your question.',
+        );
+    }
+    if (request.noWorkflowScope) {
+        parts.push(
+            "This machine's GitHub login cannot push changes to files in .github/workflows. If the fix needs one, " +
+                'push nothing, say so in one line and stop.',
+        );
+    }
     return parts.join('\n\n');
 }
 

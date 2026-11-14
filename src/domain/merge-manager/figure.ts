@@ -9,11 +9,17 @@
  * lane shows in the pose, not a number.
  *
  * The bubble says what merged lately ("#432 merged"), for a while after.
+ *
+ * While merging is handed off to a VM (#442) it takes its remote pose (radio
+ * to the ear) whatever the lanes do, the counter still counting Needs you,
+ * and the bubble says what happened there in short ("3 merged · 1 needs
+ * you") until the away summary is dismissed or merging comes back.
  */
+import {awayBubble} from './merging-host';
 import type {MergeManagerState} from './model';
 
-/** Matches the Merge manager's states in @jblaak/patch; `remote` is a VM's (#442). */
-export type MergeFigurePose = 'idle' | 'moving' | 'needsYou';
+/** Matches the Merge manager's states in @jblaak/patch; `remote` while a VM merges (#442). */
+export type MergeFigurePose = 'idle' | 'moving' | 'needsYou' | 'remote';
 
 export interface MergeFigure {
     readonly pose: MergeFigurePose;
@@ -27,7 +33,14 @@ export const MERGED_BUBBLE_MS = 15 * 60_000;
 export function mergeFigureOf(state: MergeManagerState): MergeFigure {
     const stages = state.lanes.flatMap((lane) => lane.pullRequests.map((pr) => pr.stage.kind));
     const needsYou = stages.filter((kind) => kind === 'needsYou').length;
-    const pose: MergeFigurePose = needsYou > 0 ? 'needsYou' : stages.includes('head') ? 'moving' : 'idle';
+    const pose: MergeFigurePose =
+        state.merging?.kind === 'vm'
+            ? 'remote'
+            : needsYou > 0
+              ? 'needsYou'
+              : stages.includes('head')
+                ? 'moving'
+                : 'idle';
     return {pose, count: needsYou};
 }
 
@@ -37,6 +50,7 @@ export function mergeFigureOf(state: MergeManagerState): MergeFigure {
  * "3 merged"), or null when none did.
  */
 export function mergedBubble(state: MergeManagerState, now: number): string | null {
+    if (state.merging?.kind === 'vm') return awayBubble(state.merging.summary);
     const merged = state.lanes
         .flatMap((lane) => lane.pullRequests)
         .flatMap((pr) => (pr.stage.kind === 'merged' ? [{number: pr.number, at: pr.stage.at}] : []))
@@ -50,6 +64,7 @@ export function mergedBubble(state: MergeManagerState, now: number): string | nu
 
 /** When the bubble next changes on its own (the oldest recent merge ages out); null when it does not. */
 export function mergedBubbleExpiry(state: MergeManagerState, now: number): number | null {
+    if (state.merging?.kind === 'vm') return null;
     const ends = state.lanes
         .flatMap((lane) => lane.pullRequests)
         .flatMap((pr) => (pr.stage.kind === 'merged' ? [pr.stage.at + MERGED_BUBBLE_MS] : []))

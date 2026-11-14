@@ -23,6 +23,7 @@
 import {isSamePullRequest, type SessionPullRequestRef} from '../../domain/merge-manager/archive-on-merge';
 import {EMPTY_MERGE_MANAGER_STATE, landedKey} from '../../domain/merge-manager/model';
 import {landedToastText} from '../../domain/merge-manager/land-it';
+import {findLanded} from '../../domain/merge-manager/stage-words';
 import {movedEntry, withEntry, withoutEntry, type IdRecord} from './records';
 import type {LandedView, MergeManagerState} from '../../domain/merge-manager/model';
 import type {MergeManagerPageFacts} from '../../domain/merge-manager/page';
@@ -124,7 +125,7 @@ export function mergeManagerReducer(state: MergeManagerSliceState, event: Render
             return {...state, busy: withEntry(state.busy, landedKey(event.repository, event.number), event.action)};
         case 'landFinished': {
             const busy = withoutEntry(state.busy, landedKey(event.repository, event.number));
-            const toast = finishedToast(event, state.nextToastId);
+            const toast = finishedToast(event, state.nextToastId, state.state);
             if (!toast) return {...state, busy, toast: closesToast(state.toast, event) ? null : state.toast};
             return {...state, busy, toast, nextToastId: state.nextToastId + 1};
         }
@@ -174,14 +175,19 @@ function pageReducer(page: MergeManagerPageState, event: RendererEvent): MergeMa
 }
 
 /** The toast a finished Land it or Unland brings: landed, or why either failed. Unland's success brings none. */
-function finishedToast(event: Extract<MergeManagerEvent, {type: 'landFinished'}>, id: number): LandToast | null {
+function finishedToast(
+    event: Extract<MergeManagerEvent, {type: 'landFinished'}>,
+    id: number,
+    lanes: MergeManagerState,
+): LandToast | null {
     const {result, repository, number} = event;
     if (!result.ok) {
         const verb = event.action === 'land' ? 'land' : 'unland';
         return {id, kind: 'failed', text: `Could not ${verb}${number ? ' #' + number : ''}: ${result.reason}`};
     }
     if (event.action !== 'land') return null;
-    const text = result.landed ? landedToastText(result.landed) : `Landed #${number}`;
+    const lane = result.landed ? findLanded(lanes, result.landed.repository, result.landed.number)?.lane : undefined;
+    const text = result.landed ? landedToastText(result.landed, lane) : `Landed #${number}`;
     return {id, kind: 'landed', text, repository, number};
 }
 

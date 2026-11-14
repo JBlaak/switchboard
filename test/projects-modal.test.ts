@@ -121,7 +121,7 @@ test('Add project… is the last row, after every project', () => {
     assert.deepEqual(describe(rows), [APP, OTHER, 'add project']);
 });
 
-test('a worktree is listed under its repository, which ranks by the worktree\'s sessions too', () => {
+test("a worktree is listed under its repository, which ranks by the worktree's sessions too", () => {
     /* Given */
     const projects = [
         project(APP_WORKTREE, '2026-10-05T00:00:00Z'),

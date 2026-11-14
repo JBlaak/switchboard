@@ -676,3 +676,45 @@ test('a listener that throws does not keep the others or the Mac from hearing', 
     assert.deepEqual(heard, ['launch-1']);
     assert.deepEqual(mac.received, [{type: 'turn-ended', launchId: 'launch-1'}]);
 });
+
+// ── Fix errands on a VM that merges (#442) ──
+
+test('a question a listener takes never reaches the Mac, and the CLI is released to ask in its terminal', () => {
+    /* Given */
+    const h = harness();
+    const mac = h.connect();
+    const cli = cliReply();
+    const heard: string[] = [];
+    h.forwarder.subscribe({
+        asked: (launchId, question) => {
+            heard.push(`${launchId}: ${question.questions[0].question}`);
+            return true;
+        },
+    });
+
+    /* When */
+    h.forwarder.receiver.receive('errand-1', asked, cli.reply);
+
+    /* Then */
+    assert.deepEqual(heard, ['errand-1: Which database?']);
+    assert.deepEqual(mac.received, []);
+    assert.deepEqual(cli.replies, [{}]);
+});
+
+test('a finished errand is archived on the VM at its turn end even with a Mac connected', () => {
+    /* Given */
+    const h = harness();
+    const mac = h.connect();
+
+    /* When */
+    h.forwarder.archiveAtTurnEnd('errand-1');
+    h.forwarder.archiveTool.turnEnded('errand-1');
+
+    /* Then */
+    assert.deepEqual(h.stopped, ['errand-1']);
+    assert.deepEqual(
+        mac.received.map((message) => message.type),
+        ['turn-ended'],
+    );
+    assert.match(String(h.file.text), /errand-1/);
+});

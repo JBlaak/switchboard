@@ -1,1 +1,8 @@
-{"type": "welcome", "protocol": 1, "macName": "Joris MacBook Pro", "deviceId": "d-7", "addresses": ["192.168.1.20"], "features": ["chat"]}
+{
+    "type": "welcome",
+    "protocol": 1,
+    "macName": "Joris MacBook Pro",
+    "deviceId": "d-7",
+    "addresses": ["192.168.1.20"],
+    "features": ["chat"]
+}

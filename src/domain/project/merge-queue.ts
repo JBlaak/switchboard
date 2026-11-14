@@ -22,6 +22,7 @@
  * (held entries are passed over) is stalled: nothing in it moves until
  * someone acts on a failed one.
  */
+import {ordinal} from '../merge-manager/stage-words';
 import type {ReviewDecision} from './overview';
 
 /** The labels the queue reads and writes. Only `optIn` and removing `failed` are ever written by Switchboard. */
@@ -579,12 +580,6 @@ function outsideEntry(pr: QueuePullRequest, why: OutsideReason): OutsideEntry {
 }
 
 // ── Pills ──
-
-function ordinal(n: number): string {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 13) return `${n}th`;
-    return `${n}${n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'}`;
-}
 
 function pillsOf(
     prs: readonly QueuePullRequest[],

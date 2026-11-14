@@ -27,7 +27,7 @@ import {
     type BugFilter,
     type BugPageState,
 } from '../../state/bug-page-slice';
-import {stageLabel} from '../../../domain/inbox/stage';
+import {inProgressPill, landedForItem, needsYouInProgress} from '../../../domain/merge-manager/stage-words';
 import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tabs';
 import {seenAgainLine} from '../../../domain/inbox/seen-again';
 import {fixBranch} from '../../../domain/inbox/fix';
@@ -65,6 +65,7 @@ export function BugManagerPage(): JSX.Element | null {
 function BugManagerView(): JSX.Element {
     const root = useRef<HTMLDivElement>(null);
     const page = useStore((state) => state.bugPage);
+    const merge = useStore((state) => state.mergeManager.state);
     const counts = useStore((state) => state.inbox.summary.bug);
     const groups = bugGroups(page);
     const under = bugCursorRow(page);
@@ -184,9 +185,10 @@ function BugManagerView(): JSX.Element {
                             root.current?.focus({preventScroll: true});
                         }}>
                         {INBOX_TAB_LABELS[tab]} <span className="bm-tab-count">{tabs[tab]}</span>
-                        {tab === 'inProgress' && inProgressWantsYou(page.items) && (
-                            <i className="bm-tab-dot" aria-label="needs you" />
-                        )}
+                        {tab === 'inProgress' &&
+                            (inProgressWantsYou(page.items) || needsYouInProgress(page.items, merge)) && (
+                                <i className="bm-tab-dot" aria-label="needs you" />
+                            )}
                     </button>
                 ))}
             </nav>
@@ -364,11 +366,15 @@ const STAGE_TONE: Record<InboxStage, string> = {
     merged: 'merged',
 };
 
-function StagePill({stage, queuePosition}: {stage: InboxStage; queuePosition: number | null}): JSX.Element {
+/** A bug's stage, in the words every place shares once its Fix's PR is landed (#441). */
+function StagePill({item, stage}: {item: InboxItem; stage: InboxStage}): JSX.Element {
+    const merge = useStore((state) => state.mergeManager.state);
+    const pill = inProgressPill(stage, landedForItem(merge, item), item.fix?.queuePosition ?? null);
+    const tone = pill.kind.startsWith('landed-') ? pill.kind : STAGE_TONE[stage];
     return (
-        <span className={`bm-stage is-${STAGE_TONE[stage]}`}>
+        <span className={`bm-stage is-${tone}`} title={pill.title ?? undefined}>
             <i aria-hidden="true" />
-            {stageLabel(stage, queuePosition)}
+            {pill.label}
         </span>
     );
 }
@@ -376,7 +382,7 @@ function StagePill({stage, queuePosition}: {stage: InboxStage; queuePosition: nu
 /** A row's badge: the stage of a bug being fixed, Fixed or Seen again under Done, else its signal. */
 function StateBadge({item}: {item: InboxItem}): JSX.Element {
     if (item.state.kind === 'inProgress') {
-        return <StagePill stage={item.state.stage} queuePosition={item.fix?.queuePosition ?? null} />;
+        return <StagePill item={item} stage={item.state.stage} />;
     }
     if (item.state.kind === 'done') {
         const again = item.fix?.seenAgain;

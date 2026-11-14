@@ -613,6 +613,29 @@ export interface ForgetSelfStartedMessage {
     sessionIds: string[];
 }
 
+// ── Mac → agent: the Merge manager while this VM is the Merging host (#442) ──
+
+/**
+ * What the Mac asks of the agent's Merge manager:
+ * - `state`: the lanes as the VM runs them, its errands and savings;
+ * - `take`: become the Merging host with these landed PRs (`{landed, noWorkflowScope}`);
+ * - `release`: finish the step under way, stop the errands and stop merging; answers the landed PRs;
+ * - `stand-down`: the Mac took merging back while this VM was unreachable: stop at once;
+ * - `land`, `unland`, `try-again`: the Mac's buttons, forwarded (`{repository, number, note?}`).
+ */
+export const MERGE_CALL_METHODS = ['state', 'take', 'release', 'stand-down', 'land', 'unland', 'try-again'] as const;
+
+export type MergeCallMethod = (typeof MERGE_CALL_METHODS)[number];
+
+/** Answered with `merge-answer`. */
+export interface MergeCallMessage {
+    type: 'merge-call';
+    requestId: string;
+    method: MergeCallMethod;
+    /** The method's arguments, an object; read defensively by the agent. */
+    args: Record<string, unknown>;
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -651,6 +674,7 @@ export type MacMessage =
     | ForgetSelfArchivedMessage
     | ListSelfStartedMessage
     | ForgetSelfStartedMessage
+    | MergeCallMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -914,6 +938,15 @@ export interface DirChangedMessage {
     watchId: string;
 }
 
+/** A `merge-call`'s answer: its result as JSON, or why it failed. */
+export interface MergeAnswerMessage {
+    type: 'merge-answer';
+    requestId: string;
+    ok: boolean;
+    result?: unknown;
+    error?: string;
+}
+
 export interface TranscriptAnswerMessage {
     type: 'transcript-answer';
     requestId: string;
@@ -1005,6 +1038,7 @@ export type AgentMessage =
     | PlacedMessage
     | SelfArchivedMessage
     | SelfStartedMessage
+    | MergeAnswerMessage
     | ByeMessage;
 
 // ── Either way ──

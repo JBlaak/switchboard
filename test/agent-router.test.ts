@@ -383,3 +383,40 @@ test('an unknown notice without a request id is ignored, and the link stays up',
     assert.equal(pair.sentByAgent.length, before);
     assert.equal(pair.agent.closed, false);
 });
+
+test('a merge call goes to the Merge host, and an agent without one refuses it (#442)', () => {
+    /* Given */
+    const calls: Calls = [];
+    const withMerge = linkPair();
+    new AgentHost({
+        parts: {
+            ...fakeParts(calls),
+            merge: {
+                clientConnected: () => {},
+                clientGone: () => {},
+                handle: (_client, message) => void calls.push(`merge.handle:${message.method}`),
+            },
+        },
+        agentVersion: VERSION,
+        log: quietLog,
+    }).accept(withMerge.agent);
+    const without = setUp();
+    const answers: unknown[] = [];
+    without.pair.mac.onMessage((message) => answers.push(message));
+    const call: MacMessage = {type: 'merge-call', requestId: 'r', method: 'state', args: {}};
+
+    /* When */
+    withMerge.mac.send(HELLO);
+    withMerge.mac.send(call);
+    without.pair.mac.send(HELLO);
+    without.pair.mac.send(call);
+
+    /* Then */
+    assert.ok(calls.includes('merge.handle:state'));
+    assert.deepEqual(answers[1], {
+        type: 'merge-answer',
+        requestId: 'r',
+        ok: false,
+        error: 'this agent does not run the Merge manager',
+    });
+});

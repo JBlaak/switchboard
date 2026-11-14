@@ -87,8 +87,13 @@ export const initialBugPageState: BugPageState = {
 export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPageState {
     switch (event.type) {
         // A fresh look each time: the inbox, unfiltered, from the top. What Bugsnag said stays.
+        // The figure on the empty screen opens it too (#416), just as fresh.
         case 'bugPageOpened':
             return {...state, tab: 'inbox', filter: 'all', cursor: null, snooze: null, notice: null};
+        case 'managerPageRequested':
+            return event.manager === 'bug'
+                ? {...state, tab: 'inbox', filter: 'all', cursor: null, snooze: null, notice: null}
+                : state;
         case 'bugPageClosed':
             return state.snooze ? {...state, snooze: null} : state;
         case 'bugPageLoaded':

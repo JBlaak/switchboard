@@ -10,9 +10,10 @@
  *
  * The schedule service (stage 5) is built here but not started: the entry
  * starts its cron loop once the agent is listening, and stops it on shutdown.
- * The Merge manager's host (#438) is the same: built here, started by the
- * entry, idle unless this VM is the Merging host. It reaches GitHub through
- * the VM's own `gh` login, in the same login-shell environment.
+ * The Merge manager's host (#438, #442) is the same: built here, started by
+ * the entry, idle unless this VM is the Merging host. It runs the Mac's own
+ * Merge manager, lane runner and fix errand services, reaching GitHub
+ * through the VM's own `gh` login, in the same login-shell environment.
  *
  * The hook server is started, and awaited, before the parts are handed back:
  * a launch asks it for its address, and one made before it listens would get
@@ -27,6 +28,13 @@ import {Copies} from '../application/services/agent-host/copies';
 import {HookForwarder} from '../application/services/agent-host/hook-forwarder';
 import {HostConfig} from '../application/services/agent-host/host-config';
 import {MergeHost} from '../application/services/agent-host/merge-host';
+import {LaneStateStore} from '../application/services/agent-host/lane-store';
+import {FixErrandService} from '../application/services/fix-errand-service';
+import {LaneRunner} from '../application/services/lane-runner';
+import {MergeManagerService} from '../application/services/merge-manager-service';
+import {GhCli} from '../infrastructure/github/gh-cli';
+import {LocalGitRunner} from '../infrastructure/git/git-runner';
+import {GitTestRebase} from '../infrastructure/git/git-test-rebase';
 import {hostScheduleService} from '../application/services/agent-host/host-schedules';
 import {SessionHost} from '../application/services/agent-host/session-host';
 import {Tools} from '../application/services/agent-host/tools';
@@ -90,6 +98,8 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
     log.info(`[agent] login shell ${loginShell}, PATH=${env.PATH}`);
 
     let hookServer: QuestionHookServer | null = null;
+    // Made below, once the sessions and copies it needs exist; the hook server only asks it once a session runs.
+    let errands: FixErrandService | null = null;
     const hooks = new HookForwarder({
         endpoint: {
             get url() {
@@ -111,6 +121,12 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
     hookServer = new QuestionHookServer({
         receiver: hooks.receiver,
         archiveTool: hooks.archiveTool,
+        // A fix errand finishing itself (`finish_errand`, #437), once this VM merges (#442).
+        errandTool: {
+            isErrand: (launchId) => errands?.isErrand(launchId) === true,
+            finish: (launchId, args) =>
+                errands?.finish(launchId, args) ?? {ok: false, message: 'This session is not a fix errand.'},
+        },
         // The turn is read here, on the VM, where the transcript is; the Mac gets its text blocks.
         transcripts: new FileTranscriptTail(new NodeFileSystem()),
         log,
@@ -189,16 +205,76 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
         commandsDir: path.join(os.homedir(), '.claude', 'commands'),
     });
 
-    // The Merge manager while this VM is the Merging host: its lane state, its
-    // fix errands as self-started sessions, and their recovery after a restart.
-    const merge = new MergeHost({
-        laneFile: new NodeRecordFile(LANE_STATE_FILE),
-        sessions,
-        hooks,
-        copies,
-        hostSettings: () => config.current(),
+    // The Merge manager while this VM is the Merging host (#438, #442): the same
+    // services as on the Mac, over the VM's own gh login and one lane state
+    // file, its fix errands as self-started sessions in copies it makes itself.
+    const laneStore = new LaneStateStore({file: new NodeRecordFile(LANE_STATE_FILE), clock: systemClock, log});
+    const github = new GhCli({env});
+    const laneRunner = new LaneRunner({
+        github,
+        testRebase: new GitTestRebase({
+            git: new LocalGitRunner(async () => env),
+            directory: path.join(os.homedir(), '.switchboard', 'lane-clones'),
+        }),
+        savings: laneStore,
+        clock: systemClock,
+        log,
+    });
+    const manager = new MergeManagerService({
+        store: laneStore,
+        github,
+        // Nobody to show it to here; the Mac asks for the state (`merge-call state`).
+        renderer: {mergeManagerChanged: () => {}},
+        clock: systemClock,
+        timers: systemTimers,
+        log,
+        runner: laneRunner,
+    });
+    errands = new FixErrandService({
+        store: laneStore.errandStore,
+        manager,
+        github,
+        checkoutOf: async (repository) => {
+            const copy = await copies.ensureCopy({
+                name: repository.split('/')[1] ?? repository,
+                origin: `https://github.com/${repository}.git`,
+                github: repository,
+            });
+            if (!copy.ok) log.warn(`[merge-host] no copy of ${repository}: ${copy.error}`);
+            return copy.ok ? copy.abs : null;
+        },
+        // The copy's own worktree maker: it fetches the branch and runs one at a time with the copy's other work.
+        git: {
+            fetchBranch: async () => ({ok: true}),
+            addDetachedWorktree: async (root, worktree, ref) => {
+                const made = await copies.errandWorktree(root, ref.replace(/^origin\//, ''), path.basename(worktree));
+                return made.ok ? {ok: true} : {ok: false, reason: made.error};
+            },
+        },
+        sessions: {
+            async start({sessionId, worktree, options}) {
+                const started = await sessions.startSelf({sessionId, dir: worktree, options, errand: true});
+                return started.ok ? {ok: true} : {ok: false, reason: started.error};
+            },
+        },
+        // A finished errand is archived here at its turn's end, Mac or no Mac.
+        archive: {request: (launchId) => hooks.archiveAtTurnEnd(launchId)},
         ids: uuidGenerator,
         clock: systemClock,
+        log,
+        runner: laneRunner,
+        unattended: true,
+        noWorkflowScope: () => laneStore.noWorkflowScope,
+    });
+    manager.onLaneRead((lane) => errands?.laneRead(lane));
+    const merge = new MergeHost({
+        manager,
+        errands,
+        store: laneStore,
+        sessions,
+        hooks,
+        hostSettings: () => config.current(),
+        setMerging: (on) => config.change({mergingHost: on}),
         timers: systemTimers,
         log,
     });

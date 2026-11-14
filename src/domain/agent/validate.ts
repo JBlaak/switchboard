@@ -14,7 +14,13 @@
  * numbers, enums) is checked exactly, and unknown extra fields are allowed, so
  * an optional field added later without a protocol bump still passes.
  */
-import {AGENT_CLOSE, TRANSCRIPT_QUERY_METHODS, type AgentCloseCode, type MacMessage} from './protocol';
+import {
+    AGENT_CLOSE,
+    MERGE_CALL_METHODS,
+    TRANSCRIPT_QUERY_METHODS,
+    type AgentCloseCode,
+    type MacMessage,
+} from './protocol';
 
 /** What `parseMacMessage` found: the message, or why it is not one. */
 export type ParsedMacMessage =
@@ -149,6 +155,7 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
     'forget-self-archived': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
     'list-self-started': {requestId: nonEmptyString},
     'forget-self-started': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
+    'merge-call': {requestId: nonEmptyString, method: oneOf(...MERGE_CALL_METHODS), args: object},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
     'set-transcript-aside': {requestId: nonEmptyString, sessionId: nonEmptyString},

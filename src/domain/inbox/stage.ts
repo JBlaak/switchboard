@@ -15,6 +15,7 @@
  * was closed unmerged) ends the work: the item goes back to the inbox, read,
  * marked "Tried, no PR".
  */
+import {INBOX_STAGE_LABELS, ordinal} from '../merge-manager/stage-words';
 import type {InboxStage} from './model';
 
 /** What the session is doing, as far as the stage goes. */
@@ -73,28 +74,11 @@ export function wantsYou(stage: InboxStage): boolean {
     return stage === 'needsYou' || stage === 'ciFailing';
 }
 
-/** A stage's pill text; `queuePosition` names the place for Queue. */
+/**
+ * A stage's pill text; `queuePosition` names the place for Queue. The words
+ * are the one table the stage words keep (`INBOX_STAGE_LABELS`, #441).
+ */
 export function stageLabel(stage: InboxStage, queuePosition: number | null = null): string {
-    switch (stage) {
-        case 'working':
-            return 'Working';
-        case 'needsYou':
-            return 'Needs you';
-        case 'prCi':
-            return 'PR · CI';
-        case 'ciFailing':
-            return 'CI failing';
-        case 'ready':
-            return 'Ready';
-        case 'queue':
-            return queuePosition ? `Queue · ${ordinal(queuePosition)}` : 'Queue';
-        case 'merged':
-            return 'Merged';
-    }
-}
-
-function ordinal(n: number): string {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 13) return `${n}th`;
-    return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+    const label = INBOX_STAGE_LABELS[stage];
+    return stage === 'queue' && queuePosition ? `${label} · ${ordinal(queuePosition)}` : label;
 }
