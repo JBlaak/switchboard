@@ -1319,6 +1319,7 @@ export function buildContainer(): Container {
                     return connection.home;
                 },
                 whenConnected: () => connection.whenConnected(),
+                retryNow: () => connection.retryNow(),
                 runTool: (tool, cwd, args, options) => connection.runTool(tool, cwd, args, options),
                 mergeCall: (method, args, timeoutMs) => connection.mergeCall(method, args, timeoutMs),
             };

@@ -71,6 +71,8 @@ export interface MergingLink {
     /** The VM user's home, where `gh auth status` runs. */
     readonly home: string | null;
     whenConnected(): Promise<void>;
+    /** Dial again now, also after the link gave up; a no-op while connected or dialling. */
+    retryNow(): void;
     runTool(
         tool: 'gh',
         cwd: string,
@@ -150,8 +152,12 @@ export class MergingHostService {
 
     /** The window got focus. */
     public focused(): void {
-        if (this.record.kind === 'mac') this.deps.local.focused();
-        else void this.refresh();
+        if (this.record.kind === 'mac') {
+            this.deps.local.focused();
+            return;
+        }
+        this.wake(this.deps.link(this.record.vm.key));
+        void this.refresh();
     }
 
     /** Hear merges and PRs going to Needs you, wherever merging runs. */
@@ -261,6 +267,7 @@ export class MergingHostService {
         if (!link) return {ok: false, reason: `${vm.name} is not registered any more.`, unreachable: true};
         if (this.moving) return {ok: false, reason: 'Merging is already moving.', unreachable: false};
         this.moving = true;
+        this.wake(link);
         try {
             const answer = await this.within(
                 link.mergeCall('release', {}, BRING_BACK_TIMEOUT_MS),
@@ -317,9 +324,19 @@ export class MergingHostService {
         if (where.to === 'mac') return here();
         const link = this.deps.link(where.vm.key);
         if (!link) throw new Error(`${where.vm.name} is not registered`);
+        this.wake(link);
         const result = (await link.mergeCall(method, args)) as T;
         void this.refresh();
         return result;
+    }
+
+    /**
+     * A link that gave up (out of attempts, or a sign-in that failed) is not
+     * dialled again by itself, and the minute's read does not dial it either.
+     * Looking at the app or pressing a button does.
+     */
+    private wake(link: MergingLink | null): void {
+        if (link && !link.connected) link.retryNow();
     }
 
     private followRemote(): void {

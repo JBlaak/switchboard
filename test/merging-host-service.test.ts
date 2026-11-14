@@ -22,6 +22,7 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
     const told: string[] = [];
     let landed: LandedPullRequest[] = [landedPr(1, 10, 'switchboard', WAITING)];
     const calls: Array<{method: MergeCallMethod; args: Record<string, unknown>}> = [];
+    const redials: string[] = [];
     const vm = {
         reachable,
         landed: [landedPr(1, 10, 'switchboard', WAITING)] as LandedPullRequest[],
@@ -33,6 +34,7 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
         },
         home: '/home/dev',
         whenConnected: () => (vm.reachable ? Promise.resolve() : Promise.reject(new Error('down'))),
+        retryNow: () => void redials.push('retry'),
         runTool: async () => ({code: ghCode, stdout: Buffer.from(gh), stderr: ''}),
         mergeCall: async (method, args = {}) => {
             calls.push({method, args});
@@ -100,6 +102,7 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
         service,
         told,
         calls,
+        redials,
         vm,
         store,
         pushed,
@@ -242,6 +245,46 @@ test("merges and Needs you seen in the VM's reads are told like the Mac's own", 
         transitions.map((t) => t.merged.map((pr) => pr.number)),
         [[1]],
     );
+    service.stop();
+});
+
+test('focusing the window dials a VM link that gave up again', async () => {
+    /* Given */
+    const {service, redials} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+
+    /* When */
+    service.focused();
+    await settle();
+
+    /* Then */
+    assert.deepEqual(redials, ['retry']);
+});
+
+test('Land it while merging is on a VM whose link gave up dials it again before forwarding', async () => {
+    /* Given */
+    const {service, redials, calls} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+
+    /* When */
+    await service.land('JBlaak/switchboard', 7).catch(() => null);
+
+    /* Then */
+    assert.deepEqual(redials, ['retry']);
+    assert.deepEqual(
+        calls.map((call) => call.method),
+        ['land'],
+    );
+});
+
+test("the minute's read of a VM does not dial a link that gave up", async () => {
+    /* Given */
+    const {service, redials} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+
+    /* When */
+    service.start();
+    await settle();
+
+    /* Then */
+    assert.deepEqual(redials, []);
     service.stop();
 });
 

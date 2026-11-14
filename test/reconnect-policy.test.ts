@@ -84,6 +84,8 @@ test('isFatalSshOutput stops the backoff only for failures ssh will repeat', () 
         // Name resolution is deliberately retryable: DNS is routinely unavailable
         // for a few seconds after a wake, which is when reconnecting should work.
         'ssh: Could not resolve hostname vm.local',
+        // The Mac's ssh-agent (1Password) failed, not the host: the next try usually signs.
+        'sign_and_send_pubkey: signing failed for ED25519 "/Users/joris/.ssh/vm.pub" from agent: communication with agent failed ubuntu@10.0.0.2: Permission denied (publickey).',
         'Last login: Thu Sep  4 11:12:22 2026',
         '',
         null,
