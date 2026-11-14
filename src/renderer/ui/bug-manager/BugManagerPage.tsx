@@ -3,8 +3,8 @@
  * route is `bugs`, opened with ⌘B.
  *
  * The Bug manager's head and when it last checked; the tabs (Inbox, In
- * progress, Done, Snoozed, Backlog) with their counts; the summary tiles,
- * which filter the inbox; the bugs grouped by local project, each row with
+ * progress, Done, Snoozed, Backlog) with their counts; the filters over
+ * the inbox; the bugs grouped by local project, each row with
  * its signal, where it came from, a 7-day sparkline, users and events; and
  * the row under the cursor in detail beside them, with Fix, Snooze and
  * Backlog, or, while a Fix works on it, its stage, PR and session.
@@ -21,7 +21,6 @@ import {useStore} from '../use-store';
 import {
     bugCursorRow,
     bugGroups,
-    bugTiles,
     inProgressWantsYou,
     sourceName,
     type BugFilter,
@@ -127,7 +126,6 @@ function BugManagerView(): JSX.Element {
     };
 
     const tabs = tabCounts(page.items);
-    const tiles = bugTiles(page.items);
     const sources = new Set(page.items.map((item) => item.source)).size;
 
     return (
@@ -193,34 +191,11 @@ function BugManagerView(): JSX.Element {
                 ))}
             </nav>
 
-            <div className="bm-tiles" role="group" aria-label="Filters">
-                <Tile filter="unread" n={tiles.unread} label="Unread" hint="to go through" page={page} />
-                <Tile
-                    filter="trending"
-                    n={tiles.trending}
-                    label="Trending"
-                    hint="24 h above its average"
-                    page={page}
-                    tone="hot"
-                />
-                <Tile
-                    filter="regressed"
-                    n={tiles.regressed}
-                    label="Regressed"
-                    hint="back after a fix"
-                    page={page}
-                    tone="red"
-                />
-                <Tile filter="new" n={tiles.new} label="New" hint="first seen lately" page={page} tone="cool" />
-                <button
-                    type="button"
-                    className={'bm-tile is-lav' + (page.tab === 'inProgress' ? ' is-on' : '')}
-                    aria-pressed={page.tab === 'inProgress'}
-                    onClick={() => chooseBugTab(page.tab === 'inProgress' ? 'inbox' : 'inProgress')}>
-                    <span className="bm-tile-n">{tiles.inProgress}</span>
-                    <span className="bm-tile-l">In progress</span>
-                    <span className="bm-tile-hint">being fixed</span>
-                </button>
+            <div className="im-filters bm-filters" role="group" aria-label="Filters">
+                <Filter filter="unread" label="Unread" page={page} />
+                <Filter filter="trending" label="Trending" page={page} tone="hot" />
+                <Filter filter="regressed" label="Regressed" page={page} tone="red" />
+                <Filter filter="new" label="New" page={page} tone="cool" />
             </div>
 
             {page.notice && (
@@ -305,18 +280,14 @@ function CheckedAgo({at}: {at: number | null}): JSX.Element | null {
     return <span>checked {minutes === 0 ? 'just now' : `${minutes} min ago`}</span>;
 }
 
-function Tile({
+function Filter({
     filter,
-    n,
     label,
-    hint,
     page,
     tone,
 }: {
     filter: Exclude<BugFilter, 'all'>;
-    n: number;
     label: string;
-    hint: string;
     page: BugPageState;
     tone?: 'hot' | 'red' | 'cool';
 }): JSX.Element {
@@ -324,12 +295,10 @@ function Tile({
     return (
         <button
             type="button"
-            className={'bm-tile' + (tone ? ` is-${tone}` : '') + (on ? ' is-on' : '')}
+            className={'im-filter' + (tone ? ` is-${tone}` : '') + (on ? ' is-on' : '')}
             aria-pressed={on}
             onClick={() => chooseBugFilter(filter)}>
-            <span className="bm-tile-n">{n}</span>
-            <span className="bm-tile-l">{label}</span>
-            <span className="bm-tile-hint">{hint}</span>
+            {label}
         </button>
     );
 }

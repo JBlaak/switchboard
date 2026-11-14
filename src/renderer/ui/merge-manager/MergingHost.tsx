@@ -1,7 +1,7 @@
 /**
  * Where merging runs (#442), on the Merge manager's page: the header's pill
  * with Hand off, Bring merging back and Take back anyway, and the "While
- * merging was on <VM>" summary under the tiles.
+ * merging was on <VM>" summary under the header.
  *
  * - On this Mac: "Merging on this Mac" and "Hand off merging to <VM>"; with
  *   several VMs a picker beside it, the last choice first. A refused hand-off

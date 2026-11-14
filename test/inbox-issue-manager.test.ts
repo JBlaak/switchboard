@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
     issueChip,
-    issueTiles,
     issueWorkStage,
     polishArgs,
     polishFooter,
@@ -11,7 +10,7 @@ import {
     shownLabels,
     withPolishFooter,
 } from '../src/domain/inbox/issue-manager';
-import {markRead, startWork, syncSource} from '../src/domain/inbox/items';
+import {markRead, syncSource} from '../src/domain/inbox/items';
 import type {InboxItem} from '../src/domain/inbox/model';
 import type {RepositoryPullRequest} from '../src/domain/project/overview';
 import {ME, NOW, REPO, THRESHOLDS, issue} from './support/inbox-fixtures';
@@ -151,17 +150,6 @@ test('an issue never seen is new; seen and commented on since, it has new commen
     assert.equal(issueChip(fresh!), 'new');
     assert.equal(issueChip(read), null);
     assert.equal(issueChip(woken), 'comments');
-});
-
-test('the tiles count unread by why, and what is being worked on', () => {
-    /* Given */
-    const [a, b, c] = arrived(issue(1), issue(2), issue(3));
-
-    /* When */
-    const tiles = issueTiles([a!, markRead(b!), startWork(c!)]);
-
-    /* Then */
-    assert.deepEqual(tiles, {unread: 1, new: 1, comments: 0, inProgress: 1});
 });
 
 // ── Where a started issue stands ──

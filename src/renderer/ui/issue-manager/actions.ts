@@ -314,7 +314,7 @@ export function chooseTab(tab: InboxTab): void {
     dispatch({type: 'issueManagerTabChosen', tab});
 }
 
-/** A tile: the inbox filtered by it, or every row again when it is picked twice. */
+/** A filter: the inbox filtered by it, or every row again when it is picked twice. */
 export function chooseFilter(filter: IssueFilter): void {
     dispatch({type: 'issueManagerFilterChosen', filter});
 }

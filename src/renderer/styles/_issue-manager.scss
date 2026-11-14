@@ -2,7 +2,7 @@
    Loose issues of the watched repositories in the main area: the header and
    its buttons are the Session work page's (.sw-header, .sw-btn), the tabs,
    status line and keys the Tasks page's (.tk-tabs, .tk-status, .tk-keys).
-   Its own: the tiles over the inbox, the rows grouped by repository, and the
+   Its own: the filters over the inbox, the rows grouped by repository, and the
    selected issue's detail beside them. */
 
 /* ---- The main-area panel, swapped in like #tasks-page ---- */
@@ -20,65 +20,61 @@
     opacity: 0.8;
 }
 
-/* ---- The tiles: the summary, and the inbox's filters ---- */
-.im-tiles {
+/* ---- The inbox's filters: small chips, the picked one lit ---- */
+.im-filters {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 14px 28px 0;
+    gap: 6px;
+    padding: 12px 28px 0;
     flex-shrink: 0;
 }
 
-.im-tile {
+.im-filter {
     appearance: none;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    min-width: 128px;
-    padding: 10px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 11px;
     border: 0;
-    border-radius: var(--sb-r-row);
+    border-radius: 999px;
     background: var(--sb-bg-panel);
     box-shadow: inset 0 0 0 1px var(--sb-line);
-    color: inherit;
-    text-align: left;
+    font: 700 12px var(--sb-font-head);
+    color: var(--sb-text-muted);
     cursor: pointer;
 
+    // The signal's colour, as a dot before the word.
+    &.is-cool::before,
+    &.is-hot::before,
+    &.is-red::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+    &.is-cool::before {
+        background: var(--sb-blue);
+    }
+    &.is-hot::before {
+        background: var(--sb-orange);
+    }
+    &.is-red::before {
+        background: var(--sb-red);
+    }
+
     &:hover {
+        color: var(--sb-text);
         box-shadow: inset 0 0 0 1px var(--sb-border-strong);
     }
     &.is-on {
         background: var(--sb-bg-raised);
+        color: var(--sb-text-strong);
         box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.55);
     }
-    &.is-cool .im-tile-n {
-        color: var(--sb-blue);
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 2px;
     }
-    &.is-hot .im-tile-n {
-        color: var(--sb-orange);
-    }
-    &.is-lav .im-tile-n {
-        color: var(--sb-lav-ink);
-    }
-}
-
-.im-tile-n {
-    font: 800 22px/1.1 var(--sb-font-head);
-    color: var(--sb-text-strong);
-    font-variant-numeric: tabular-nums;
-}
-
-.im-tile-l {
-    font: 700 11px var(--sb-font-head);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--sb-text-muted);
-}
-
-.im-tile-hint {
-    font-size: 11.5px;
-    color: var(--sb-text-faint);
 }
 
 /* ---- Body: the list, and the detail beside it ---- */

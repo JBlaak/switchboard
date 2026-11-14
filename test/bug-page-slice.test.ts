@@ -1,6 +1,6 @@
 /**
  * The Bug manager page, renderer side (#414): the tabs and their counts, the
- * tiles that filter the inbox, the groups by local project with "Not linked"
+ * filters over the inbox, the groups by local project with "Not linked"
  * last, the cursor's walk, and what each key does to the row under it.
  */
 import {test} from 'node:test';
@@ -9,7 +9,6 @@ import {
     bugGroups,
     bugPageReducer,
     bugRows,
-    bugTiles,
     inProgressWantsYou,
     initialBugPageState,
     steppedBugCursor,
@@ -70,20 +69,7 @@ test('each tab counts its items: inbox holds unread and read', () => {
     assert.deepEqual(tabCounts(items), {inbox: 2, inProgress: 1, done: 1, snoozed: 1, backlog: 1});
 });
 
-test("the tiles count the inbox's unread, trending, regressed and new bugs, and those in progress", () => {
-    /* Given */
-    const items = [
-        item('a', {signals: {trending: true}}),
-        item('b', {state: {kind: 'read'}, signals: {new: true}}),
-        item('c', {signals: {regressed: true, trending: true}}),
-        item('d', {state: {kind: 'inProgress', stage: 'prCi'}, signals: {trending: true}}),
-    ];
-
-    /* Then */
-    assert.deepEqual(bugTiles(items), {unread: 2, trending: 2, regressed: 1, new: 1, inProgress: 1});
-});
-
-test('a tile filters the inbox, and the same tile again shows all of it', () => {
+test('a filter narrows the inbox, and the same filter again shows all of it', () => {
     /* Given */
     const state = page([item('a', {signals: {trending: true}}), item('b')]);
 
@@ -99,7 +85,7 @@ test('a tile filters the inbox, and the same tile again shows all of it', () => 
     assert.equal(bugRows(again).length, 2);
 });
 
-test('a tile chosen from another tab goes back to the inbox, filtered', () => {
+test('a filter chosen from another tab goes back to the inbox, filtered', () => {
     /* Given */
     const state = page([item('a', {signals: {new: true}})], {tab: 'done'});
 

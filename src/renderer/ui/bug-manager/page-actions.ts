@@ -70,7 +70,7 @@ export function chooseBugTab(tab: BugTab): void {
     dispatch({type: 'bugTabChosen', tab});
 }
 
-/** A tile: filter the inbox by it, or the whole inbox again. */
+/** A filter: the inbox filtered by it, or the whole inbox again. */
 export function chooseBugFilter(filter: BugFilter): void {
     dispatch({type: 'bugFilterChosen', filter});
 }

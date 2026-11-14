@@ -2,8 +2,7 @@
  * The Issue manager page (#415): what the main area shows while its route is
  * `issueManager`. The loose issues of the repositories with Watch issues on,
  * unassigned or yours: tabs (Inbox, In progress, Done, Snoozed, Backlog),
- * tiles over the inbox that count and filter it (Unread, New, New comments,
- * In progress), the list grouped by repository, and the selected issue's
+ * filters over the inbox (Unread, New, New comments), the list grouped by repository, and the selected issue's
  * detail beside it.
  *
  * Its keys, while it has the focus and never in a field, are `page-keys`;
@@ -19,7 +18,7 @@ import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
 import {selectedItem, visibleGroups, type IssueManagerState} from '../../state/issue-manager-slice';
 import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tabs';
-import {issueChip, issueTiles, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
+import {issueChip, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
 import type {InboxItem} from '../../../domain/inbox/model';
 import {IssueDetail, StagePill} from './IssueDetail';
 import {ManagerFigure} from '../bug-manager/ManagerFigure';
@@ -53,7 +52,6 @@ function IssueManagerView(): JSX.Element {
     const selected = selectedItem(page);
     const items = page.items ?? [];
     const counts = tabCounts(items);
-    const tiles = issueTiles(items);
     const merge = useStore((state) => state.mergeManager.state);
     const inProgressNeedsYou = needsYouInProgress(items, merge);
     const repositories = new Set(items.map((item) => item.source)).size;
@@ -193,25 +191,10 @@ function IssueManagerView(): JSX.Element {
                 ))}
             </nav>
 
-            <div className="im-tiles" role="group" aria-label="Summary">
-                <Tile filter="unread" page={page} n={tiles.unread} label="Unread" hint="to go through" />
-                <Tile filter="new" page={page} n={tiles.new} label="New" hint="not seen yet" tone="cool" />
-                <Tile
-                    filter="comments"
-                    page={page}
-                    n={tiles.comments}
-                    label="New comments"
-                    hint="since you looked"
-                    tone="hot"
-                />
-                <button
-                    type="button"
-                    className={'im-tile is-lav' + (page.tab === 'inProgress' ? ' is-on' : '')}
-                    onClick={() => chooseTab('inProgress')}>
-                    <span className="im-tile-n">{tiles.inProgress}</span>
-                    <span className="im-tile-l">In progress</span>
-                    <span className="im-tile-hint">being worked on</span>
-                </button>
+            <div className="im-filters" role="group" aria-label="Filters">
+                <Filter filter="unread" page={page} label="Unread" />
+                <Filter filter="new" page={page} label="New" tone="cool" />
+                <Filter filter="comments" page={page} label="New comments" tone="hot" />
             </div>
 
             {page.notice && (
@@ -274,19 +257,15 @@ function IssueManagerView(): JSX.Element {
     );
 }
 
-function Tile({
+function Filter({
     filter,
     page,
-    n,
     label,
-    hint,
     tone,
 }: {
     filter: IssueFilter;
     page: IssueManagerState;
-    n: number;
     label: string;
-    hint: string;
     tone?: 'cool' | 'hot';
 }): JSX.Element {
     const on = page.tab === 'inbox' && page.filter === filter;
@@ -294,11 +273,9 @@ function Tile({
         <button
             type="button"
             aria-pressed={on}
-            className={'im-tile' + (tone ? ' is-' + tone : '') + (on ? ' is-on' : '')}
+            className={'im-filter' + (tone ? ' is-' + tone : '') + (on ? ' is-on' : '')}
             onClick={() => chooseFilter(filter)}>
-            <span className="im-tile-n">{n}</span>
-            <span className="im-tile-l">{label}</span>
-            <span className="im-tile-hint">{hint}</span>
+            {label}
         </button>
     );
 }
@@ -390,6 +367,6 @@ function EmptyLine({page, count}: {page: IssueManagerState; count: number}): JSX
                 No issues yet. Turn on Watch issues on a project’s page, and its loose issues come here.
             </div>
         );
-    if (page.tab === 'inbox' && page.filter) return <div className="pp-quiet">Nothing matches this tile.</div>;
+    if (page.tab === 'inbox' && page.filter) return <div className="pp-quiet">Nothing matches this filter.</div>;
     return <div className="pp-quiet">{page.tab === 'inbox' ? 'Inbox zero.' : 'Nothing here.'}</div>;
 }

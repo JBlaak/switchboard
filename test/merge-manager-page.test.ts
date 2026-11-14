@@ -1,5 +1,5 @@
 /**
- * The Merge manager's page (#439): its tiles, its lanes (grouped, ordered,
+ * The Merge manager's page (#439): its lanes (grouped, ordered,
  * empty ones left out, only the user's own PRs), Merged today, the CI saved
  * estimate, what each row offers and the keys; the facts main answers for it;
  * and the page's part of the renderer slice.
@@ -8,10 +8,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mergeManagerState} from '../src/domain/merge-manager/landed';
 import {
-    ciRunsSaved,
     dayStart,
     headSteps,
-    mergeManagerTiles,
     mergedToday,
     pageLanes,
     pageSubline,
@@ -47,55 +45,18 @@ function row(lanes: ReturnType<typeof pageLanes>, number: number): PageRow {
     return lanes.flatMap((lane) => lane.rows).find((candidate) => candidate.number === number)!;
 }
 
-// ── Tiles ──
-
-test("the tiles count the user's landed PRs by stage, and Merged today from local midnight", () => {
-    /* Given */
-    const today = dayStart(NOW);
-    const state = mergeManagerState(
-        [
-            landedPr(1, 50, 'switchboard', HEAD),
-            landedPr(2, 40, 'switchboard', {kind: 'waiting', willConflict: true, position: null}),
-            landedPr(3, 30),
-            landedPr(4, 20, 'switchboard', HELD_REVIEW),
-            landedPr(5, 10, 'switchboard', {kind: 'fixing', cause: 'conflict'}),
-            landedPr(6, 5, 'switchboard', STOPPED),
-            landedPr(7, 300, 'switchboard', {kind: 'merged', at: today + 60 * MIN}),
-            landedPr(8, 300, 'switchboard', {kind: 'merged', at: today - 60 * MIN}),
-        ],
-        new Map(),
-    );
-
-    /* When */
-    const tiles = mergeManagerTiles(state, today);
-
-    /* Then */
-    assert.deepEqual(tiles, {
-        needsYou: 1,
-        fixing: 1,
-        merging: 1,
-        waiting: 2,
-        willConflict: 1,
-        held: 1,
-        mergedToday: 1,
-        lastMergedAt: today + 60 * MIN,
-    });
-});
-
-test('CI runs saved is one run for each saving of every kind, and says what they were', () => {
+test('the CI saved text says what each saving was', () => {
     /* Given */
     const saved = {'update-not-pushed': 5, 'run-cancelled': 2, 'conflict-found': 1};
 
     /* When */
-    const runs = ciRunsSaved(saved);
+    const text = savedText(saved);
 
     /* Then */
-    assert.equal(runs, 8);
     assert.equal(
-        savedText(saved),
+        text,
         '5 updates not pushed to waiting PRs, 2 runs cancelled behind the head, 1 conflict found by a local test rebase',
     );
-    assert.equal(ciRunsSaved(null), 0);
     assert.equal(savedText({'update-not-pushed': 0, 'run-cancelled': 0, 'conflict-found': 0}), null);
 });
 
@@ -337,7 +298,7 @@ test("the page's facts: this week's savings in all and by repository, the errand
 
     /* Then */
     assert.deepEqual(asked, [weekStart(NOW)]);
-    assert.equal(ciRunsSaved(facts.savedThisWeek), 4);
+    assert.deepEqual(facts.savedThisWeek, {'update-not-pushed': 3, 'run-cancelled': 1, 'conflict-found': 0});
     assert.deepEqual(Object.keys(facts.savedByRepository), [REPO]);
     assert.deepEqual(facts.errands, [
         {

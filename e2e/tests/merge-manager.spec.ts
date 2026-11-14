@@ -1,10 +1,10 @@
 /**
  * The Merge manager's page (#439): ⌘⇧L opens it from anywhere, the
- * terminal included, on its tiles and its lanes, with the head as a card and
+ * terminal included, on its lanes, with the head as a card and
  * the selected row's detail; J moves the selection, Esc goes back to the
  * session, and ⌘⇧L opens it again.
  *
- * What the tiles count and how the lanes are ordered is unit tested
+ * How the lanes are ordered is unit tested
  * (test/merge-manager-page.test.ts).
  */
 import {test, expect} from '../support/test';
@@ -69,7 +69,7 @@ test('⌘⇧L opens the Merge manager from the terminal on its lanes, J moves th
     const manager = mergePage(page);
     await expect(manager.getByRole('heading', {name: 'Merge manager'})).toBeVisible();
     await expect(manager).toContainText('Merging on this Mac');
-    await expect(manager.getByRole('group', {name: 'Summary'})).toContainText('CI runs saved');
+    await expect(manager.getByRole('group', {name: 'Summary'})).toHaveCount(0);
     await expect(manager.getByRole('group', {name: REPO})).toContainText('Switchboard lane');
     await expect(manager.getByRole('list', {name: 'Where the head is'})).toContainText('Updated on the trunk');
     await expect(manager.getByRole('option', {name: /#1320 Paginate the export/})).toContainText('will conflict');
