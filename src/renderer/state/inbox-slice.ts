@@ -1,10 +1,17 @@
 /**
  * The managers' inbox (#413), renderer side: both managers' unread and urgent
  * counts and which of them are set up, as main pushed them last
- * (`inboxChanged`), for the managers on the empty screen (#416). The pages
- * ask main for the items themselves.
+ * (`inboxChanged`), for the managers on the empty screen (#416), and the bugs
+ * being triaged, for the Errands shelf. The pages ask main for the items
+ * themselves.
  */
-import {EMPTY_INBOX_SUMMARY, type InboxManager, type InboxSummary, type ManagerCounts} from '../../domain/inbox/model';
+import {
+    EMPTY_INBOX_SUMMARY,
+    type InboxManager,
+    type InboxSummary,
+    type ManagerCounts,
+    type TriageErrandView,
+} from '../../domain/inbox/model';
 import type {RendererEvent} from './events';
 
 export interface InboxSliceState {
@@ -19,7 +26,20 @@ export function inboxReducer(state: InboxSliceState, event: RendererEvent): Inbo
     const same = (manager: InboxManager): boolean =>
         sameCounts(state.summary[manager], summary[manager]) &&
         state.summary.configured[manager] === summary.configured[manager];
-    return same('bug') && same('issue') ? state : {summary};
+    return same('bug') && same('issue') && sameTriaging(state.summary.triaging, summary.triaging) ? state : {summary};
+}
+
+/** Whether two pushes triage the same bugs in the same state; main sends a fresh list every time. */
+function sameTriaging(a: readonly TriageErrandView[], b: readonly TriageErrandView[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every(
+        (view, i) =>
+            view.sessionId === b[i].sessionId &&
+            view.key === b[i].key &&
+            view.title === b[i].title &&
+            view.repository === b[i].repository &&
+            view.needsYou === b[i].needsYou,
+    );
 }
 
 function sameCounts(a: ManagerCounts, b: ManagerCounts): boolean {

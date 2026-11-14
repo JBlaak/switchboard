@@ -84,6 +84,10 @@ export function installIpcListeners(): void {
     onEvent('mergeManagerChanged', (_event, state, previous) => {
         if (errandsChanged(previous, state)) relayoutSessionList();
     });
+    // So does the Bug manager starting a triage, or one stopping or finishing.
+    onEvent('inboxChanged', (_event, state, previous) => {
+        if (errandsChanged(previous, state)) relayoutSessionList();
+    });
 
     onEvent('remoteStatus', ({sessionId, status}, _state, previous) => {
         handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);

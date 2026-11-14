@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {errandHeaderText, errandsBySession, shortRepository} from '../src/domain/session/errand-shelf';
+import {errandHeaderText, errandsBySession, shortRepository, shortTitle} from '../src/domain/session/errand-shelf';
 import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
 import type {LaneStage, MergeManagerState} from '../src/domain/merge-manager/model';
 import {landedPr, REPO} from './support/merge-manager-fixtures';
@@ -21,7 +21,7 @@ test('a fix errand on a PR that failed its checks is fixing checks', () => {
     const merge = managerWith({kind: 'fixing', cause: 'checks'}, 's-1');
 
     /* When */
-    const errands = errandsBySession(merge, {});
+    const errands = errandsBySession(merge, {}, []);
 
     /* Then */
     assert.deepEqual(errands.get('s-1'), {
@@ -30,6 +30,7 @@ test('a fix errand on a PR that failed its checks is fixing checks', () => {
         owner: 'merge-manager',
         repository: REPO,
         number: 431,
+        title: null,
         doing: 'fixing checks',
         needsYou: false,
         host: null,
@@ -41,7 +42,7 @@ test('a fix errand on a conflict is rebasing', () => {
     const merge = managerWith({kind: 'fixing', cause: 'conflict'}, 's-1');
 
     /* When */
-    const doing = errandsBySession(merge, {}).get('s-1')?.doing;
+    const doing = errandsBySession(merge, {}, []).get('s-1')?.doing;
 
     /* Then */
     assert.equal(doing, 'rebasing');
@@ -52,7 +53,7 @@ test('a fix errand that stopped on a question needs you', () => {
     const merge = managerWith({kind: 'needsYou', reason: {kind: 'errand-stopped', question: 'Which side?'}}, 's-1');
 
     /* When */
-    const entry = errandsBySession(merge, {}).get('s-1');
+    const entry = errandsBySession(merge, {}, []).get('s-1');
 
     /* Then */
     assert.equal(entry?.doing, 'stopped: asks');
@@ -65,8 +66,8 @@ test('a fix errand whose PR went back to its place is finishing, and one on a me
     const merged = managerWith({kind: 'merged', at: 0}, 's-2');
 
     /* When */
-    const finishing = errandsBySession(waiting, {}).get('s-1');
-    const gone = errandsBySession(merged, {}).get('s-2');
+    const finishing = errandsBySession(waiting, {}, []).get('s-1');
+    const gone = errandsBySession(merged, {}, []).get('s-2');
 
     /* Then */
     assert.equal(finishing?.doing, 'finishing');
@@ -81,7 +82,7 @@ test('errands running on a VM carry its name', () => {
     } as MergeManagerState['merging']);
 
     /* When */
-    const host = errandsBySession(merge, {}).get('s-1')?.host;
+    const host = errandsBySession(merge, {}, []).get('s-1')?.host;
 
     /* Then */
     assert.equal(host, 'builder');
@@ -99,7 +100,7 @@ test('queue errands count from their session until done', () => {
     };
 
     /* When */
-    const errands = errandsBySession(EMPTY_MERGE_MANAGER_STATE, queue);
+    const errands = errandsBySession(EMPTY_MERGE_MANAGER_STATE, queue, []);
 
     /* Then */
     assert.deepEqual([...errands.keys()], ['n-1', 'f-1']);
@@ -110,7 +111,7 @@ test('queue errands count from their session until done', () => {
 
 test('the header names the owner, what it does and on which PR', () => {
     /* Given */
-    const entry = errandsBySession(managerWith({kind: 'fixing', cause: 'checks'}, 's-1'), {}).get('s-1')!;
+    const entry = errandsBySession(managerWith({kind: 'fixing', cause: 'checks'}, 's-1'), {}, []).get('s-1')!;
 
     /* When */
     const text = errandHeaderText(entry);
@@ -118,4 +119,99 @@ test('the header names the owner, what it does and on which PR', () => {
     /* Then */
     assert.equal(text, 'Errand for the Merge manager · fixing checks on #431 · archives itself');
     assert.equal(shortRepository('owner/repo'), 'repo');
+});
+
+// ── The Bug manager's quick triage ──
+
+const TRIAGE = {
+    sessionId: 't-1',
+    key: 'bugsnag:proj:err-1',
+    title: 'TypeError: Cannot read properties of undefined',
+    repository: 'movelab/switchboard',
+    needsYou: false,
+};
+
+test('a bug being triaged is a triage errand for the Bug manager, with no PR', () => {
+    /* Given */
+    const triaging = [TRIAGE];
+
+    /* When */
+    const errands = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, triaging);
+
+    /* Then */
+    assert.deepEqual(errands.get('t-1'), {
+        sessionId: 't-1',
+        kind: 'triage',
+        owner: 'bug-manager',
+        repository: 'movelab/switchboard',
+        number: null,
+        title: 'TypeError: Cannot read properties of undefined',
+        doing: 'triaging',
+        needsYou: false,
+        host: null,
+    });
+});
+
+test('a triage that stopped without a verdict needs you', () => {
+    /* Given */
+    const triaging = [{...TRIAGE, needsYou: true}];
+
+    /* When */
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, triaging).get('t-1');
+
+    /* Then */
+    assert.equal(entry?.doing, 'stopped');
+    assert.equal(entry?.needsYou, true);
+});
+
+test('triages sit in the index beside the PR errands', () => {
+    /* Given */
+    const merge = managerWith({kind: 'fixing', cause: 'checks'}, 's-1');
+
+    /* When */
+    const errands = errandsBySession(merge, {}, [TRIAGE]);
+
+    /* Then */
+    assert.deepEqual([...errands.keys()], ['s-1', 't-1']);
+});
+
+test("the header names the Bug manager and the bug's short title", () => {
+    /* Given */
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [TRIAGE]).get('t-1')!;
+
+    /* When */
+    const text = errandHeaderText(entry);
+
+    /* Then */
+    assert.equal(
+        text,
+        'Errand for the Bug manager · triaging TypeError: Cannot read properties of un… · archives itself',
+    );
+});
+
+test('the header says a stuck triage stopped', () => {
+    /* Given */
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [{...TRIAGE, title: 'Boom', needsYou: true}]).get(
+        't-1',
+    )!;
+
+    /* When */
+    const text = errandHeaderText(entry);
+
+    /* Then */
+    assert.equal(text, 'Errand for the Bug manager · stopped triaging Boom · archives itself');
+});
+
+test('a short title is kept whole; a long one is cut to 40 characters with an ellipsis', () => {
+    /* Given */
+    const short = 'Error:  out of\n memory';
+    const long = 'x'.repeat(60);
+
+    /* When */
+    const cut = [shortTitle(short), shortTitle(long)];
+
+    /* Then */
+    assert.equal(cut[0], 'Error: out of memory');
+    assert.equal(cut[1].length, 40);
+    assert.ok(cut[1].endsWith('…'));
 });
