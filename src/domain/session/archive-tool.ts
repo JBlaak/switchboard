@@ -13,7 +13,7 @@
  * sessions), which Streamable HTTP allows.
  *
  * The same server offers more tools where the caller hands them in (`extra`):
- * on the Mac, `show_page` (`page-tool`).
+ * on the Mac, `show_page` (`page-tool`) and `land` (`merge-manager/land-tool`).
  */
 
 /** The name the CLI registers the server under; the tool shows as `mcp__switchboard__archive_session`. */
@@ -41,15 +41,20 @@ export interface ArchiveToolOutcome {
     message: string;
 }
 
-/** Another tool the server offers: what `tools/list` says of it, and what a call does. */
-export interface McpTool {
+/**
+ * Another tool the server offers: what `tools/list` says of it, and what a
+ * call does. A call may answer later (`land` asks GitHub); `archiveToolReply`
+ * itself only takes tools that answer at once, so the server holds the reply
+ * until a later answer settles.
+ */
+export interface McpTool<Outcome extends ArchiveToolOutcome | Promise<ArchiveToolOutcome> = ArchiveToolOutcome> {
     readonly definition: {
         readonly name: string;
         readonly title: string;
         readonly description: string;
         readonly inputSchema: Record<string, unknown>;
     };
-    call(args: unknown): ArchiveToolOutcome;
+    call(args: unknown): Outcome;
     /**
      * When to reach for the tool, for the server's `instructions`. The CLI puts
      * those in the session's system prompt, which matters because it may list

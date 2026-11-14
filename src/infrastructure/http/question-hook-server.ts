@@ -22,8 +22,8 @@
  * the heads-up pop-up; any other is let go at once.
  *
  * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
- * with `archive_session` and, where a page tool is given, `show_page`; to a
- * fix errand (#437), `finish_errand` as well.
+ * with `archive_session` and, where they are given, `show_page` and `land`;
+ * to a fix errand (#437), `finish_errand` as well.
  *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
@@ -44,6 +44,7 @@ import {parseOnePasswordHookInput} from '../../domain/onepassword/heads-up';
 import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
 import {pageTool, type PageInput} from '../../domain/session/page-tool';
 import {finishErrandTool} from '../../domain/merge-manager/errands';
+import {landTool, type LandInput} from '../../domain/merge-manager/land-tool';
 import {parseQuestionHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
 import type {HookReceiver, QuestionHookEndpoint} from '../../application/ports/question-hook';
@@ -82,6 +83,11 @@ export interface QuestionHookServerDeps {
      * VM) the tool is not offered.
      */
     pageTool?: {show(launchId: string, page: PageInput): ArchiveToolOutcome};
+    /**
+     * Where `land` calls go, with a valid pull request: the Merge manager.
+     * Without one (the agent on a VM) the tool is not offered.
+     */
+    landTool?: {land(launchId: string, input: LandInput): Promise<ArchiveToolOutcome>};
     /**
      * Fix errands (#437): `finish_errand` is offered to a session only while
      * it is one. Without it (the agent on a VM) the tool is not offered.
@@ -260,36 +266,46 @@ export class QuestionHookServer implements QuestionHookEndpoint {
     private mcp(launchId: string, body: unknown, res: http.ServerResponse): void {
         const {archiveTool} = this.deps;
         if (!archiveTool) return this.end(res, 404);
-        // archiveToolReply is synchronous and pure. When the outcome is only a
-        // promise, the call is made once here, and the reply is built again
-        // around the settled outcome; a synchronous outcome replies at once,
-        // exactly as before.
+        // archiveToolReply is synchronous and pure. When a tool's outcome is
+        // only a promise (an archive forwarded to the Mac, a land), the call is
+        // made once here, and the reply is built again around the settled
+        // outcome; a synchronous outcome replies at once, exactly as before.
         const page = this.deps.pageTool;
         const errands = this.deps.errandTool;
-        const extra: McpTool[] = [
+        const land = this.deps.landTool;
+        const extra: McpTool<ArchiveToolOutcome | Promise<ArchiveToolOutcome>>[] = [
             ...(page ? [pageTool((input) => page.show(launchId, input))] : []),
+            ...(land ? [landTool((input) => land.land(launchId, input))] : []),
             ...(errands?.isErrand(launchId) ? [finishErrandTool((args) => errands.finish(launchId, args))] : []),
         ];
-        const call: {pending?: Promise<ArchiveToolOutcome>} = {};
+        const call: {pending?: Promise<ArchiveToolOutcome>; failure?: string} = {};
+        const hold = (outcome: ArchiveToolOutcome | Promise<ArchiveToolOutcome>, failure: string) => {
+            if (!(outcome instanceof Promise)) return outcome;
+            call.pending = outcome;
+            call.failure = failure;
+            return {ok: false, message: ''};
+        };
         const reply = archiveToolReply(
             body,
-            () => {
-                const outcome = archiveTool.request(launchId);
-                if (!(outcome instanceof Promise)) return outcome;
-                call.pending = outcome;
-                return {ok: false, message: ''};
-            },
-            extra,
+            () => hold(archiveTool.request(launchId), 'Switchboard could not archive this session.'),
+            extra.map((tool) => ({
+                ...tool,
+                call: (args: unknown) => hold(tool.call(args), `Switchboard could not finish ${tool.definition.name}.`),
+            })),
         );
         if (call.pending) {
             void call.pending
                 .catch((err: unknown): ArchiveToolOutcome => {
-                    this.deps.log.error('[archive-tool] request failed:', err);
-                    return {ok: false, message: 'Switchboard could not archive this session.'};
+                    this.deps.log.error('[mcp] tool call failed:', err);
+                    return {ok: false, message: call.failure ?? 'Switchboard could not finish this call.'};
                 })
                 .then((outcome) => {
-                    // Only an archive call is ever pending, so the other tools are not called again.
-                    const settled = archiveToolReply(body, () => outcome, extra);
+                    // The tool is not called again: every tool answers with the settled outcome.
+                    const settled = archiveToolReply(
+                        body,
+                        () => outcome,
+                        extra.map((tool) => ({...tool, call: () => outcome})),
+                    );
                     if (settled) this.json(res, settled);
                 });
             return;

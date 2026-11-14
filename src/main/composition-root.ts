@@ -166,6 +166,7 @@ import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {ArchiveToolService} from '../application/services/archive-tool-service';
+import {LandToolService} from '../application/services/land-tool-service';
 import {PageToolService} from '../application/services/page-tool-service';
 import {OpensslIdentityStore} from '../infrastructure/phone/identity-store';
 import {EncryptedFileSecretStore} from '../infrastructure/fs/encrypted-secret-store';
@@ -463,6 +464,16 @@ export function buildContainer(): Container {
         },
         // A session showing the user a page (`show_page`), over its terminal.
         pageTool: new PageToolService({registry, renderer, clock, log}),
+        // A session landing its pull request (`land`), through the Merging host as Land it does.
+        landTool: new LandToolService({
+            mergeManager: {
+                land: (repository, number) =>
+                    mergingHost
+                        ? mergingHost.land(repository, number)
+                        : Promise.resolve({ok: false, reason: 'the Merge manager is not running yet'}),
+            },
+            log,
+        }),
         // A fix errand finishing itself (`finish_errand`, #437), offered to errands only.
         errandTool: {
             isErrand: (launchId) => fixErrands.isErrand(launchId),
