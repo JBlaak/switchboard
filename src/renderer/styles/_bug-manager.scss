@@ -661,16 +661,17 @@
 }
 
 .bm-titlerow {
+    // The title takes the pane's width; the Bugsnag link sits under it.
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 6px;
 }
 
 .bm-detail-title {
     margin: 0;
     min-width: 0;
-    font: 700 16px/1.3 var(--sb-font-head);
+    font: 700 15px/1.35 var(--sb-font-head);
     color: var(--sb-text-strong);
     overflow-wrap: anywhere;
 }
