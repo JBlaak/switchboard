@@ -263,6 +263,11 @@ export function toggleSection(tier: number): void {
     dispatch({type: 'sectionToggled', tier});
 }
 
+/** Unfold the Errands shelf, or fold it again; `open` sets it either way. */
+export function toggleErrandShelf(open?: boolean): void {
+    dispatch(open === undefined ? {type: 'errandShelfToggled'} : {type: 'errandShelfToggled', open});
+}
+
 // ── Rename ──
 
 export function startRename(rowId: string): void {

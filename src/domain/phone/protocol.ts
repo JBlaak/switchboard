@@ -80,6 +80,31 @@ export interface PhoneSession {
     owner: TerminalOwner;
     /** Epoch ms of the last state change, for the row's "2m". */
     changedAt: number;
+    /**
+     * Set when Switchboard started the session itself for a pull request (an
+     * errand); left out for the user's own sessions. An older app ignores it
+     * and lists the errand as any other session.
+     */
+    errand?: PhoneErrand;
+}
+
+/**
+ * What an errand session is doing for which pull request: the Merge manager's
+ * fix errands and the merge queue's Nudge and Fix (`domain/session/errand-shelf`).
+ * The phone keeps these out of its own sections and lists them under an
+ * "N errands" chip; a stuck one also stays in Needs you, marked as an errand.
+ */
+export interface PhoneErrand {
+    /** fix: a wrench; nudge: a paper plane. */
+    kind: 'fix' | 'nudge';
+    /** The pull request's number. */
+    number: number;
+    /** `owner/repo`. */
+    repository: string;
+    /** In a few words: "fixing checks", "rebasing", "nudging the reviewer", "stopped: asks". */
+    doing: string;
+    /** Stuck: it stopped without finishing, and only the user can move it on. */
+    needsYou: boolean;
 }
 
 /** A local project Ask Patch may start a session in. */

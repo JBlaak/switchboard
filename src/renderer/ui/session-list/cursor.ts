@@ -20,7 +20,8 @@ export function setListCursor(target: string | null): void {
 
 /**
  * The element a cursor name renders as: the element of that id, or for a
- * group's header, the header at the top of the group's element.
+ * group's header, the header at the top of the group's element. A row of the
+ * Errands shelf (`er-<key>`) counts wherever in the sidebar the shelf docks.
  */
 export function cursorElement(target: string): HTMLElement | null {
     if (target.startsWith('header:')) {
@@ -28,7 +29,9 @@ export function cursorElement(target: string): HTMLElement | null {
         return group?.querySelector<HTMLElement>(':scope > .slug-group-header') ?? null;
     }
     const el = document.getElementById(target);
-    return el && sidebarContent.contains(el) ? el : null;
+    if (!el) return null;
+    if (sidebarContent.contains(el)) return el;
+    return target.startsWith('er-') && el.closest('#sidebar') ? el : null;
 }
 
 /**

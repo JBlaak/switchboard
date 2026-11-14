@@ -29,18 +29,22 @@ import {MAC, NO_OWNERSHIP, acceptsInput, applyOwnership, ownerOf} from '../../do
 import {sessionTier, TIER_ATTENTION, TIER_RUNNING} from '../../domain/session/tiers';
 import {turnHolds, type BackgroundTask, type TurnHolds} from '../../domain/session/background-tasks';
 import {cleanDisplayName, resolveSessionName} from '../../domain/session/title';
+import {errandsBySession, type ErrandEntry} from '../../domain/session/errand-shelf';
 import {ENTER_ALT_SCREEN, HIDE_CURSOR} from '../../domain/terminal/ansi';
 import type {RouteCandidate, RouteRequest, RouteResult} from '../../domain/ask/model';
 import type {Device, OwnershipEvent, OwnershipState, TerminalSize} from '../../domain/phone/ownership';
 import type {
     ClientMessage,
     PhoneAskResult,
+    PhoneErrand,
     PhoneProject,
     PhoneSession,
     ServerMessage,
     TerminalOwner,
 } from '../../domain/phone/protocol';
 import type {Project} from '../../domain/project/project';
+import type {MergeManagerState} from '../../domain/merge-manager/model';
+import type {QueueErrandView} from '../../domain/project/queue-errands';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged, GrillResult} from '../../domain/grill/model';
 import type {SessionRow} from '../../domain/session/session';
@@ -99,6 +103,12 @@ export interface PhoneSessionsServiceDeps {
     /** Stop the session and archive its row, as the Mac's archive does; `ok: false` leaves it running and listed. */
     archiver: {archive(sessionId: string): {ok: boolean; error?: string}};
     settings: {effective(projectPath: string): EffectiveSettings};
+    /**
+     * What tells an errand from the user's own session: the Merge manager's
+     * state and the merge queue's errands, as main last pushed and serves
+     * them to the renderer. Read on every list; `errandsChanged` sends it again.
+     */
+    errands: {mergeManager(): MergeManagerState; queue(): readonly QueueErrandView[]};
     renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
     /** Hold-to-talk, which keeps its own state per connection. */
     voice: Pick<VoiceService, 'connected' | 'message' | 'disconnected'>;
@@ -428,6 +438,11 @@ export class PhoneSessionsService {
         this.schedulePush();
     }
 
+    /** An errand started, stopped, moved on or finished: the phones' lists mark errands afresh. */
+    public errandsChanged(): void {
+        this.schedulePush();
+    }
+
     /** A session was archived, on the Mac or from a phone: every phone closes it, under the id it knows. */
     public sessionArchived(sessionId: string): void {
         this.broadcast({type: 'archived', sessionId: this.currentId(sessionId) ?? sessionId});
@@ -724,6 +739,7 @@ export class PhoneSessionsService {
             for (const row of project.sessions) rows.set(row.sessionId, row);
         }
         const asking = new Set(questions.pending().map((set) => set.sessionId));
+        const errands = this.errands();
 
         const listed: {session: PhoneSession; tier: number; sortTime: number}[] = [];
         for (const sessionId of running.runningSessionIds()) {
@@ -757,12 +773,26 @@ export class PhoneSessionsService {
                     waiting: questionsWaiting ? 'questions' : terminal ? 'terminal' : null,
                     owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
                     changedAt: this.changedAt.get(sessionId) ?? session.openedAt,
+                    ...errandField(errands.get(sessionId)),
                 },
             });
         }
         listed.sort((a, b) => b.tier - a.tier || b.sortTime - a.sortTime);
         this.listed = new Set(listed.map((entry) => entry.session.id));
         return listed.map((entry) => entry.session);
+    }
+
+    /** Every errand, keyed by the id its session is registered under now (a re-key moves it). */
+    private errands(): Map<string, ErrandEntry> {
+        const byRepository: Record<string, QueueErrandView[]> = {};
+        for (const errand of this.deps.errands.queue()) {
+            (byRepository[errand.repository] ??= []).push(errand);
+        }
+        const out = new Map<string, ErrandEntry>();
+        for (const [sessionId, entry] of errandsBySession(this.deps.errands.mergeManager(), byRepository)) {
+            out.set(this.currentId(sessionId) ?? sessionId, entry);
+        }
+        return out;
     }
 
     // ── Helpers ──
@@ -780,6 +810,13 @@ export class PhoneSessionsService {
         if (device === MAC) return {kind: 'mac'};
         return {kind: 'device', deviceId: device, name: this.names.get(device) ?? 'Phone'};
     }
+}
+
+/** The wire's `errand`, spread into a session: nothing for the user's own sessions, so older fields stay as they were. */
+function errandField(entry: ErrandEntry | undefined): {errand?: PhoneErrand} {
+    if (!entry) return {};
+    const {kind, number, repository, doing, needsYou} = entry;
+    return {errand: {kind, number, repository, doing, needsYou}};
 }
 
 /**

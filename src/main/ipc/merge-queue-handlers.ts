@@ -86,11 +86,13 @@ export function registerMergeQueueHandlers(ipc: IpcRegistrar, app: Container): v
             ? app.queueErrands.optIn(repository, number)
             : {ok: false, reason: 'Not a PR to opt in'},
     );
-    ipc.handle(INVOKE.queueErrandStarted, (errandId: string, sessionId: string) =>
-        isText(errandId) && isText(sessionId)
-            ? app.queueErrands.started(errandId, sessionId)
-            : {ok: false, reason: 'Not an errand and its session'},
-    );
+    // The phones keep errands apart from the user's sessions: tell them when one starts.
+    ipc.handle(INVOKE.queueErrandStarted, (errandId: string, sessionId: string) => {
+        if (!isText(errandId) || !isText(sessionId)) return {ok: false, reason: 'Not an errand and its session'};
+        const result = app.queueErrands.started(errandId, sessionId);
+        app.phoneSessions.errandsChanged();
+        return result;
+    });
     ipc.handle(INVOKE.queueErrandAbandoned, (errandId: string) =>
         isText(errandId) ? app.queueErrands.abandon(errandId) : {ok: false, reason: 'Not an errand'},
     );

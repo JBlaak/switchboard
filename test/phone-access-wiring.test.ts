@@ -16,13 +16,14 @@ import {HIDE_CURSOR} from '../src/domain/terminal/ansi';
 import {OpensslIdentityStore} from '../src/infrastructure/phone/identity-store';
 import {systemTimers} from '../src/infrastructure/system/timers';
 import {INVOKE, SEND} from '../src/ipc/channels';
-import {PhoneEventTee, buildPhoneAccess} from '../src/main/phone-access';
+import {PhoneEventTee, buildPhoneAccess, type PhoneSessionEvents} from '../src/main/phone-access';
 import {registerPhoneAccessHandlers} from '../src/main/ipc/phone-access-handlers';
 import {registerQuestionHandlers} from '../src/main/ipc/question-handlers';
 import {registerSessionHandlers} from '../src/main/ipc/session-handlers';
 import {sessionArchiver} from '../src/main/stop-session';
 import {registerTerminalHandlers} from '../src/main/ipc/terminal-handlers';
 import {fakeRenderer, resizingPty, silentLog} from './support/fakes';
+import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
 import type {FakeRenderer} from './support/fakes';
 import type {DeviceRegistry, EnrolledDevice, ServiceAdvertiser} from '../src/application/ports/phone-access';
 import type {OpenSessionRequest} from '../src/application/services/session-launcher';
@@ -247,6 +248,7 @@ async function mac() {
             },
             effective: () => ({permissionMode: 'auto', worktree: false}),
         },
+        errands: {mergeManager: () => EMPTY_MERGE_MANAGER_STATE, queue: () => []},
         renderer,
         voice: {
             transcriber: {available: async () => true, transcribe: async () => ' um, fix the login\n'},
@@ -716,4 +718,19 @@ test('a phone that holds the mic gets the voice status on welcome and the cleane
     assert.deepEqual(status, {type: 'voice-status', status: {kind: 'ready'}});
     assert.deepEqual(result, {type: 'voice-result', voiceId: 'v1', result: {kind: 'text', text: 'Fix the login.'}});
     phone.close();
+});
+
+test('a Merge manager push reaches the window, and the phones mark its errands afresh', () => {
+    /* Given */
+    const window = fakeRenderer();
+    let errandsChanged = 0;
+    const phones = {errandsChanged: () => errandsChanged++} as unknown as PhoneSessionEvents;
+    const tee = new PhoneEventTee(window, () => phones);
+
+    /* When */
+    tee.mergeManagerChanged(EMPTY_MERGE_MANAGER_STATE);
+
+    /* Then */
+    assert.deepEqual(window.only('mergeManagerChanged'), [['mergeManagerChanged', EMPTY_MERGE_MANAGER_STATE]]);
+    assert.equal(errandsChanged, 1);
 });

@@ -1,0 +1,41 @@
+{
+    "type": "sessions",
+    "sessions": [
+        {
+            "id": "s-4",
+            "name": "Fix checks on #431",
+            "project": "switchboard",
+            "projectPath": "/Users/joris/Development/switchboard",
+            "remote": null,
+            "state": "busy",
+            "waiting": null,
+            "owner": {"kind": "mac"},
+            "changedAt": 1792756980000,
+            "errand": {
+                "kind": "fix",
+                "number": 431,
+                "repository": "jblaak/switchboard",
+                "doing": "fixing checks",
+                "needsYou": false
+            }
+        },
+        {
+            "id": "s-5",
+            "name": "Nudge the reviewer on #398",
+            "project": "switchboard",
+            "projectPath": "/Users/joris/Development/switchboard",
+            "remote": null,
+            "state": "needs-you",
+            "waiting": "terminal",
+            "owner": {"kind": "mac"},
+            "changedAt": 1792757040000,
+            "errand": {
+                "kind": "nudge",
+                "number": 398,
+                "repository": "jblaak/switchboard",
+                "doing": "stopped",
+                "needsYou": true
+            }
+        }
+    ]
+}

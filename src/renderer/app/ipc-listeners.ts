@@ -32,6 +32,7 @@ import {openDialog} from '../ui/dialogs/actions';
 import {setHeaderIdentity} from '../features/sessions/terminal-header';
 import {handleRemoteStatus} from '../features/remote/connection-log';
 import {busyChanged} from '../state/activity-slice';
+import {errandsChanged} from '../state/errand-index';
 import {turnHolds} from '../../domain/session/background-tasks';
 import {getState, onEvent} from '../state/app-store';
 import {pendingSessions, sessionMap} from '../state/session-store';
@@ -75,8 +76,13 @@ export function installIpcListeners(): void {
     onEvent('prStatusChanged', (_event, state) => {
         if (anyWatching(state)) relayoutSessionList();
     });
-    onEvent('mergeQueueChanged', (_event, state) => {
-        if (anyWatching(state)) relayoutSessionList();
+    onEvent('mergeQueueChanged', (_event, state, previous) => {
+        if (anyWatching(state) || errandsChanged(previous, state)) relayoutSessionList();
+    });
+    // Which sessions are errands decides whether they sit on the Errands shelf
+    // or in the user's sections, and a stuck one also asks in Blocked.
+    onEvent('mergeManagerChanged', (_event, state, previous) => {
+        if (errandsChanged(previous, state)) relayoutSessionList();
     });
 
     onEvent('remoteStatus', ({sessionId, status}, _state, previous) => {

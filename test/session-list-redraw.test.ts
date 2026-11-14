@@ -65,6 +65,7 @@ const OLD = 30 * 24 * HOUR;
 function redraw(): RendererEvent {
     return {
         type: 'sessionListBuilt',
+        errands: [],
         items: [item(row('a')), item(group), item(row('old', OLD), OLD)],
         activeItemId: null,
         resort: false,

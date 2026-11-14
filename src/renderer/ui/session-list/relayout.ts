@@ -14,6 +14,7 @@ import {dispatch, getState} from '../../state/app-store';
 import {tierOf} from '../../state/activity-store';
 import {sessionKeyIn} from '../../state/keys-slice';
 import {listItems} from '../../state/session-list-layout';
+import {errandOf} from '../../state/errand-index';
 import {view} from '../../state/session-store';
 import {isFilteringView} from '../../state/view-slice';
 import {projectsToRender} from '../../state/search-narrowing';
@@ -42,13 +43,14 @@ export interface RelayoutOptions {
 export function relayoutSessionList({resort = false}: RelayoutOptions = {}): void {
     const state = getState();
     const now = Date.now();
-    const {items, activeItemId} = listItems(projectsForLayout(), {
+    const {items, activeItemId, errands} = listItems(projectsForLayout(), {
         filters: state.view,
         running: state.view.activePtyIds,
         // The session on screen, whose folded group opens to show its lit row.
         activeSessionId: highlightedSession(state.mainArea),
         tierOf,
         keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
+        errandOf: (sessionId) => errandOf(state, sessionId),
         today: localDateKey(new Date(now)),
         now,
     });
@@ -56,6 +58,7 @@ export function relayoutSessionList({resort = false}: RelayoutOptions = {}): voi
         type: 'sessionListBuilt',
         items,
         activeItemId,
+        errands,
         resort,
         filtering: isFilteringView(state.view),
         visibleSessionCount: state.view.visibleSessionCount,

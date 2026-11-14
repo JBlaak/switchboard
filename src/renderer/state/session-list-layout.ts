@@ -23,9 +23,17 @@ import {byMostRecentlyModified} from '../../domain/session/session';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {isSnoozed} from '../../domain/session/snooze';
 import {cleanDisplayName} from '../../domain/session/title';
-import {TIER_ORDER, TIER_REST, TIER_RUNNING, itemTier, rowSurvivesTruncation} from '../../domain/session/tiers';
+import {
+    TIER_ATTENTION,
+    TIER_ORDER,
+    TIER_REST,
+    TIER_RUNNING,
+    itemTier,
+    rowSurvivesTruncation,
+} from '../../domain/session/tiers';
 import {formatDate, localDateKey} from '../lib/format';
 import type {Project} from '../../domain/project/project';
+import type {ErrandEntry} from '../../domain/session/errand-shelf';
 import type {SessionRow} from '../../domain/session/session';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 
@@ -85,12 +93,24 @@ export interface ListItem {
     /** The highest tier of its sessions, before pinning is taken into account. */
     readonly tier: number;
     readonly remote: boolean;
+    /**
+     * A stuck errand's row in Blocked: it sits below every one of the user's
+     * own entries there, whatever the anchoring does, and neither counts
+     * toward the visible cap nor goes behind "older".
+     */
+    readonly errand?: boolean;
 }
 
 /** An entry in its final place, under the section it is filed in. */
 export interface LaidEntry {
     readonly entry: SessionListEntry;
     readonly tier: number;
+}
+
+/** An errand's session on the Errands shelf. */
+export interface LaidErrand {
+    readonly entry: SessionListRow;
+    readonly errand: ErrandEntry;
 }
 
 /** One entry of the full render order, the thing the next layout anchors against. */
@@ -103,6 +123,12 @@ export interface OrderedEntry {
 export interface SessionListLayout {
     readonly visible: readonly LaidEntry[];
     readonly older: readonly LaidEntry[];
+    /**
+     * The Errands shelf, docked under the list: every errand's session, the
+     * ones that need you first, then the rest newest started first. Empty
+     * while filtering, when errands show inline among the matches.
+     */
+    readonly errands: readonly LaidErrand[];
     /** A filter or a search is on: no section labels, and nothing folded away. */
     readonly filtering: boolean;
 }
@@ -132,6 +158,15 @@ export function projectPinId(projectPath: string): string {
 /** The element id of a session's row. */
 export function rowId(key: string): string {
     return 'si-' + key;
+}
+
+/**
+ * The element id of a session's row on the Errands shelf. Not `rowId`: a
+ * stuck errand shows both on the shelf and in Blocked, and the two rows are
+ * two elements the cursor can be on.
+ */
+export function errandRowId(key: string): string {
+    return 'er-' + key;
 }
 
 /** The label a session shows: its name, its AI title, or its first prompt. */
@@ -289,6 +324,8 @@ export interface BuildInputs {
     readonly today: string;
     /** The time, in ms: a snoozed session stays out of the list until its own. */
     readonly now: number;
+    /** The errand a session runs (see `state/errand-index`), or null for one the user started. */
+    errandOf(sessionId: string): ErrandEntry | null;
 }
 
 export function passesFilters(sessions: readonly SessionRow[], inputs: BuildInputs): SessionRow[] {
@@ -321,8 +358,9 @@ export function passesFilters(sessions: readonly SessionRow[], inputs: BuildInpu
 export function listItems(
     projects: readonly Project[],
     inputs: BuildInputs,
-): {items: ListItem[]; activeItemId: string | null} {
+): {items: ListItem[]; activeItemId: string | null; errands: LaidErrand[]} {
     const items: ListItem[] = [];
+    const errands: LaidErrand[] = [];
     let activeItemId: string | null = null;
 
     const row = (session: SessionRow, projectPath: string): SessionListRow => ({
@@ -377,7 +415,38 @@ export function listItems(
             }
         }
 
-        const filtered = passesFilters(project.sessions, inputs);
+        let filtered = passesFilters(project.sessions, inputs);
+        // Errands keep out of the user's sections: they go to the shelf, and
+        // never join a slug group. While filtering they show inline among the
+        // matches like any session, so the filter still finds them.
+        if (!filtering) {
+            filtered = filtered.filter((session) => {
+                const errand = inputs.errandOf(session.sessionId);
+                if (!errand) return true;
+                if (session.archived) return false;
+                const key = inputs.keyOf(session.sessionId);
+                errands.push({
+                    entry: {kind: 'row', id: errandRowId(key), session: {...session}, projectPath: project.projectPath},
+                    errand,
+                });
+                if (errand.needsYou) {
+                    // Stuck: only the user can move it on, so it also asks in Blocked.
+                    const entry = row(session, project.projectPath);
+                    if (session.sessionId === inputs.activeSessionId) activeItemId = entry.id;
+                    items.push({
+                        entry,
+                        sortTime: new Date(session.modified).getTime(),
+                        startTime: new Date(session.created).getTime(),
+                        pinned: false,
+                        pinnedPlan: false,
+                        tier: TIER_ATTENTION,
+                        remote: session.type === 'remote',
+                        errand: true,
+                    });
+                }
+                return false;
+            });
+        }
         if (filtered.length === 0) continue;
 
         const bySlug = new Map<string, SessionRow[]>();
@@ -434,7 +503,7 @@ export function listItems(
         }
     }
 
-    return {items, activeItemId};
+    return {items, activeItemId, errands};
 }
 
 // ── Ordering ──
@@ -499,7 +568,9 @@ export function orderEntries(
                 previous.filter((e) => e.tier === tier).map((e) => e.id),
             );
         }
-        for (const item of bucket) ordered.push({entry: item.entry, tier});
+        // A stuck errand asks below the user's own: theirs first, wherever anchoring left it.
+        for (const item of bucket) if (!item.errand) ordered.push({entry: item.entry, tier});
+        for (const item of bucket) if (item.errand) ordered.push({entry: item.entry, tier});
     }
     return ordered;
 }
@@ -531,6 +602,11 @@ export function truncateEntries(
 
     for (const laid of ordered) {
         const item = items.get(laid.entry.id)!;
+        // An errand is not one of the user's sessions: it takes no slot of theirs.
+        if (item.errand) {
+            visible.push(laid);
+            continue;
+        }
         const survives = rowSurvivesTruncation(item, laid.tier, {
             count,
             visibleSessionCount,
@@ -554,6 +630,8 @@ export interface LayoutOptions extends TruncationLimits {
     readonly activeItemId: string | null;
     readonly resort: boolean;
     readonly filtering: boolean;
+    /** The errands' sessions, in any order (see `listItems`); the shelf orders them. */
+    readonly errands?: readonly LaidErrand[];
 }
 
 /** Order, then truncate — except while filtering, which shows every match. */
@@ -568,19 +646,41 @@ export function layoutSessionList(
         ? {visible: ordered, older: []}
         : truncateEntries(ordered, byId, options.activeItemId, options);
     return {
-        layout: {visible, older, filtering: options.filtering},
+        layout: {
+            visible,
+            older,
+            errands: options.filtering ? [] : orderErrands(options.errands ?? []),
+            filtering: options.filtering,
+        },
         // The full order, folded rows included: a row coming back from "older"
         // anchors like any other.
         order: ordered.map(({entry, tier}) => ({id: entry.id, tier})),
     };
 }
 
-/** Every row of a layout, inside groups and behind "older" included. */
+/**
+ * The Errands shelf's order: the ones that need you first, then the rest
+ * newest started first. Started, not last active: an errand writes to its
+ * transcript all the time, and the shelf should hold still while it works.
+ */
+export function orderErrands(errands: readonly LaidErrand[]): LaidErrand[] {
+    const started = (laid: LaidErrand): number => new Date(laid.entry.session.created).getTime();
+    return [...errands].sort(
+        (a, b) => Number(b.errand.needsYou) - Number(a.errand.needsYou) || started(b) - started(a),
+    );
+}
+
+/**
+ * Every row of a layout, inside groups, behind "older" and on the Errands
+ * shelf included. A stuck errand is in it twice: its row in Blocked and its
+ * row on the shelf, under their two ids.
+ */
 export function layoutRows(layout: SessionListLayout): SessionListRow[] {
     const rows: SessionListRow[] = [];
     for (const {entry} of [...layout.visible, ...layout.older]) {
         if (entry.kind === 'row') rows.push(entry);
         else if (entry.kind === 'group') rows.push(...entry.sessions);
     }
+    for (const {entry} of layout.errands) rows.push(entry);
     return rows;
 }

@@ -22,7 +22,7 @@ import {isFoldableTier} from '../../domain/session/tiers';
 import {layoutRows, layoutSessionList} from './session-list-layout';
 import {withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
-import type {ListItem, OrderedEntry, SessionListEntry, SessionListLayout} from './session-list-layout';
+import type {LaidErrand, ListItem, OrderedEntry, SessionListEntry, SessionListLayout} from './session-list-layout';
 import type {RendererEvent} from './events';
 
 export type SessionListEvent =
@@ -31,6 +31,8 @@ export type SessionListEvent =
           type: 'sessionListBuilt';
           items: readonly ListItem[];
           activeItemId: string | null;
+          /** The errands' sessions, for the Errands shelf; empty while filtering, when they are among `items`. */
+          errands: readonly LaidErrand[];
           /** Let the open session move to its true position too. */
           resort: boolean;
           filtering: boolean;
@@ -49,6 +51,8 @@ export type SessionListEvent =
     | {type: 'olderToggled'}
     /** A foldable section's label was clicked: Pinned projects or Pinned plans. */
     | {type: 'sectionToggled'; tier: number}
+    /** The Errands shelf's label was clicked, or the keyboard walked into it (`open`) or out of it. */
+    | {type: 'errandShelfToggled'; open?: boolean}
     | {type: 'renameStarted'; rowId: string}
     | {type: 'renameEnded'; rowId: string}
     /** The keyboard cursor moved (null: it is gone). See `ui/session-list/cursor`. */
@@ -71,6 +75,8 @@ export interface SessionListState {
     readonly olderExpanded: boolean;
     /** The section tiers folded under their label. Kept for this run of the app only. */
     readonly foldedSections: readonly number[];
+    /** The Errands shelf is unfolded. Kept for this run of the app only: it starts folded. */
+    readonly errandShelfOpen: boolean;
     /** The row with its rename input open. */
     readonly renaming: string | null;
     /** What the keyboard cursor is on: an element id, or `header:<group id>`. */
@@ -87,6 +93,7 @@ export const initialSessionListState: SessionListState = {
     expandedSlugs: {},
     olderExpanded: false,
     foldedSections: [],
+    errandShelfOpen: false,
     renaming: null,
     cursor: null,
     leaving: {},
@@ -132,6 +139,11 @@ export function sessionListReducer(state: SessionListState, event: RendererEvent
                     : [...state.foldedSections, event.tier],
             };
 
+        case 'errandShelfToggled': {
+            const open = event.open ?? !state.errandShelfOpen;
+            return open === state.errandShelfOpen ? state : {...state, errandShelfOpen: open};
+        }
+
         case 'renameStarted':
             return patch(state, {renaming: event.rowId});
 
@@ -161,6 +173,7 @@ function built(
         activeItemId: event.activeItemId,
         resort: event.resort,
         filtering: event.filtering,
+        errands: event.errands,
         visibleSessionCount: event.visibleSessionCount,
         sessionMaxAgeDays: event.sessionMaxAgeDays,
         now: event.now,
@@ -232,7 +245,8 @@ function renamed(state: SessionListState, sessionId: string, name: string | null
     };
     const visible = layout.visible.map(rename);
     const older = layout.older.map(rename);
-    return changed ? {...state, layout: {...layout, visible, older}} : state;
+    const errands = layout.errands.map(rename);
+    return changed ? {...state, layout: {...layout, visible, older, errands}} : state;
 }
 
 /** `state` itself when none of the fields actually changed. */

@@ -51,6 +51,7 @@ function built(
 ): RendererEvent {
     return {
         type: 'sessionListBuilt',
+        errands: [],
         items,
         activeItemId: null,
         resort: false,

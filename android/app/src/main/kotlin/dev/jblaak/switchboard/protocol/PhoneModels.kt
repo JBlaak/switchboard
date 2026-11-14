@@ -40,7 +40,37 @@ data class PhoneSession(
     val owner: TerminalOwner,
     /** Epoch ms of the last state change. */
     val changedAt: Long,
+    /** Set when Switchboard started the session itself for a pull request; absent for the user's own and from older Macs. */
+    val errand: PhoneErrand? = null,
 )
+
+/**
+ * What an errand session is doing for which pull request: the Merge manager's fix errands and the merge queue's
+ * Nudge and Fix. The list keeps errands out of its own sections; a stuck one also stays in Needs you.
+ */
+@Serializable
+data class PhoneErrand(
+    val kind: ErrandKind,
+    /** The pull request's number. */
+    val number: Int,
+    /** `owner/repo`. */
+    val repository: String,
+    /** In a few words: "fixing checks", "rebasing", "nudging the reviewer", "stopped: asks". */
+    val doing: String,
+    /** Stuck: it stopped without finishing, and only the user can move it on. */
+    val needsYou: Boolean,
+)
+
+@Serializable
+enum class ErrandKind {
+    /** Fixes a pull request's checks or conflict: a wrench. */
+    @SerialName("fix")
+    Fix,
+
+    /** Nudges a reviewer: a paper plane. */
+    @SerialName("nudge")
+    Nudge,
+}
 
 @Serializable
 enum class SessionState {

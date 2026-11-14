@@ -17,6 +17,11 @@ import type {Project} from '../src/domain/project/project';
 import type {AskedQuestions} from '../src/domain/questions/question';
 import type {GrillResult, GrillView} from '../src/domain/grill/model';
 import type {SessionRow} from '../src/domain/session/session';
+import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
+import type {LaneStage, MergeManagerState} from '../src/domain/merge-manager/model';
+import type {QueueErrandView} from '../src/domain/project/queue-errands';
+import {landedPr, REPO} from './support/merge-manager-fixtures';
+import {errand} from './support/merge-queue-fixtures';
 
 /**
  * What a phone sees and does once it is in: the running list, a terminal's
@@ -90,6 +95,9 @@ function harness() {
     const voiceCalls: [string, string, string?][] = [];
     /** What the chat service was handed, as [call, ...what it was told]. */
     const chatCalls: string[][] = [];
+    /** What main holds of the errands: the Merge manager's state and the queue's errands. */
+    let mergeManager: MergeManagerState = EMPTY_MERGE_MANAGER_STATE;
+    let queueErrands: QueueErrandView[] = [];
 
     const addSession = (id: string, fields: {projectPath?: string; openedAt?: number; plain?: boolean} = {}): Pty => {
         const pty = resizingPty();
@@ -175,6 +183,7 @@ function harness() {
             },
         },
         settings: {effective: () => ({permissionMode: 'auto', worktree: true})},
+        errands: {mergeManager: () => mergeManager, queue: () => queueErrands},
         renderer,
         voice: {
             connected(connection) {
@@ -256,7 +265,22 @@ function harness() {
         failArchive: (error: string) => {
             archiveResult = {ok: false, error};
         },
+        setMergeManager: (next: MergeManagerState) => {
+            mergeManager = next;
+        },
+        setQueueErrands: (next: QueueErrandView[]) => {
+            queueErrands = next;
+        },
     };
+}
+
+/** The Merge manager with one landed PR, #431, whose fix errand is `errandSession`. */
+function managerWith(stage: LaneStage, errandSession: string): MergeManagerState {
+    const pr = {...landedPr(431, 5, 'switchboard', stage, {errand: errandSession}), place: null};
+    return {
+        lanes: [{repository: REPO, kind: 'switchboard', approvalLostOnPush: false, pullRequests: [pr]}],
+        needsYou: 0,
+    } as MergeManagerState;
 }
 
 /** Let the awaited routing call and launch run on. */
@@ -432,6 +456,102 @@ test('a re-key moves the row and the stream, and an exit is told once under the 
     assert.deepEqual(phone.of('session-rekeyed'), [{type: 'session-rekeyed', from: 'old', to: 'new'}]);
     assert.deepEqual(phone.frames, [['new', 'after']]);
     assert.deepEqual(phone.of('exited'), [{type: 'exited', sessionId: 'new', exitCode: 0}]);
+});
+
+// ── Errands ──
+
+test("a Merge manager fix errand's session carries what it is doing for which PR", () => {
+    /* Given */
+    const h = harness();
+    h.addSession('fixer');
+    h.addSession('mine');
+    h.setMergeManager(managerWith({kind: 'fixing', cause: 'checks'}, 'fixer'));
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    const byId = Object.fromEntries(list.sessions.map((s) => [s.id, s.errand]));
+    assert.deepEqual(byId.fixer, {
+        kind: 'fix',
+        number: 431,
+        repository: REPO,
+        doing: 'fixing checks',
+        needsYou: false,
+    });
+    assert.equal('errand' in list.sessions.find((s) => s.id === 'mine')!, false);
+});
+
+test('a stuck queue nudge is an errand that needs you', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('nudger');
+    h.setQueueErrands([errand('nudger', {kind: 'nudge', repository: REPO, number: 398, state: 'needs-you'})]);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.deepEqual(list.sessions[0].errand, {
+        kind: 'nudge',
+        number: 398,
+        repository: REPO,
+        doing: 'stopped',
+        needsYou: true,
+    });
+});
+
+test('a finished queue errand is no longer marked', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('done');
+    h.setQueueErrands([errand('done', {state: 'done'})]);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.equal(list.sessions[0].errand, undefined);
+});
+
+test('an errand stored under an id its session has since left is marked under the new id', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('old');
+    h.registry.rekey('old', 'new');
+    h.setQueueErrands([errand('old', {kind: 'fix'})]);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.deepEqual(
+        list.sessions.map((s) => [s.id, s.errand?.kind]),
+        [['new', 'fix']],
+    );
+});
+
+test('the errands changing sends the list again', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('fixer');
+    const phone = h.connect();
+    phone.clear();
+    h.setMergeManager(
+        managerWith({kind: 'needsYou', reason: {kind: 'errand-stopped', question: 'Which side?'}}, 'fixer'),
+    );
+
+    /* When */
+    h.service.errandsChanged();
+    h.timers.tick();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.deepEqual([list.sessions[0].errand?.doing, list.sessions[0].errand?.needsYou], ['stopped: asks', true]);
 });
 
 // ── Archiving ──

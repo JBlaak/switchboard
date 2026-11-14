@@ -61,6 +61,7 @@ export type PhoneSessionEvents = Pick<
     | 'grillChanged'
     | 'sessionsChanged'
     | 'sessionArchived'
+    | 'errandsChanged'
 >;
 
 /**
@@ -220,9 +221,10 @@ export class PhoneEventTee implements RendererGateway {
         this.inner.inboxChanged(summary);
     }
 
-    // The Merge manager is the Mac's alone (#432).
+    // The Merge manager page is the Mac's alone (#432); the phones only mark its errands.
     public mergeManagerChanged(state: MergeManagerState): void {
         this.inner.mergeManagerChanged(state);
+        this.phones()?.errandsChanged();
     }
 }
 
