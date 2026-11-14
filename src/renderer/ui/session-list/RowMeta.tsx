@@ -1,6 +1,8 @@
 /**
  * A row's compact meta line: what it is asking, the project, the time and
- * message count, the agents badge, the PR chips and the merge queue's pill (#315).
+ * message count, the agents badge, the PR chips and the merge queue's pill
+ * (#315). An errand's row says so first ("errand · "), since its name is
+ * the PR it works on rather than anything the user typed.
  *
  * The whole line is one button that opens the session's Session work page
  * (D2), unless the page cannot open for it — a session on an agentless
@@ -32,11 +34,13 @@ export interface RowMetaProps {
     asking: number;
     agents: readonly WorkingAgent[];
     now: number;
+    /** The session is an errand (see `domain/session/errand-shelf`). */
+    errand?: boolean;
     /** A click on the line when it is the Session work button. */
     onOpenWork: (e: MouseEvent<HTMLElement>) => void;
 }
 
-export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): JSX.Element {
+export function RowMeta({row, asking, agents, now, errand = false, onOpenWork}: RowMetaProps): JSX.Element {
     const {session} = row;
     const path = row.projectPath || session.projectPath;
     const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
@@ -45,6 +49,7 @@ export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): J
 
     const content = (
         <span className="session-meta-left">
+            {errand && <span className="session-errand-lead">errand ·</span>}
             {/* What the session is blocked on, ahead of everything else on the line. */}
             {asking > 0 && <span className="session-asking">{askingLabel(asking)}</span>}
             <ProjectLabel path={path} />

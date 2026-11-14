@@ -1,0 +1,340 @@
+// The Errands shelf (ErrandShelf): the sessions Switchboard started by itself
+// for a pull request, docked under the session list and above the footer, so
+// it stays put while the list scrolls. Its header reads like a foldable
+// section label; each errand is one 28px line. Never taller than a third of
+// the sidebar (which is the window's height): beyond that the rows scroll.
+//
+// Also here: an errand's glyph and lead on an ordinary sidebar row (a stuck
+// one in Blocked, any of them among a filter's matches), and the strip under
+// the session header while an errand is on screen.
+
+$fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+#sidebar-errands {
+    flex-shrink: 0;
+}
+
+.errand-shelf {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh / 3);
+    padding: 2px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 6px var(--sb-sidebar-gutter);
+    border-top: 1px solid var(--sb-line);
+}
+
+/* ---- The header: chevron, label, count, and what needs saying on the right ---- */
+.errand-shelf-header {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* Ends where the rows do, clear of the gutter their scrollbar keeps. */
+    margin: 0 var(--sb-scrollbar-width) 0 0;
+    padding: 8px 6px 4px var(--sb-row-text);
+    border: none;
+    border-radius: 6px;
+    background: none;
+    text-align: left;
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+
+    &:hover {
+        color: var(--sb-text-strong);
+    }
+
+    &:hover .session-section-chevron {
+        opacity: 1;
+    }
+
+    &:active .session-section-chevron {
+        scale: 0.85;
+    }
+
+    &.is-folded .session-section-chevron {
+        transform: rotate(0deg);
+    }
+
+    &:focus-visible,
+    &.kbd-cursor {
+        outline: none;
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+}
+
+.errand-shelf-label {
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.errand-shelf-count {
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-text-muted);
+    font-family: var(--sb-font-head);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.errand-shelf-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    font-family: var(--sb-font-body);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+
+    &.is-needs-you {
+        color: var(--sb-red);
+    }
+}
+
+.errand-shelf-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--sb-accent);
+
+    .is-needs-you > & {
+        width: 6px;
+        height: 6px;
+        background: var(--sb-red);
+    }
+}
+
+/* ---- The rows: the ones that need you, then the rest folding under the header ---- */
+.errand-shelf-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+
+    /* The session list's thin scrollbar (_scrollbar.scss). */
+    &::-webkit-scrollbar {
+        width: var(--sb-scrollbar-width);
+    }
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: var(--sb-line);
+        border-radius: 99px;
+    }
+}
+
+.errand-shelf-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+        grid-template-rows 380ms $fold-ease,
+        visibility 0s;
+
+    &.is-folded {
+        grid-template-rows: 0fr;
+        visibility: hidden;
+        transition:
+            grid-template-rows 300ms $fold-ease,
+            visibility 0s 300ms;
+    }
+}
+
+.errand-shelf-rows {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.errand-shelf-entry {
+    transition:
+        opacity 220ms ease calc(40ms + var(--i) * 35ms),
+        transform 300ms $fold-ease calc(40ms + var(--i) * 35ms);
+
+    .is-folded & {
+        opacity: 0;
+        transform: translateY(-6px);
+        transition-delay: calc((var(--n) - 1 - var(--i)) * 25ms);
+    }
+}
+
+.errand-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sb-row-gap);
+    height: 28px;
+    padding: 0 8px 0 var(--sb-row-inset);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s;
+
+    &:hover {
+        background: rgba(var(--sb-overlay-rgb), 0.05);
+    }
+
+    &.active {
+        background: rgba(var(--sb-accent-rgb), 0.14);
+    }
+
+    &.needs-you {
+        background: rgba(var(--sb-red-rgb), 0.1);
+    }
+
+    &.needs-you:hover {
+        background: rgba(var(--sb-red-rgb), 0.14);
+    }
+
+    &.kbd-cursor {
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+}
+
+/* The glyph sits in the marker gutter, so the name lands on the list's text rail. */
+.errand-row-glyph {
+    flex-shrink: 0;
+    margin: 0 calc((var(--sb-row-gutter) - 12px) / 2);
+    color: var(--sb-text-muted);
+
+    .needs-you > & {
+        color: var(--sb-red);
+    }
+}
+
+.errand-row-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--sb-text);
+}
+
+.errand-row-meta {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+}
+
+/* On hover, where it runs and its age give way to PR ↗ and Stop. */
+.errand-row-actions {
+    display: none;
+    flex-shrink: 0;
+    gap: 4px;
+}
+
+.errand-row:hover,
+.errand-row:focus-within {
+    .errand-row-meta {
+        display: none;
+    }
+    .errand-row-actions {
+        display: flex;
+    }
+}
+
+.errand-row-btn {
+    height: 20px;
+    padding: 0 7px;
+    border: 1px solid var(--sb-line);
+    border-radius: 6px;
+    background: var(--sb-bg-raised);
+    color: var(--sb-text-muted);
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        color 0.12s,
+        border-color 0.12s;
+
+    &:hover {
+        color: var(--sb-text);
+        border-color: rgba(var(--sb-accent-rgb), 0.55);
+    }
+
+    &.session-archive-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 4px;
+    }
+
+    &.is-stop:hover {
+        color: var(--sb-red);
+        border-color: rgba(var(--sb-red-rgb), 0.55);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .errand-shelf-body,
+    .errand-shelf-entry {
+        transition-duration: 0s;
+        transition-delay: 0s;
+    }
+}
+
+/* ---- An errand among the ordinary rows ---- */
+/* In place of the 6px status dot: the 12px glyph, its margins pulling it back
+   to the dot's width so the name stays on the text rail. */
+.session-errand-glyph {
+    flex-shrink: 0;
+    margin: 4px -3px 0;
+    color: var(--sb-text-muted);
+
+    .errand-needs-you & {
+        color: var(--sb-red);
+    }
+}
+
+.session-errand-lead {
+    color: var(--sb-text-muted);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* ---- The strip under the session header ---- */
+#terminal-errand-strip {
+    flex-shrink: 0;
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.errand-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--sb-line);
+    font-family: var(--sb-font-body);
+    font-size: 12px;
+    color: var(--sb-text-muted);
+
+    strong {
+        font-weight: 700;
+        color: var(--sb-text);
+    }
+
+    &.needs-you .errand-strip-glyph {
+        color: var(--sb-red);
+    }
+}
+
+.errand-strip-glyph {
+    flex-shrink: 0;
+}
+
+.errand-strip-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}

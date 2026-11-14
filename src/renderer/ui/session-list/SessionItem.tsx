@@ -7,9 +7,16 @@
  * the agents, the highlight, the cursor and the exit. That split is what the
  * vanilla list got by patching classes in place; here it is simply what each
  * row subscribes to.
+ *
+ * An errand's session (one Switchboard started by itself for a PR, see
+ * `domain/session/errand-shelf`) that shows here — a stuck one in Blocked,
+ * any of them among a filter's matches — reads as one: its kind's glyph in
+ * place of the status dot, `#431 · fixing checks` as its name, and a meta
+ * line that starts with "errand · ".
  */
 import {useCallback, useRef, useState} from 'react';
 import {askingCountIn} from '../../state/questions-slice';
+import {errandOf} from '../../state/errand-index';
 import {rowActivity} from '../../state/row-activity';
 import {rowButtons, sessionDisplayName, showsTerminalBadge} from '../../state/session-list-layout';
 import {shallowEqual} from '../../state/store';
@@ -30,6 +37,9 @@ import {HandoffMarker} from '../session-handoff/HandoffMarker';
 import type {JSX, MouseEvent} from 'react';
 import type {SessionListRow} from '../../state/session-list-layout';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
+import type {ErrandEntry} from '../../../domain/session/errand-shelf';
+import {ErrandGlyph} from './ErrandGlyph';
+import {errandRowName} from './errand-view';
 
 export interface SessionItemProps {
     row: SessionListRow;
@@ -51,6 +61,8 @@ interface LiveRow {
     leaving: boolean;
     renaming: boolean;
     now: number;
+    /** The errand the session runs; null for one the user started. */
+    errand: ErrandEntry | null;
 }
 
 function useLiveRow(row: SessionListRow): LiveRow {
@@ -72,6 +84,7 @@ function useLiveRow(row: SessionListRow): LiveRow {
             leaving: !!s.sessionList.leaving[rowId],
             renaming: s.sessionList.renaming === rowId,
             now: s.sessionList.now,
+            errand: errandOf(s, sessionId),
         };
     }, shallowEqual);
 }
@@ -92,6 +105,8 @@ function rowClass(row: SessionListRow, live: LiveRow): string {
     if (live.merging) classes.push('is-merging');
     if (live.active) classes.push('active');
     if (live.cursor) classes.push('kbd-cursor');
+    if (live.errand) classes.push('is-errand');
+    if (live.errand?.needsYou) classes.push('errand-needs-you');
     return classes.join(' ');
 }
 
@@ -135,11 +150,15 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
                     dangerouslySetInnerHTML={session.starred ? HTML.pinFilled : HTML.pinOutline}
                     onClick={action((pin) => void togglePin(sessionId, pin))}
                 />
-                <span
-                    className={'session-status-dot' + (live.running ? ' running' : '')}
-                    data-testid="session-status-dot"
-                    title={statusDotTitle(live)}
-                />
+                {live.errand ? (
+                    <ErrandGlyph kind={live.errand.kind} className="session-errand-glyph" />
+                ) : (
+                    <span
+                        className={'session-status-dot' + (live.running ? ' running' : '')}
+                        data-testid="session-status-dot"
+                        title={statusDotTitle(live)}
+                    />
+                )}
                 <div className="session-info">
                     {live.renaming ? (
                         <RenameInput rowId={row.id} session={session} />
@@ -159,10 +178,17 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
                             )}
                             <TaskMarker sessionId={sessionId} />
                             <HandoffMarker sessionId={sessionId} />
-                            {sessionDisplayName(session)}
+                            {live.errand ? errandRowName(live.errand) : sessionDisplayName(session)}
                         </div>
                     )}
-                    <RowMeta row={row} asking={live.asking} agents={live.agents} now={live.now} onOpenWork={openWork} />
+                    <RowMeta
+                        row={row}
+                        asking={live.asking}
+                        agents={live.agents}
+                        now={live.now}
+                        errand={live.errand !== null}
+                        onOpenWork={openWork}
+                    />
                 </div>
                 <RowActions
                     row={row}
