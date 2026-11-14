@@ -20,9 +20,14 @@ $tray-height: 240px;
 #terminal-header {
     transition: box-shadow 120ms ease-out;
 
-    &.is-tray-intent,
-    &.is-tray-open {
+    &.is-tray-intent {
         box-shadow: inset 0 -2px 0 rgba(var(--sb-accent-rgb), 0.35);
+    }
+
+    /* Open, the tray hangs straight from the bar: no border or glow between them. */
+    &.is-tray-open {
+        border-bottom-color: transparent;
+        box-shadow: none;
     }
 }
 
