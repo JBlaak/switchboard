@@ -97,3 +97,19 @@ test('⌘⇧L opens the Merge manager from the terminal on its lanes, J moves th
     /* Then: the selection is where it was */
     await expect(mergePage(page).getByRole('complementary')).toContainText('#1330 Rate-limit webhooks');
 });
+
+test('with nothing landed the page shows the Merge manager large and how to land a pull request', async ({
+    page,
+    home,
+}) => {
+    /* Given */
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+
+    /* When */
+    await page.keyboard.press('Meta+Shift+KeyL');
+
+    /* Then */
+    const manager = mergePage(page);
+    await expect(manager.getByRole('heading', {name: 'Nothing to land yet'})).toBeVisible();
+    await expect(manager.locator('.mm-empty-figure .patch-manager')).toHaveCSS('width', '180px');
+});

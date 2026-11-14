@@ -17,9 +17,10 @@ export function ManagerFigure({kind, counts}: {kind: 'bug' | 'issue'; counts: Ma
 
 /**
  * Any manager in a scene of its own: the Merge manager's head on its page
- * (#439) is posed by its lanes (`mergeFigureOf`).
+ * (#439) is posed by its lanes (`mergeFigureOf`). `className` sizes it:
+ * the header's small head by default, the empty page's large Patch otherwise.
  */
-export function SceneFigure({scene}: {scene: ManagerScene}): JSX.Element {
+export function SceneFigure({scene, className = 'bm-figure'}: {scene: ManagerScene; className?: string}): JSX.Element {
     const host = useRef<HTMLDivElement>(null);
     const handle = useRef<ManagerHandle | null>(null);
 
@@ -36,5 +37,5 @@ export function SceneFigure({scene}: {scene: ManagerScene}): JSX.Element {
         handle.current?.show({kind, state, count, label: ''} as ManagerScene);
     }, [kind, state, count]);
 
-    return <div ref={host} className="bm-figure" />;
+    return <div ref={host} className={className} />;
 }
