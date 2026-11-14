@@ -186,14 +186,14 @@ test('a head that loses its approval drops back to held, and the next PR up beco
     assert.deepEqual(stages, {1: 'held', 2: 'head'});
 });
 
-test('held covers a draft, a stacked base, an outstanding review and a missing approval, in that order', () => {
+test('held covers a draft, a stacked base, an outstanding review and a missing required approval, in that order', () => {
     /* Given */
     const reads = [
         prRead(1, {draft: true, baseRef: 'other'}),
         prRead(2, {baseRef: 'feature-base', requestedReviewers: ['ben']}),
         prRead(3, {requestedReviewers: ['movelab/ios']}),
-        prRead(4, {review: null, approvedBy: []}),
-        prRead(5, {review: null, approvedBy: ['ben']}),
+        prRead(4, {review: 'review_required', approvedBy: []}),
+        prRead(5, {review: 'review_required', approvedBy: ['ben']}),
     ];
 
     /* When */
@@ -207,6 +207,17 @@ test('held covers a draft, a stacked base, an outstanding review and a missing a
         {kind: 'approval'},
         null,
     ]);
+});
+
+test('a PR without an approval is not held when the branch rules require none', () => {
+    /* Given */
+    const read = prRead(1, {review: null, approvedBy: []});
+
+    /* When */
+    const reason = heldReason(read, 'main');
+
+    /* Then */
+    assert.equal(reason, null);
 });
 
 test('requested changes and open threads need you, and keep the PR out of the head', () => {

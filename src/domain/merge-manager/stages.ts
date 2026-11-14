@@ -17,7 +17,9 @@
  *    or a review thread is open;
  * 3. Fixing, while an errand works on the commit it failed out on;
  * 4. Held, as a draft, stacked on an unmerged branch, with a requested
- *    review outstanding, or without an approval;
+ *    review outstanding, or without an approval the branch rules require
+ *    (GitHub's review decision is "review required"; with no such rule
+ *    there is nothing to wait for);
  * 5. otherwise up for the head. The head is the PR that was the head last
  *    time, while it is still up for it (no pre-emption: a PR earlier in land
  *    order that becomes ready waits until the head merges or fails out), or
@@ -191,13 +193,17 @@ function feedback(read: LanePullRequestRead): NeedsYouReason | null {
     return null;
 }
 
-/** Why a PR is passed over, or null when nothing holds it. Switchboard never approves. */
+/**
+ * Why a PR is passed over, or null when nothing holds it. Switchboard never approves.
+ * An approval is only waited for when the branch rules ask for one: without
+ * that rule GitHub gives no review decision, and the PR is free to land.
+ */
 export function heldReason(read: LanePullRequestRead, trunk: string): HeldReason | null {
     if (read.draft) return {kind: 'draft'};
     if (read.baseRef && read.baseRef !== trunk) return {kind: 'base', base: read.baseRef};
     const reviewer = read.requestedReviewers[0];
     if (reviewer) return {kind: 'review', reviewer, team: reviewer.includes('/')};
-    if (read.review !== 'approved' && read.approvedBy.length === 0) return {kind: 'approval'};
+    if (read.review === 'review_required' && read.approvedBy.length === 0) return {kind: 'approval'};
     return null;
 }
 
