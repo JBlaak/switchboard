@@ -10,7 +10,9 @@
  *
  * Where the cursor can go is read from the list's layout (`state/list-cursor`):
  * rows, group headers, the foldable section labels and the "more" toggles all take part, in the order the
- * list renders them. The cursor itself is state, so it survives a redraw, and
+ * list renders them, and then the rows of the Errands shelf: ↓ past the list's
+ * last target walks into the shelf and unfolds it, and ↑ from its first row
+ * comes back out. A shelf row takes the same keys as a row. The cursor itself is state, so it survives a redraw, and
  * if what it was on is gone the next arrow simply starts again from the top.
  *
  * The keys are heard on `#sidebar-content`, which is what holds the focus
@@ -24,9 +26,10 @@ import {getState} from '../../state/app-store';
 import {
     cursorTargets,
     liveCursor,
+    opensShelf,
     shownTargets,
     startTarget,
-    stepTarget,
+    stepCursor,
     targetAfterRemoval,
 } from '../../state/list-cursor';
 import {openSessions} from '../../state/session-store';
@@ -37,6 +40,7 @@ import {
     expandSlugGroup,
     openRow,
     startRename,
+    toggleErrandShelf,
     toggleOlder,
     toggleSection,
     toggleSlugGroup,
@@ -57,7 +61,7 @@ export {isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey} from '../../
 export function archiveActiveSession(): void {
     const onScreen = highlightedSession(getState().mainArea);
     if (!onScreen) return;
-    const row = targets().find((t) => t.kind === 'row' && t.sessionId === onScreen);
+    const row = targets().find((t) => (t.kind === 'row' || t.kind === 'errand') && t.sessionId === onScreen);
     if (row) pressArchive(row.name);
 }
 
@@ -130,8 +134,7 @@ function currentCursor(): CursorTarget | null {
 }
 
 function step(direction: -1 | 1): void {
-    const shown = shownTargets(targets());
-    const next = stepTarget(shown, currentCursor()?.name ?? null, direction);
+    const next = stepCursor(targets(), currentCursor()?.name ?? null, direction);
     if (next) moveCursorTo(next);
 }
 
@@ -142,6 +145,9 @@ function activateCursor(): void {
     switch (cursor.kind) {
         case 'row':
             openRow(cursor.name, cursor.sessionId, cursor.groupId);
+            return;
+        case 'errand':
+            openRow(cursor.name, cursor.sessionId);
             return;
         case 'plan':
             openPlanPage(cursor);
@@ -166,7 +172,7 @@ function activateCursor(): void {
 
 function renameAtCursor(): void {
     const cursor = currentCursor();
-    if (cursor?.kind !== 'row') return;
+    if (cursor?.kind !== 'row' && cursor?.kind !== 'errand') return;
     const {name} = cursor;
 
     // Committed at once: the input focuses itself as it mounts, and the keys
@@ -194,7 +200,7 @@ function renameAtCursor(): void {
  */
 function archiveAtCursor(): void {
     const cursor = currentCursor();
-    if (!cursor || (cursor.kind !== 'row' && cursor.kind !== 'header')) return;
+    if (!cursor || (cursor.kind !== 'row' && cursor.kind !== 'errand' && cursor.kind !== 'header')) return;
 
     const before = shownTargets(targets());
     // Marks the row (or group) as leaving at once, so it drops out of `after`.
@@ -208,7 +214,7 @@ function archiveAtCursor(): void {
 /** L: land the PR of the row under the cursor (#436); a row without one says why in the toast. */
 function landAtCursor(): void {
     const cursor = currentCursor();
-    if (cursor?.kind !== 'row') return;
+    if (cursor?.kind !== 'row' && cursor?.kind !== 'errand') return;
     void landSessionPullRequest(cursor.sessionId);
 }
 
@@ -221,6 +227,9 @@ function backToTerminal(): void {
 }
 
 function moveCursorTo(target: string): void {
+    // Walking onto a shelf row unfolds the shelf, committed at once so the row
+    // is there to scroll into view.
+    if (opensShelf(getState().sessionList, targets(), target)) flushSync(() => toggleErrandShelf(true));
     setListCursor(target);
     cursorElement(target)?.scrollIntoView({block: 'nearest'});
 }

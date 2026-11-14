@@ -67,6 +67,7 @@ function inputs(extra: Partial<BuildInputs> = {}): BuildInputs {
         activeSessionId: null,
         tierOf: () => TIER_REST,
         keyOf: (id) => 'k-' + id,
+        errandOf: () => null,
         today: localDateKey(new Date(NOW)),
         now: NOW,
         ...extra,

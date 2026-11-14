@@ -4,7 +4,7 @@
  *
  * The list renders, top to bottom: each visible entry (a row, a pinned
  * project, a pinned GitHub plan, or a slug group's header followed by its rows), then the "+ N older" toggle and the
- * entries behind it. `cursorTargets` walks that same order and says, for each
+ * entries behind it, then the Errands shelf docked under the list. `cursorTargets` walks that same order and says, for each
  * thing a click would act on, whether it is on screen. The keyboard cursor
  * only lands on what is on screen; session navigation (Cmd+Shift+[ / ])
  * walks the rows in the same order, hidden ones included, as it always did.
@@ -13,8 +13,12 @@
  * (Pinned projects, Pinned plans) hides its entries, a folded group
  * hides its rows, the "+ N older" list hides its entries until opened, a
  * group's own "+ N more" never shows (an open group shows its rows instead,
- * and a folded one hides the container the toggle sits in), and anything
- * sliding out is skipped.
+ * and a folded one hides the container the toggle sits in), a folded Errands
+ * shelf hides its rows except the ones that need you, which peek out, and
+ * anything sliding out is skipped.
+ *
+ * The shelf has no key of its own: ↓ past the list's last target walks into
+ * it, folded or not, and unfolds it (see `stepCursor`).
  *
  * Nothing here reads the DOM or the store, so it is tested in node.
  */
@@ -42,6 +46,14 @@ export type CursorTarget =
     | {readonly kind: 'header'; readonly name: string; readonly shown: boolean; readonly groupId: string}
     | {readonly kind: 'more'; readonly name: string; readonly shown: boolean; readonly groupId: string}
     | {readonly kind: 'older'; readonly name: string; readonly shown: boolean}
+    | {
+          readonly kind: 'errand';
+          readonly name: string;
+          readonly shown: boolean;
+          readonly sessionId: string;
+          /** Hidden only because the shelf is folded: walking onto it unfolds the shelf. */
+          readonly folded: boolean;
+      }
     | {readonly kind: 'section'; readonly name: string; readonly shown: boolean; readonly tier: number};
 
 /** The cursor's name for a slug group's header, which has no element id of its own. */
@@ -129,6 +141,17 @@ export function cursorTargets(list: SessionListState, running: ReadonlySet<strin
         targets.push({kind: 'older', name: OLDER_TARGET, shown: true});
         for (const laid of layout.older) entry(laid, list.olderExpanded);
     }
+    for (const {entry: row, errand} of layout.errands) {
+        const leaving = !!list.leaving[row.id];
+        const peeks = list.errandShelfOpen || errand.needsYou;
+        targets.push({
+            kind: 'errand',
+            name: row.id,
+            shown: peeks && !leaving,
+            sessionId: row.session.sessionId,
+            folded: !peeks && !leaving,
+        });
+    }
     return targets;
 }
 
@@ -156,7 +179,7 @@ export function startTarget(
     activeSessionId: string | null,
 ): string | null {
     const active = activeSessionId
-        ? targets.find((t) => t.kind === 'row' && t.sessionId === activeSessionId)
+        ? targets.find((t) => (t.kind === 'row' || t.kind === 'errand') && t.sessionId === activeSessionId)
         : undefined;
     return liveCursor(list, targets)?.name ?? active?.name ?? shownTargets(targets)[0] ?? null;
 }
@@ -170,6 +193,23 @@ export function stepTarget(shown: readonly string[], cursor: string | null, dire
     const at = cursor === null ? -1 : shown.indexOf(cursor);
     if (at === -1) return shown[0];
     return shown[Math.min(shown.length - 1, Math.max(0, at + direction))];
+}
+
+/**
+ * One step of the keyboard cursor, as ↑ and ↓ take it: `stepTarget` over what
+ * is on screen, with a folded Errands shelf walked as if it were open, so ↓
+ * past the list's last target lands on its first row even when none of them
+ * peeks out. Whoever moves the cursor onto a shelf row unfolds the shelf
+ * (`opensShelf`); ↑ from its first row is simply the list's last target.
+ */
+export function stepCursor(targets: readonly CursorTarget[], cursor: string | null, direction: -1 | 1): string | null {
+    const walk = targets.filter((t) => t.shown || (t.kind === 'errand' && t.folded)).map((t) => t.name);
+    return stepTarget(walk, cursor, direction);
+}
+
+/** Whether putting the cursor on `target` has to unfold the Errands shelf first. */
+export function opensShelf(list: SessionListState, targets: readonly CursorTarget[], target: string): boolean {
+    return !list.errandShelfOpen && targets.some((t) => t.kind === 'errand' && t.name === target);
 }
 
 /**
@@ -195,10 +235,17 @@ export function targetAfterRemoval(
     );
 }
 
-/** The session ids of the rendered rows, in render order, hidden ones included. */
+/**
+ * The session ids of the rendered rows, in render order, hidden ones and the
+ * Errands shelf's included. A stuck errand is listed in Blocked and on the
+ * shelf; it takes its place in Blocked only.
+ */
 export function rowOrder(targets: readonly CursorTarget[]): string[] {
     const ids: string[] = [];
-    for (const target of targets) if (target.kind === 'row') ids.push(target.sessionId);
+    for (const target of targets) {
+        if (target.kind !== 'row' && target.kind !== 'errand') continue;
+        if (!ids.includes(target.sessionId)) ids.push(target.sessionId);
+    }
     return ids;
 }
 
