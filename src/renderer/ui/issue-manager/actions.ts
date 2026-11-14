@@ -318,3 +318,8 @@ export function chooseTab(tab: InboxTab): void {
 export function chooseFilter(filter: IssueFilter): void {
     dispatch({type: 'issueManagerFilterChosen', filter});
 }
+
+/** F: the list folded away to read the open issue alone, or back. */
+export function toggleFocus(): void {
+    dispatch({type: 'issueManagerFocusToggled'});
+}

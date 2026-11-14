@@ -7,7 +7,13 @@
  * whenever the inbox changes. An action answers the item after it, which
  * replaces the one held, so the list moves without waiting for the next ask.
  */
-import {issueChip, matchesFilter, type IssueFilter, type IssueThread} from '../../domain/inbox/issue-manager';
+import {
+    issueChip,
+    matchesFilter,
+    newCommentCount,
+    type IssueFilter,
+    type IssueThread,
+} from '../../domain/inbox/issue-manager';
 import {tabOf, type InboxTab} from '../../domain/inbox/tabs';
 import type {InboxItem} from '../../domain/inbox/model';
 import type {SnoozeOptionView} from '../../application/services/inbox-settings-service';
@@ -43,6 +49,10 @@ export interface IssueManagerState {
     /** Stop working on it, asked: whether to also take you off the issue on GitHub. */
     readonly stop: {readonly key: string; readonly unassign: boolean} | null;
     readonly notice: string | null;
+    /** F: the list folded away while an issue is open, to read it alone. */
+    readonly focus: boolean;
+    /** How many comments were new when each issue was opened, for "new since you looked"; opening marks them seen. */
+    readonly fresh: Readonly<Record<string, number>>;
 }
 
 export const initialIssueManagerState: IssueManagerState = {
@@ -56,6 +66,8 @@ export const initialIssueManagerState: IssueManagerState = {
     snooze: null,
     stop: null,
     notice: null,
+    focus: false,
+    fresh: {},
 };
 
 export type IssueManagerEvent =
@@ -89,13 +101,14 @@ export type IssueManagerEvent =
     | {type: 'issueManagerStopAsked'; key: string}
     | {type: 'issueManagerStopUnassignToggled'}
     | {type: 'issueManagerStopDismissed'}
-    | {type: 'issueManagerNoticed'; notice: string | null};
+    | {type: 'issueManagerNoticed'; notice: string | null}
+    | {type: 'issueManagerFocusToggled'};
 
 export function issueManagerReducer(state: IssueManagerState, event: RendererEvent): IssueManagerState {
     switch (event.type) {
         // A fresh look every time: what was open last time is put away; the tab stays.
         case 'issueManagerOpened':
-            return {...state, comment: null, snooze: null, stop: null, notice: null};
+            return {...state, comment: null, snooze: null, stop: null, notice: null, fresh: {}};
 
         case 'managerPageRequested':
             return event.manager === 'issue'
@@ -116,21 +129,26 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
         case 'issueManagerTabChosen':
             return state.tab === event.tab
                 ? state
-                : {...state, tab: event.tab, filter: null, selected: null, snooze: null, stop: null};
+                : {...state, tab: event.tab, filter: null, selected: null, focus: false, snooze: null, stop: null};
 
         case 'issueManagerFilterChosen':
             return {...state, tab: 'inbox', filter: state.filter === event.filter ? null : event.filter};
 
-        case 'issueManagerSelected':
+        case 'issueManagerSelected': {
             if (state.selected === event.key) return state;
+            const item = state.items?.find((candidate) => candidate.key === event.key);
+            const fresh = item && issueChip(item) === 'comments' ? newCommentCount(item) : 0;
             return {
                 ...state,
                 selected: event.key,
+                focus: event.key === null ? false : state.focus,
+                fresh: fresh > 0 ? {...state.fresh, [item!.key]: fresh} : state.fresh,
                 snooze: null,
                 stop: null,
                 // A comment's preview stays with its issue, but not on screen under another.
                 comment: state.comment && state.comment.key !== event.key ? null : state.comment,
             };
+        }
 
         case 'issueManagerThreadAsked':
             return {...state, threads: {...state.threads, [event.key]: {phase: 'loading'}}};
@@ -208,6 +226,9 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
 
         case 'issueManagerNoticed':
             return {...state, notice: event.notice};
+
+        case 'issueManagerFocusToggled':
+            return state.selected ? {...state, focus: !state.focus} : state;
 
         default:
             return state;

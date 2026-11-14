@@ -32,8 +32,15 @@ export interface IssueThread {
     readonly viewer: string | null;
 }
 
-/** Comments the detail shows, newest last. */
-export const THREAD_SHOWN = 3;
+/**
+ * Where the detail draws "new since you looked" in the comments it shows:
+ * before the first of the `fresh` newest; null when none are new or the
+ * first new one is older than what was read from GitHub.
+ */
+export function newSinceAt(shown: number, fresh: number): number | null {
+    if (fresh <= 0 || fresh > shown) return null;
+    return shown - fresh;
+}
 
 // ── A row ──
 
@@ -56,6 +63,20 @@ export function issueChip(item: InboxItem): IssueChip {
     if (item.state.kind !== 'unread' || item.facts.kind !== 'issue') return null;
     if (item.seenComments === undefined) return 'new';
     return item.facts.comments > item.seenComments ? 'comments' : 'changed';
+}
+
+/** How many comments came since you last looked; 0 for an issue never seen. */
+export function newCommentCount(item: InboxItem): number {
+    if (item.facts.kind !== 'issue' || item.seenComments === undefined) return 0;
+    return Math.max(0, item.facts.comments - item.seenComments);
+}
+
+/** A row's chip as it reads: "New", "2 new comments" or "Changed". */
+export function chipLabel(chip: Exclude<IssueChip, null>, item: InboxItem): string {
+    if (chip === 'new') return 'New';
+    if (chip === 'changed') return 'Changed';
+    const n = newCommentCount(item);
+    return n === 1 ? '1 new comment' : `${n} new comments`;
 }
 
 /** A filter picked as the inbox's filter. */

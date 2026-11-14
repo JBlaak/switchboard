@@ -1,14 +1,17 @@
 /**
- * The selected issue on the Issue manager page (#415): its title with Open
- * in GitHub, the newest of its thread, your notes (saved as you type),
- * Comment… with its editable preview, and what you can do with it: Start
- * and claim, Snooze and Backlog in the inbox; Open session and Stop working
- * on it once started. Its × (or Esc) puts it away until another row is picked.
+ * The selected issue on the Issue manager page (#415), taking the page while
+ * the list is a rail beside it: a header with where it stands, its title and
+ * what you can do with it (Start and claim, Snooze and Backlog in the inbox;
+ * Open session and Stop working on it once started), the whole conversation
+ * read from GitHub (the ticket first, then its comments, with "new since you
+ * looked" where the unread ones start, and the polished comment waiting to be
+ * posted at the end), and your notes docked under it with Comment… and Polish
+ * and post now. Its × (or Esc) puts it away until another row is picked.
  */
 import {useEffect, useRef, type JSX} from 'react';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
-import {THREAD_SHOWN} from '../../../domain/inbox/issue-manager';
+import {newSinceAt} from '../../../domain/inbox/issue-manager';
 import type {InboxItem, InboxStage} from '../../../domain/inbox/model';
 import type {IssueManagerState} from '../../state/issue-manager-slice';
 import {inProgressPill, landedForItem} from '../../../domain/merge-manager/stage-words';
@@ -48,6 +51,43 @@ export function StagePill({item, stage}: {item: InboxItem; stage: InboxStage}): 
     );
 }
 
+/** The avatar's tint: the same login always gets the same one. */
+function tintOf(login: string | null): number {
+    let sum = 0;
+    for (const char of login ?? '') sum += char.charCodeAt(0);
+    return sum % 4;
+}
+
+function Message({
+    author,
+    at,
+    body,
+    opened,
+    now,
+}: {
+    author: string | null;
+    at: string;
+    body: string;
+    opened?: boolean;
+    now: number;
+}): JSX.Element {
+    return (
+        <article className="im-msg">
+            <span className={'im-avatar is-tint' + tintOf(author)} aria-hidden="true">
+                {(author ?? '?').slice(0, 1).toUpperCase()}
+            </span>
+            <div className="im-msg-main">
+                <div className="im-msg-head">
+                    <b>{author ?? 'ghost'}</b>
+                    {opened ? ' opened the issue' : ''}
+                    {at ? ` · ${formatDate(new Date(at), now)}` : ''}
+                </div>
+                <div className="im-msg-body">{body}</div>
+            </div>
+        </article>
+    );
+}
+
 export function IssueDetail({
     item,
     page,
@@ -59,241 +99,311 @@ export function IssueDetail({
 }): JSX.Element | null {
     const now = useStore((state) => state.sessionList.now) || Date.now();
     const menu = useRef<HTMLDivElement>(null);
+    const thread = useRef<HTMLDivElement>(null);
     const snoozeOptions = page.snooze?.key === item.key ? page.snooze.options : undefined;
+    const commentPhase = page.comment?.key === item.key ? page.comment.phase : null;
 
     // The Snooze menu comes into view with its first option under the keyboard.
     useEffect(() => {
         if (!snoozeOptions) return;
-        menu.current?.scrollIntoView({block: 'nearest'});
         menu.current?.querySelector<HTMLButtonElement>('.im-menu-item')?.focus({preventScroll: true});
     }, [snoozeOptions]);
+
+    // Another issue opens at the top of its conversation.
+    useEffect(() => {
+        thread.current?.scrollTo({top: 0});
+    }, [item.key]);
+
+    // The polished comment shows where it will land: at the end of the thread.
+    useEffect(() => {
+        if (commentPhase !== 'polishing' && commentPhase !== 'preview') return;
+        const box = thread.current;
+        box?.scrollTo({top: box.scrollHeight, behavior: 'smooth'});
+    }, [commentPhase]);
 
     if (item.facts.kind !== 'issue') return null;
     const facts = item.facts;
     const load = page.threads[item.key];
-    const thread = load?.phase === 'ok' ? load.thread : null;
-    const shown = thread ? thread.comments.slice(-THREAD_SHOWN) : [];
+    const read = load?.phase === 'ok' ? load.thread : null;
+    const comments = read?.comments ?? [];
+    const earlier = read ? read.total - comments.length : 0;
+    const marker = newSinceAt(comments.length, page.fresh[item.key] ?? 0);
     const state = item.state.kind;
     const working = state === 'inProgress';
     const comment = page.comment?.key === item.key ? page.comment : null;
     const start = page.start?.key === item.key ? page.start : null;
     const stop = page.stop?.key === item.key ? page.stop : null;
     const snooze = page.snooze?.key === item.key ? page.snooze : null;
+    const busy = comment?.phase === 'polishing' || comment?.phase === 'posting';
 
     return (
         <aside className="im-detail" aria-label="Issue detail">
-            <div className="im-meta">
-                {working && <StagePill item={item} stage={(item.state as {stage: InboxStage}).stage} />}
-                <span>
-                    {facts.repository} #{facts.number}
-                </span>
-                <span>·</span>
-                <span>
-                    {facts.author ?? 'ghost'} · {facts.comments} {facts.comments === 1 ? 'comment' : 'comments'}
-                </span>
-                <button
-                    type="button"
-                    className="im-close"
-                    aria-label="Close the issue (Esc)"
-                    title="Close (Esc)"
-                    onClick={() => {
-                        selectIssue(null);
-                        onFocusRows();
-                    }}>
-                    <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <div className="im-titlerow">
+            <header className="im-head">
+                <div className="im-head-bar">
+                    {working ? (
+                        <StagePill item={item} stage={(item.state as {stage: InboxStage}).stage} />
+                    ) : state === 'done' ? (
+                        <span className="im-chip is-done">Done</span>
+                    ) : (
+                        <span className="im-open">Open</span>
+                    )}
+                    <span className="im-ref">
+                        {facts.repository} #{facts.number}
+                    </span>
+                    <span className="im-head-gap" />
+                    {working ? (
+                        <>
+                            <button
+                                type="button"
+                                className="sw-btn is-primary"
+                                onClick={() => void openIssueSession(item)}>
+                                Open session <kbd className="sw-kbd">↵</kbd>
+                            </button>
+                            <button type="button" className="sw-btn" onClick={() => askStopWork(item.key)}>
+                                Stop working on it
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                className="sw-btn is-primary"
+                                disabled={start?.phase === 'starting'}
+                                onClick={() => void startIssue(item.key)}>
+                                {start?.phase === 'starting' ? 'Starting…' : 'Start and claim'}{' '}
+                                <kbd className="sw-kbd">↵</kbd>
+                            </button>
+                            {state !== 'done' && (
+                                <>
+                                    <button type="button" className="sw-btn" onClick={() => void openSnooze(item.key)}>
+                                        Snooze <kbd className="sw-kbd">S</kbd>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="sw-btn"
+                                        onClick={() => void backlogIssue(item.key)}>
+                                        Backlog <kbd className="sw-kbd">B</kbd>
+                                    </button>
+                                </>
+                            )}
+                        </>
+                    )}
+                    <button type="button" className="im-out" onClick={() => openOnGitHub(item)}>
+                        Open in GitHub ↗
+                    </button>
+                    <button
+                        type="button"
+                        className="im-close"
+                        aria-label="Close the issue (Esc)"
+                        title="Close (Esc)"
+                        onClick={() => {
+                            selectIssue(null);
+                            onFocusRows();
+                        }}>
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
                 <h2 className="im-title">{facts.title}</h2>
-                <button type="button" className="im-out" onClick={() => openOnGitHub(item)}>
-                    Open in GitHub ↗
-                </button>
-            </div>
-            {item.work?.pullRequest && (
-                <button type="button" className="im-out is-quiet" onClick={() => openPullRequest(item)}>
-                    {state === 'done'
-                        ? `Closed by #${item.work.pullRequest}`
-                        : `Open PR #${item.work.pullRequest} in GitHub`}{' '}
-                    ↗
-                </button>
-            )}
 
-            <section className="im-box" aria-label="Thread">
-                <span className="im-box-label">
-                    {thread && thread.total > shown.length
-                        ? `Thread · newest ${shown.length} of ${thread.total}`
-                        : 'Thread'}
-                </span>
-                {!load || load.phase === 'loading' ? (
-                    <div className="pp-quiet">Reading the thread…</div>
-                ) : !thread ? (
-                    <div className="pp-quiet">Could not read the thread from GitHub.</div>
-                ) : shown.length === 0 ? (
-                    <div className="im-msg-body">{thread.body.trim() || 'No description.'}</div>
-                ) : (
-                    shown.map((c, i) => (
-                        <div key={i} className="im-msg">
-                            <span className="im-avatar" aria-hidden="true">
-                                {(c.author ?? '?').slice(0, 1).toUpperCase()}
-                            </span>
-                            <div>
-                                <b>{c.author ?? 'ghost'}</b> ·{' '}
-                                {c.createdAt ? formatDate(new Date(c.createdAt), now) : ''}
-                                <div className="im-msg-body">{c.body}</div>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </section>
-
-            <section className="im-box" aria-label="Your notes">
-                <span className="im-box-label">
-                    Your notes · optional <kbd className="sw-kbd">C</kbd>
-                </span>
-                <textarea
-                    className="im-notes"
-                    aria-label="Your notes"
-                    placeholder="Context for the session, or what to say on the issue…"
-                    value={item.notes}
-                    rows={4}
-                    spellCheck
-                    onChange={(e) => typeNotes(item.key, e.target.value)}
-                    onBlur={() => void flushNotes(item.key)}
-                />
-                <div className="im-actions">
-                    <button
-                        type="button"
-                        className="sw-btn"
-                        disabled={comment?.phase === 'polishing' || comment?.phase === 'posting'}
-                        onClick={() => void commentFromNotes(item.key, false)}>
-                        Comment… <kbd className="sw-kbd">M</kbd>
-                    </button>
-                    <button
-                        type="button"
-                        className="sw-btn is-ghost"
-                        disabled={comment?.phase === 'polishing' || comment?.phase === 'posting'}
-                        onClick={() => void commentFromNotes(item.key, true)}>
-                        Polish and post now <kbd className="sw-kbd">⇧M</kbd>
-                    </button>
+                <div className="im-facts">
+                    {facts.labels.map((label) => (
+                        <span key={label.name} className="im-label">
+                            {label.name}
+                        </span>
+                    ))}
+                    <span>
+                        opened by <b>{facts.author ?? 'ghost'}</b> {formatDate(new Date(facts.createdAt), now)} ·{' '}
+                        {facts.comments} {facts.comments === 1 ? 'comment' : 'comments'} ·{' '}
+                        {facts.assignees.length > 0 ? `assigned to ${facts.assignees.join(', ')}` : 'unassigned'}
+                        {facts.references > 0
+                            ? ` · referenced in ${facts.references} ${facts.references === 1 ? 'commit' : 'commits'}`
+                            : ''}
+                    </span>
                 </div>
-                <span className="im-help">
-                    Saved as you type. Start puts your notes in the prompt. Comment… has Claude polish them for you to
-                    edit before posting; every comment ends with a line saying it was polished with Claude.
-                </span>
-            </section>
 
-            {comment && <CommentBox comment={comment} onFocusRows={onFocusRows} />}
-
-            {start?.phase === 'failed' && (
-                <div className="tk-status is-error" role="alert">
-                    {start.reason}
-                </div>
-            )}
-
-            {stop ? (
-                <div className="im-box im-ask" role="group" aria-label="Stop working on it">
-                    <span>Stop working on #{facts.number}? It goes back to the inbox.</span>
-                    <label className="im-check">
-                        <input type="checkbox" checked={stop.unassign} onChange={toggleStopUnassign} /> Also unassign me
-                        on GitHub
-                    </label>
-                    <div className="im-actions">
-                        <button type="button" className="sw-btn is-primary" onClick={() => void confirmStopWork()}>
-                            Stop working on it
+                {item.work?.pullRequest && (
+                    <div className="im-work">
+                        <span>
+                            <b>PR #{item.work.pullRequest}</b>
+                            {state === 'done' ? ' closed it' : ' closes it'}
+                        </span>
+                        <span className="im-head-gap" />
+                        <button type="button" className="im-out is-quiet" onClick={() => openPullRequest(item)}>
+                            {state === 'done'
+                                ? `Closed by #${item.work.pullRequest}`
+                                : `Open PR #${item.work.pullRequest} in GitHub`}{' '}
+                            ↗
                         </button>
-                        <button type="button" className="sw-btn is-ghost" onClick={dismissStopWork}>
-                            Cancel
+                    </div>
+                )}
+
+                {start?.phase === 'failed' && (
+                    <div className="tk-status is-error" role="alert">
+                        {start.reason}
+                    </div>
+                )}
+
+                {stop && (
+                    <div className="im-box im-ask" role="group" aria-label="Stop working on it">
+                        <span>Stop working on #{facts.number}? It goes back to the inbox.</span>
+                        <label className="im-check">
+                            <input type="checkbox" checked={stop.unassign} onChange={toggleStopUnassign} /> Also
+                            unassign me on GitHub
+                        </label>
+                        <div className="im-actions">
+                            <button type="button" className="sw-btn is-primary" onClick={() => void confirmStopWork()}>
+                                Stop working on it
+                            </button>
+                            <button type="button" className="sw-btn is-ghost" onClick={dismissStopWork}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {snooze && (
+                    <div
+                        ref={menu}
+                        className="im-menu"
+                        role="menu"
+                        aria-label="Snooze until"
+                        onKeyDown={(e) => {
+                            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                            e.preventDefault();
+                            const items = [
+                                ...(menu.current?.querySelectorAll<HTMLButtonElement>('.im-menu-item') ?? []),
+                            ];
+                            const at = items.indexOf(document.activeElement as HTMLButtonElement);
+                            items[
+                                Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))
+                            ]?.focus();
+                        }}>
+                        <div className="im-menu-label">Snooze until</div>
+                        {snooze.options === null ? (
+                            <div className="pp-quiet">…</div>
+                        ) : (
+                            snooze.options.map((option) => (
+                                <button
+                                    key={option.kind}
+                                    type="button"
+                                    role="menuitem"
+                                    className="im-menu-item"
+                                    onClick={() => {
+                                        void snoozeIssue(item.key, option.until);
+                                        onFocusRows();
+                                    }}>
+                                    {option.label}
+                                    <span>
+                                        {option.until
+                                            ? new Date(option.until).toLocaleDateString('en-GB', {
+                                                  weekday: 'short',
+                                                  day: 'numeric',
+                                                  month: 'short',
+                                              })
+                                            : 'a new comment or commit'}
+                                    </span>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                )}
+            </header>
+
+            <div ref={thread} className="im-thread">
+                <section className="im-thread-col" aria-label="Thread">
+                    {!load || load.phase === 'loading' ? (
+                        <div className="pp-quiet">Reading the thread…</div>
+                    ) : !read ? (
+                        <div className="pp-quiet">Could not read the thread from GitHub.</div>
+                    ) : (
+                        <>
+                            <Message
+                                author={facts.author}
+                                at={facts.createdAt}
+                                body={read.body.trim() || 'No description.'}
+                                opened
+                                now={now}
+                            />
+                            {earlier > 0 && (
+                                <div className="im-event">
+                                    {earlier} earlier {earlier === 1 ? 'comment' : 'comments'} ·{' '}
+                                    <button type="button" className="im-link" onClick={() => openOnGitHub(item)}>
+                                        read them on GitHub
+                                    </button>
+                                </div>
+                            )}
+                            {comments.map((c, i) => (
+                                <div key={i} className="im-thread-item">
+                                    {marker === i && (
+                                        <div className="im-new-since" role="separator">
+                                            {comments.length - i} new since you looked
+                                        </div>
+                                    )}
+                                    <Message author={c.author} at={c.createdAt} body={c.body} now={now} />
+                                </div>
+                            ))}
+                        </>
+                    )}
+                    {comment && <CommentBox comment={comment} onFocusRows={onFocusRows} />}
+                </section>
+            </div>
+
+            <section className="im-composer" aria-label="Your notes">
+                <div className="im-composer-col">
+                    <div className="im-composer-head">
+                        <span className="im-box-label">
+                            Your notes <kbd className="sw-kbd">C</kbd>
+                        </span>
+                        <span className="im-help">
+                            Saved as you type · Start puts them in the prompt · Comment… polishes them for you to edit
+                            before posting
+                        </span>
+                    </div>
+                    <textarea
+                        className="im-notes"
+                        aria-label="Your notes"
+                        placeholder="Context for the session, or what to say on the issue…"
+                        value={item.notes}
+                        rows={2}
+                        spellCheck
+                        onChange={(e) => typeNotes(item.key, e.target.value)}
+                        onBlur={() => void flushNotes(item.key)}
+                    />
+                    <div className="im-actions">
+                        <button
+                            type="button"
+                            className="sw-btn"
+                            disabled={busy}
+                            onClick={() => void commentFromNotes(item.key, false)}>
+                            Comment… <kbd className="sw-kbd">M</kbd>
+                        </button>
+                        <button
+                            type="button"
+                            className="sw-btn is-ghost"
+                            disabled={busy}
+                            onClick={() => void commentFromNotes(item.key, true)}>
+                            Polish and post now <kbd className="sw-kbd">⇧M</kbd>
                         </button>
                     </div>
                 </div>
-            ) : working ? (
-                <div className="im-actions">
-                    <button type="button" className="sw-btn is-primary" onClick={() => void openIssueSession(item)}>
-                        Open session <kbd className="sw-kbd">↵</kbd>
-                    </button>
-                    <button type="button" className="sw-btn" onClick={() => askStopWork(item.key)}>
-                        Stop working on it
-                    </button>
-                </div>
-            ) : (
-                <div className="im-actions">
-                    <button
-                        type="button"
-                        className="sw-btn is-primary"
-                        disabled={start?.phase === 'starting'}
-                        onClick={() => void startIssue(item.key)}>
-                        {start?.phase === 'starting' ? 'Starting…' : 'Start and claim'} <kbd className="sw-kbd">↵</kbd>
-                    </button>
-                    {state !== 'done' && (
-                        <>
-                            <button type="button" className="sw-btn" onClick={() => void openSnooze(item.key)}>
-                                Snooze <kbd className="sw-kbd">S</kbd>
-                            </button>
-                            <button type="button" className="sw-btn" onClick={() => void backlogIssue(item.key)}>
-                                Backlog <kbd className="sw-kbd">B</kbd>
-                            </button>
-                        </>
-                    )}
-                </div>
-            )}
-
-            {snooze && (
-                <div
-                    ref={menu}
-                    className="im-menu"
-                    role="menu"
-                    aria-label="Snooze until"
-                    onKeyDown={(e) => {
-                        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-                        e.preventDefault();
-                        const items = [...(menu.current?.querySelectorAll<HTMLButtonElement>('.im-menu-item') ?? [])];
-                        const at = items.indexOf(document.activeElement as HTMLButtonElement);
-                        items[Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus();
-                    }}>
-                    <div className="im-menu-label">Snooze until</div>
-                    {snooze.options === null ? (
-                        <div className="pp-quiet">…</div>
-                    ) : (
-                        snooze.options.map((option) => (
-                            <button
-                                key={option.kind}
-                                type="button"
-                                role="menuitem"
-                                className="im-menu-item"
-                                onClick={() => {
-                                    void snoozeIssue(item.key, option.until);
-                                    onFocusRows();
-                                }}>
-                                {option.label}
-                                <span>
-                                    {option.until
-                                        ? new Date(option.until).toLocaleDateString('en-GB', {
-                                              weekday: 'short',
-                                              day: 'numeric',
-                                              month: 'short',
-                                          })
-                                        : 'a new comment or commit'}
-                                </span>
-                            </button>
-                        ))
-                    )}
-                </div>
-            )}
+            </section>
         </aside>
     );
 }
 
+/** The comment Claude polished from your notes, at the end of the thread where it will land. */
 function CommentBox({
     comment,
     onFocusRows,
@@ -303,14 +413,14 @@ function CommentBox({
 }): JSX.Element {
     if (comment.phase === 'polishing') {
         return (
-            <div className="im-box im-preview" role="status">
+            <div className="im-reply" role="status">
                 Claude is polishing your notes…
             </div>
         );
     }
     if (comment.phase === 'posted') {
         return (
-            <div className="im-box im-preview" role="status">
+            <div className="im-reply" role="status">
                 Posted on GitHub. Your notes are kept.
                 <div className="im-actions">
                     <button type="button" className="sw-btn is-ghost" onClick={dismissComment}>
@@ -322,7 +432,7 @@ function CommentBox({
     }
     if (comment.phase === 'failed') {
         return (
-            <div className="im-box im-preview" role="alert">
+            <div className="im-reply" role="alert">
                 <span className="is-error">{comment.reason}</span>
                 <div className="im-actions">
                     <button type="button" className="sw-btn is-ghost" onClick={dismissComment}>
@@ -333,13 +443,15 @@ function CommentBox({
         );
     }
     return (
-        <section className="im-box im-preview" aria-label="Comment preview">
-            <span className="im-box-label">Comment preview · edit before posting</span>
+        <section className="im-reply" aria-label="Comment preview">
+            <span className="im-box-label">
+                Your comment <span className="im-reply-tag">Polished · not posted</span>
+            </span>
             <textarea
                 className="im-notes"
                 aria-label="Comment"
                 value={comment.body}
-                rows={6}
+                rows={5}
                 readOnly={comment.phase === 'posting'}
                 onChange={(e) => editComment(e.target.value)}
             />
