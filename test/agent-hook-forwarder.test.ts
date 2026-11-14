@@ -8,6 +8,7 @@ import {HookForwarder} from '../src/application/services/agent-host/hook-forward
 import {ArchiveToolService} from '../src/application/services/archive-tool-service';
 import {QuestionService} from '../src/application/services/question-service';
 import {PAGE_TOOL_QUALIFIED_NAME} from '../src/domain/session/page-tool';
+import {LAND_TOOL_QUALIFIED_NAME} from '../src/domain/merge-manager/land-tool';
 import {SessionRegistry} from '../src/application/model/session-registry';
 import type {ActiveSession} from '../src/application/model/active-session';
 import {NodeSelfArchivedFile} from '../src/infrastructure/agent/node-self-archived-file';
@@ -323,11 +324,13 @@ test("settings and tools point at the agent's own server, as a local launch's do
         (entry: {matcher: string}) => entry.matcher !== 'Bash',
     );
     assert.deepEqual(JSON.parse(settings!), localSettings);
-    // The same server, but without `show_page`: the agent does not forward its calls to the Mac yet.
+    // The same server, but without `show_page` or `land`: the agent does not forward their calls to the Mac yet.
     const local = archive.launchFor('launch/1');
     assert.deepEqual(tools, {
         mcpConfig: local?.mcpConfig,
-        allowedTools: local?.allowedTools.filter((name) => name !== PAGE_TOOL_QUALIFIED_NAME),
+        allowedTools: local?.allowedTools.filter(
+            (name) => name !== PAGE_TOOL_QUALIFIED_NAME && name !== LAND_TOOL_QUALIFIED_NAME,
+        ),
     });
     assert.match(settings ?? '', /http:\/\/127\.0\.0\.1:4100\/ask\/launch%2F1/);
 });
