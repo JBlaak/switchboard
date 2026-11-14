@@ -462,6 +462,7 @@ $pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
 
         &.is-head {
             animation: landing-ring 1.8s ease-out infinite;
+            animation-play-state: var(--loop-state, running);
         }
         &[data-tone='error'] {
             animation: landing-shake 0.36s ease-in-out;
@@ -474,6 +475,7 @@ $pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
             border-top-color: var(--sb-yellow);
             border-radius: 50%;
             animation: landing-spin 1s linear infinite;
+            animation-play-state: var(--loop-state, running);
         }
         &.is-gone {
             animation: landing-gone 0.5s ease-in forwards;
