@@ -12,7 +12,7 @@
  */
 import {useState, type JSX} from 'react';
 import {useStore} from '../use-store';
-import type {AwaySummary, MergingHostView} from '../../../domain/merge-manager/merging-host';
+import {awayRef, type AwaySummary, type MergingHostView} from '../../../domain/merge-manager/merging-host';
 import {
     bringMergingBack,
     dismissAwaySummary,
@@ -160,8 +160,13 @@ function AwayList({
             <ul>
                 {prs.map((pr) => (
                     <li key={pr.key}>
-                        <button type="button" className="mm-away-pr" onClick={() => openMergeManager(pr.key)}>
-                            #{pr.number} {pr.title}
+                        <button
+                            type="button"
+                            className="mm-away-pr"
+                            title={`${pr.repository}#${pr.number}`}
+                            onClick={() => openMergeManager(pr.key)}>
+                            <span className="mm-away-ref">{awayRef(pr)}</span>
+                            {pr.title}
                         </button>
                         {pr.question && <q>{pr.question}</q>}
                     </li>

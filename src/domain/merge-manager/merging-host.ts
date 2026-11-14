@@ -22,6 +22,7 @@
  * Pure, so the tests hold it still. Times are epoch ms.
  */
 import type {LaneStage, MergeManagerState} from './model';
+import {shortRepository} from '../session/errand-shelf';
 
 /** A registered VM, by its key (`user@host:port`) and the name it shows. */
 export interface VmChoice {
@@ -240,6 +241,11 @@ export function awaySummary(record: MergingHostRecord, state: MergeManagerState)
             })),
         running: prs.filter((p) => p.stage.kind === 'fixing').map(pr),
     };
+}
+
+/** Where an away PR came from, short: "switchboard #461". */
+export function awayRef(pr: AwayPr): string {
+    return `${shortRepository(pr.repository)} #${pr.number}`;
 }
 
 /** The bubble's short form: "3 merged · 1 needs you"; null when neither happened. */
