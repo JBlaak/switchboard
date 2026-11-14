@@ -21,6 +21,7 @@ import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tab
 import {issueChip, issueTiles, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
 import type {InboxItem} from '../../../domain/inbox/model';
 import {IssueDetail, StagePill} from './IssueDetail';
+import {ManagerFigure} from '../bug-manager/ManagerFigure';
 import {needsYouInProgress} from '../../../domain/merge-manager/stage-words';
 import {canBacklog, issueKeyAction} from './page-keys';
 import {
@@ -55,6 +56,7 @@ function IssueManagerView(): JSX.Element {
     const merge = useStore((state) => state.mergeManager.state);
     const inProgressNeedsYou = needsYouInProgress(items, merge);
     const repositories = new Set(items.map((item) => item.source)).size;
+    const figure = useStore((state) => state.inbox.summary.issue);
 
     // Into the page as it opens, so its keys reach it without a click.
     useLayoutEffect(() => {
@@ -155,6 +157,7 @@ function IssueManagerView(): JSX.Element {
                         </svg>
                         Close <kbd className="sw-kbd">esc</kbd>
                     </button>
+                    <ManagerFigure kind="issue" counts={figure} />
                     <div className="sw-heading">
                         <h1 className="sw-title pp-title">Issue manager</h1>
                         <div className="sw-subline pp-subline">
