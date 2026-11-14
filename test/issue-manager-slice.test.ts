@@ -9,8 +9,8 @@ import {
     visibleRows,
 } from '../src/renderer/state/issue-manager-slice';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
-import {issueKeyAction} from '../src/renderer/ui/issue-manager/page-keys';
-import {markRead, startWork, syncSource} from '../src/domain/inbox/items';
+import {canBacklog, issueKeyAction} from '../src/renderer/ui/issue-manager/page-keys';
+import {markRead, snooze, startWork, syncSource, toBacklog} from '../src/domain/inbox/items';
 import type {InboxItem} from '../src/domain/inbox/model';
 import {DAY, ME, NOW, THRESHOLDS, issue} from './support/inbox-fixtures';
 
@@ -117,4 +117,17 @@ test('choosing a manager on the empty screen opens its page', () => {
     /* Then */
     assert.deepEqual(issue.mainArea.route, {kind: 'issueManager'});
     assert.deepEqual(bug.mainArea.route, {kind: 'bugs'});
+});
+
+test('a row offers Backlog while it is in the inbox or snoozed, not once it is in the backlog or started', () => {
+    /* Given */
+    const [unread, , read, working] = items();
+    const snoozed = snooze(unread!, null);
+    const backlogged = toBacklog(unread!);
+
+    /* When */
+    const offered = [unread, read, snoozed, backlogged, working].map((item) => canBacklog(item!));
+
+    /* Then */
+    assert.deepEqual(offered, [true, true, true, false, false]);
 });

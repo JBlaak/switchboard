@@ -22,7 +22,7 @@ import {issueChip, issueTiles, shownLabels, type IssueFilter} from '../../../dom
 import type {InboxItem} from '../../../domain/inbox/model';
 import {IssueDetail, StagePill} from './IssueDetail';
 import {needsYouInProgress} from '../../../domain/merge-manager/stage-words';
-import {issueKeyAction} from './page-keys';
+import {canBacklog, issueKeyAction} from './page-keys';
 import {
     backlogIssue,
     chooseFilter,
@@ -350,6 +350,19 @@ function IssueRow({
                         : ''}
                 </span>
             </span>
+            {canBacklog(item) && !starting && (
+                <button
+                    type="button"
+                    className="sw-btn im-row-action"
+                    aria-label={`Put #${facts.number} in the backlog`}
+                    title="Backlog (B)"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        void backlogIssue(item.key);
+                    }}>
+                    Backlog
+                </button>
+            )}
             <span className="im-row-nums">
                 {starting ? (
                     'Starting…'
