@@ -48,8 +48,8 @@ export function offersUpdate(vm: Pick<VmHostView, 'agent' | 'current'>): boolean
 /** One tool's row in the setup checks. */
 export interface ToolLine {
     readonly tool: AgentTool;
-    /** `ready` gets the green check. */
-    readonly state: 'ready' | 'signed-out' | 'missing';
+    /** `ready` gets the green check; `limited` is signed in without a scope Switchboard needs. */
+    readonly state: 'ready' | 'signed-out' | 'limited' | 'missing';
     readonly text: string;
 }
 
@@ -65,6 +65,12 @@ export function toolLine(check: ToolCheck): ToolLine {
     const installed = check.version ? 'Installed, ' + check.version : 'Installed';
     // git has no login, so `loggedIn` is absent for it and it is ready once installed.
     if (check.loggedIn === false) return {tool: check.tool, state: 'signed-out', text: installed + ' · not signed in'};
+    if (check.loggedIn === true && check.missingScopes?.length) {
+        const scopes = check.missingScopes;
+        const named = scopes.join(', ') + (scopes.length === 1 ? ' scope' : ' scopes');
+        const fix = 'gh auth refresh ' + scopes.map((scope) => '-s ' + scope).join(' ');
+        return {tool: check.tool, state: 'limited', text: `${installed} · signed in without the ${named} · run ${fix}`};
+    }
     if (check.loggedIn === true) return {tool: check.tool, state: 'ready', text: installed + ' · signed in'};
     return {tool: check.tool, state: 'ready', text: installed};
 }

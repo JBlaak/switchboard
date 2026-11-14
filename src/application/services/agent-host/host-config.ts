@@ -28,6 +28,7 @@
  */
 import {DEFAULT_BASE_FOLDER, defaultHostInstructions} from '../../../domain/agent/host-instructions';
 import {expandClaudeDirPlaceholder, PLACEHOLDER_FILES} from '../../../domain/agent/config-copy';
+import {missingGhScopes} from '../../../domain/agent/gh-scopes';
 import {isSafeConfigPath} from '../../../domain/agent/protocol';
 import {isValidScheduleDir, normalScheduleDir} from '../../../domain/agent/schedule-dirs';
 import type {
@@ -182,7 +183,11 @@ export class HostConfig implements HostConfigPart {
             version('claude'),
             version('gh').then(async (found) => {
                 if (!found.installed) return {...found, loggedIn: false};
-                return {...found, loggedIn: (await run('gh', ['auth', 'status'])).exitCode === 0};
+                const status = await run('gh', ['auth', 'status']);
+                if (status.exitCode !== 0) return {...found, loggedIn: false};
+                // gh writes the status to stdout since 2.40 and to stderr before.
+                const missing = missingGhScopes(status.stdout + '\n' + status.stderr);
+                return {...found, loggedIn: true, ...(missing.length > 0 ? {missingScopes: missing} : {})};
             }),
             version('git'),
             run('sudo', ['-n', 'true']),

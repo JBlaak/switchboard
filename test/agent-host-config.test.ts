@@ -330,6 +330,58 @@ test('missing tools, a gh with no login, no credentials and a sudo that asks all
     ]);
 });
 
+test('a gh token without the repo scope is reported as missing it', async () => {
+    /* Given */
+    const h = harness({
+        commands: {
+            'gh --version': {stdout: 'gh version 2.60.1'},
+            'gh auth status': {
+                stdout: "github.com\n  ✓ Logged in to github.com account someone (keyring)\n  - Token scopes: 'gist', 'read:org'\n",
+            },
+        },
+    });
+
+    /* When */
+    h.pair.mac.send({type: 'check-tools', requestId: 'r7'});
+    await settle();
+
+    /* Then */
+    const tools = (h.received[0] as {tools: unknown[]}).tools;
+    assert.deepEqual(tools[1], {
+        tool: 'gh',
+        installed: true,
+        version: '2.60.1',
+        loggedIn: true,
+        missingScopes: ['repo'],
+    });
+});
+
+test('an older gh that prints its status to stderr is read too', async () => {
+    /* Given */
+    const h = harness({
+        commands: {
+            'gh --version': {stdout: 'gh version 2.30.0'},
+            'gh auth status': {
+                stderr: 'github.com\n  ✓ Logged in to github.com as someone\n  ✓ Token scopes: gist, read:org\n',
+            },
+        },
+    });
+
+    /* When */
+    h.pair.mac.send({type: 'check-tools', requestId: 'r8'});
+    await settle();
+
+    /* Then */
+    const tools = (h.received[0] as {tools: unknown[]}).tools;
+    assert.deepEqual(tools[1], {
+        tool: 'gh',
+        installed: true,
+        version: '2.30.0',
+        loggedIn: true,
+        missingScopes: ['repo'],
+    });
+});
+
 test('gh auth status is not run when gh is not installed', async () => {
     /* Given */
     const h = harness();

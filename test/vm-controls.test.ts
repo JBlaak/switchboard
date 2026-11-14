@@ -68,6 +68,33 @@ test('an installed tool that is signed out says so', () => {
     assert.deepEqual(line, {tool: 'claude', state: 'signed-out', text: 'Installed, 2.1.220 · not signed in'});
 });
 
+test('a gh signed in without the repo scope warns and names the fix', () => {
+    /* When */
+    const line = toolLine({tool: 'gh', installed: true, version: '2.60.1', loggedIn: true, missingScopes: ['repo']});
+
+    /* Then */
+    assert.deepEqual(line, {
+        tool: 'gh',
+        state: 'limited',
+        text: 'Installed, 2.60.1 · signed in without the repo scope · run gh auth refresh -s repo',
+    });
+});
+
+test('setup is not done while gh lacks a scope', () => {
+    /* Given */
+    const tools = [
+        {tool: 'claude' as const, installed: true, loggedIn: true},
+        {tool: 'gh' as const, installed: true, loggedIn: true, missingScopes: ['repo']},
+        {tool: 'git' as const, installed: true},
+    ];
+
+    /* When */
+    const done = setupDone(tools);
+
+    /* Then */
+    assert.equal(done, false);
+});
+
 test('git has no login, so it is ready once installed', () => {
     /* When */
     const line = toolLine({tool: 'git', installed: true, version: '2.43.0'});
