@@ -2,7 +2,7 @@
  * The Issue manager page (#415) wired into the real app: ⌘I opens it on the
  * inbox main found at launch, J selects an issue and reads its thread, your
  * notes are kept by main, and ⏎ starts a session on it that the page then
- * lists under In progress.
+ * lists under In progress. The detail closes with its × or Esc.
  *
  * The rules (prompt, footer, labels, stages, keys) are unit tested in
  * test/inbox-issue-manager.test.ts, test/issue-manager-*.test.ts and
@@ -157,4 +157,33 @@ test("a row's Backlog button puts the issue in the backlog at once, without sele
     const backlogged = managerPage(page).getByRole('option', {name: /#482/});
     await expect(backlogged).toBeVisible();
     await expect(backlogged.getByRole('button', {name: 'Put #482 in the backlog'})).toHaveCount(0);
+});
+
+test('The issue detail closes with its × or Esc, and Esc then closes the page', async ({page}) => {
+    /* Given */
+    await page.keyboard.press('Meta+i');
+    await page.keyboard.press('j');
+    await expect(detail(page)).toBeVisible();
+
+    /* When */
+    await detail(page).getByRole('button', {name: 'Close the issue (Esc)'}).click();
+
+    /* Then */
+    await expect(detail(page)).toHaveCount(0);
+    await expect(managerPage(page)).toBeVisible();
+
+    /* When */
+    await page.keyboard.press('j');
+    await expect(detail(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    /* Then */
+    await expect(detail(page)).toHaveCount(0);
+    await expect(managerPage(page)).toBeVisible();
+
+    /* When */
+    await page.keyboard.press('Escape');
+
+    /* Then */
+    await expect(managerPage(page)).toHaveCount(0);
 });
