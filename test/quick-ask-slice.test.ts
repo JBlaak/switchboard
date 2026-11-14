@@ -10,7 +10,9 @@ import {
     quickAskPhase,
     quickAskReducer,
     savedLabel,
+    projectHits,
     savingLine,
+    selectedHit,
 } from '../src/renderer/state/quick-ask-slice';
 import type {QuickAskEvent, QuickAskState} from '../src/renderer/state/quick-ask-slice';
 import type {QuickAskReply} from '../src/ipc/quick-ask-api';
@@ -327,4 +329,109 @@ test('showing a box that was left editing changes nothing', () => {
 
     /* Then */
     assert.equal(state, typed);
+});
+
+// ── Project search ──
+
+const SEARCHABLE = [
+    {projectPath: '/dev/switchboard', folder: 'switchboard'},
+    {projectPath: '/dev/switchboard-android', folder: 'switchboard-android'},
+    {projectPath: '/dev/patch', folder: 'patch'},
+];
+
+function searching(text: string): QuickAskState {
+    return run(
+        initialQuickAskState,
+        {type: 'quickAskProjectsLoaded', projects: SEARCHABLE},
+        {type: 'askTextChanged', text},
+    );
+}
+
+test('text that matches a project lists the matches, the first highlighted', () => {
+    /* When */
+    const state = searching('switch');
+
+    /* Then */
+    assert.deepEqual(
+        projectHits(state).map((h) => h.folder),
+        ['switchboard', 'switchboard-android'],
+    );
+    assert.equal(selectedHit(state)?.folder, 'switchboard');
+});
+
+test('text that matches nothing has no matches, so Enter goes to Patch', () => {
+    /* When */
+    const state = searching('fix the login bug');
+
+    /* Then */
+    assert.deepEqual(projectHits(state), []);
+    assert.equal(selectedHit(state), null);
+});
+
+test('the arrows move the highlight through the matches and wrap', () => {
+    /* Given */
+    const state = searching('switch');
+
+    /* When */
+    const down = run(state, {type: 'quickAskHitStepped', step: 1});
+    const wrapped = run(down, {type: 'quickAskHitStepped', step: 1});
+    const up = run(state, {type: 'quickAskHitStepped', step: -1});
+
+    /* Then */
+    assert.equal(selectedHit(down)?.folder, 'switchboard-android');
+    assert.equal(selectedHit(wrapped)?.folder, 'switchboard');
+    assert.equal(selectedHit(up)?.folder, 'switchboard-android');
+});
+
+test('typing again puts the highlight back on the first match', () => {
+    /* Given */
+    const moved = run(searching('switch'), {type: 'quickAskHitStepped', step: 1});
+
+    /* When */
+    const state = run(moved, {type: 'askTextChanged', text: 'switchb'});
+
+    /* Then */
+    assert.equal(state.hit, 0);
+});
+
+test('Enter on a match waits for main, and its started reply clears the box', () => {
+    /* Given */
+    const state = searching('switchb');
+
+    /* When */
+    const sent = run(state, {type: 'quickAskOpenSent'});
+    const started = run(sent, {
+        type: 'quickAskReplied',
+        asked: sent.box.asked,
+        reply: {kind: 'started', folder: 'switchboard'},
+    });
+
+    /* Then */
+    assert.equal(quickAskPhase(sent), 'waiting');
+    assert.deepEqual(projectHits(sent), []);
+    assert.equal(quickAskPhase(started), 'started');
+    assert.equal(started.box.text, '');
+});
+
+test('Enter with nothing matching does not open anything', () => {
+    /* Given */
+    const state = searching('fix the login bug');
+
+    /* When */
+    const sent = run(state, {type: 'quickAskOpenSent'});
+
+    /* Then */
+    assert.equal(sent, state);
+});
+
+test('opening again starts on the first match', () => {
+    /* Given */
+    const moved = run(searching('switch'), {type: 'quickAskHitStepped', step: 1});
+
+    /* When */
+    const state = run(moved, {type: 'quickAskClosed'}, {type: 'quickAskShown'});
+
+    /* Then */
+    assert.equal(state.hit, 0);
+    assert.equal(state.box.text, 'switch');
 });

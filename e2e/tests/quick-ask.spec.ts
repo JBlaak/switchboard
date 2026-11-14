@@ -319,6 +319,35 @@ test.describe('on the fake clock', () => {
     });
 });
 
+test('a project name lists the local matches, and Enter starts an empty session there without asking Patch', async ({
+    app,
+    page,
+    home,
+}) => {
+    /* Given */
+    const route = fakeRoute(home);
+    const before = launchedKeys(home);
+    const popUp = await open(app);
+
+    /* When */
+    await box(popUp).fill('acme');
+
+    /* Then */
+    const matches = popUp.getByRole('listbox', {name: 'Matching projects'});
+    await expect(matches.getByRole('option').first()).toHaveText('acme-api');
+
+    /* When */
+    await box(popUp).press('Enter');
+
+    /* Then */
+    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+    expect(launch.cwd).toBe(home.projectPath(P.acmeApi));
+    await expect(sessionRow(page, 'New session')).toBeVisible();
+    // Under the harness the main window never comes forward; the service's unit test covers that.
+    await expect.poll(() => quickAskShowing(app)).toBe(false);
+    expect(route.calls()).toEqual([]);
+});
+
 test('Tab from the list opens the picker in the main window with the rewritten prompt', async ({app, page, home}) => {
     /* Given */
     answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.');
