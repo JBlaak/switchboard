@@ -57,6 +57,10 @@ _Avoid_: Failed, stuck
 **Merged**:
 A landed pull request that has merged; the Merge manager's work on it is done.
 
+**Landing shelf**:
+The line under the session list that shows the user's landed pull requests, one dot each, and how long until the next one merges; hovered or unfolded, each one's wait and what merged today.
+_Avoid_: Merge queue bar, queue strip
+
 **Fix errand**:
 A session the Merge manager starts by itself, in its own worktree, when the head fails out on a conflict or a failed check. It ends by pushing a fix to the pull request's branch, or by judging the failure flaky so the Merge manager retries it; one that stops without either leaves the pull request Needs you. There is at most one per pull request.
 _Avoid_: Auto-fix, Fix CI

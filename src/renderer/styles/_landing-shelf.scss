@@ -1,0 +1,497 @@
+// The Landing shelf (LandingShelf): the user's landed PRs as one line docked
+// under the Errands shelf, its hover card, and the rows it unfolds into.
+// Its header reads like the Errands shelf's; the right edge is the time until
+// the next merge.
+//
+// The colours are every place's (`stageTone`), set per element by
+// `data-tone`: purple merging or merged, green ready, yellow in progress or
+// needs you, grey held, red an error. Everything moves in place and quickly;
+// the one show-off moment is the merge, whose rocket is lib/motion/rocket.
+
+$fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
+$pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+#sidebar-landing {
+    flex-shrink: 0;
+}
+
+[data-tone='merging'] {
+    --tone: var(--sb-purple);
+}
+[data-tone='ready'] {
+    --tone: var(--sb-green);
+}
+[data-tone='progress'] {
+    --tone: var(--sb-yellow);
+}
+[data-tone='blocked'] {
+    --tone: var(--sb-text-faint);
+}
+[data-tone='error'] {
+    --tone: var(--sb-red);
+}
+
+.landing-shelf {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh / 3);
+    padding: 2px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 4px var(--sb-sidebar-gutter);
+    border-top: 1px solid var(--sb-line);
+}
+
+// ---- The line: chevron, label, count, the dots, and the time ----
+.landing-shelf-header {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 var(--sb-scrollbar-width) 0 0;
+    padding: 8px 6px 6px var(--sb-row-text);
+    border: none;
+    border-radius: 6px;
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+
+    &:hover {
+        color: var(--sb-text-strong);
+    }
+    &:hover .session-section-chevron {
+        opacity: 1;
+    }
+    &:active .session-section-chevron {
+        scale: 0.85;
+    }
+    .is-folded > & .session-section-chevron {
+        transform: rotate(0deg);
+    }
+    &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+}
+
+.landing-shelf-label {
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.landing-shelf-count {
+    display: inline-flex;
+    overflow: hidden;
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-text-muted);
+    font-family: var(--sb-font-head);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.landing-pips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    min-width: 0;
+}
+
+.landing-pip-lane {
+    display: flex;
+    align-items: center;
+}
+
+// One PR: filled when it is the user's, hollow when it is someone else's.
+.landing-pip {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid var(--tone);
+    border-radius: 50%;
+    background: var(--tone);
+    transition:
+        background-color 0.45s ease,
+        border-color 0.45s ease;
+
+    .landing-pip-lane > & + & {
+        margin-left: 3px;
+    }
+    &.is-other {
+        background: transparent;
+        opacity: 0.7;
+    }
+}
+
+.landing-badge {
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--sb-yellow);
+    color: var(--sb-bg-base);
+    font: 800 10px/15px var(--sb-font-head);
+}
+
+.landing-sep {
+    width: 1px;
+    height: 12px;
+    background: var(--sb-line);
+}
+
+.landing-eta {
+    display: inline-flex;
+    overflow: hidden;
+    color: var(--tone);
+    font: 800 12px var(--sb-font-head);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transition: color 0.4s;
+
+    &[data-tone='ready'] {
+        color: var(--sb-text);
+    }
+}
+
+.landing-roll {
+    display: inline-block;
+}
+
+// ---- The hover card ----
+.landing-card {
+    position: absolute;
+    left: var(--sb-sidebar-gutter);
+    right: var(--sb-sidebar-gutter);
+    bottom: calc(100% - 4px);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 12px 8px 8px;
+    border-radius: var(--sb-r-card);
+    background: var(--sb-bg-raised);
+    box-shadow: var(--sb-edge), var(--sb-lift);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(6px) scale(0.98);
+    transform-origin: bottom center;
+    transition:
+        opacity 0.16s ease-out,
+        transform 0.16s ease-out,
+        visibility 0s linear 0.16s;
+
+    .landing-shelf:has(> .landing-shelf-header:hover) &,
+    .landing-shelf:has(> .landing-shelf-header:focus-visible) &,
+    &:hover {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: none;
+        transition-delay: 0.12s, 0.12s, 0s;
+    }
+}
+
+.landing-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 6px 8px;
+}
+
+.landing-card-title {
+    font: 800 13px var(--sb-font-head);
+    color: var(--sb-text-strong);
+}
+
+.landing-card-total {
+    font-size: 11px;
+    color: var(--sb-text-muted);
+
+    b {
+        color: var(--sb-text);
+    }
+}
+
+// ---- Lanes and rows: the card's and the unfolded shelf's ----
+.landing-lane {
+    padding: 6px 0 2px;
+    border-top: 1px solid var(--sb-line);
+
+    .landing-shelf-rows > &:first-child {
+        border-top: none;
+    }
+}
+
+.landing-lane-name {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 6px;
+    font: 800 11px var(--sb-font-head);
+    color: var(--sb-text-dim);
+
+    span {
+        font-weight: 600;
+        font-size: 10.5px;
+        color: var(--sb-text-faint);
+    }
+    .is-merged > & {
+        color: var(--sb-purple);
+    }
+}
+
+.landing-row {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 9px;
+    width: 100%;
+    padding: 5px 6px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(var(--sb-overlay-rgb), 0.05);
+    }
+    &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+    > .landing-pip {
+        margin: 5px auto 0;
+    }
+    &.is-merged {
+        align-items: center;
+    }
+}
+
+.landing-rocket {
+    margin: 0 auto;
+    color: var(--sb-purple);
+}
+
+.landing-row-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.landing-row-title {
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--sb-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    .is-merged & {
+        font-size: 12.5px;
+        color: var(--sb-text-dim);
+    }
+}
+
+.landing-row-number {
+    color: var(--sb-text-faint);
+}
+
+.landing-row-stage {
+    overflow: hidden;
+    margin-top: 1px;
+    font-size: 11.5px;
+    color: var(--tone);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    [data-tone='ready'] > .landing-row-text > & {
+        color: var(--sb-text-muted);
+    }
+}
+
+.landing-row-eta {
+    padding-top: 1px;
+    font: 800 12px var(--sb-font-head);
+    font-variant-numeric: tabular-nums;
+    color: var(--sb-text);
+    white-space: nowrap;
+
+    [data-tone='merging'] > & {
+        color: var(--sb-purple);
+    }
+    [data-tone='progress'] > &,
+    [data-tone='blocked'] > &,
+    [data-tone='error'] > & {
+        color: var(--tone);
+    }
+}
+
+.landing-row-ago {
+    font-size: 11px;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+}
+
+.landing-bar {
+    height: 3px;
+    margin-top: 5px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--sb-line);
+
+    span {
+        display: block;
+        height: 100%;
+        background: var(--sb-purple);
+        transition: width 0.6s $fold-ease;
+    }
+}
+
+// ---- Unfolded: the rows ease in under the line, like the Errands shelf's ----
+.landing-shelf-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    min-height: 0;
+    overflow-y: auto;
+    transition: grid-template-rows 380ms $fold-ease;
+
+    &.is-folded {
+        grid-template-rows: 0fr;
+        overflow: hidden;
+    }
+}
+
+.landing-shelf-rows {
+    min-height: 0;
+    overflow: hidden;
+    padding-left: calc(var(--sb-row-text) - 22px);
+}
+
+// ---- Motion ----
+@keyframes landing-ring {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--sb-purple-rgb), 0.55);
+    }
+    70%,
+    100% {
+        box-shadow: 0 0 0 5px rgba(var(--sb-purple-rgb), 0);
+    }
+}
+
+@keyframes landing-gone {
+    0% {
+        transform: scale(1);
+    }
+    35% {
+        transform: scale(1.7);
+        box-shadow: 0 0 10px 2px rgba(var(--sb-purple-rgb), 0.7);
+    }
+    100% {
+        width: 0;
+        margin-left: 0;
+        border-width: 0;
+        transform: scale(0);
+    }
+}
+
+@keyframes landing-shake {
+    0%,
+    100% {
+        translate: 0;
+    }
+    20%,
+    60% {
+        translate: -2px 0;
+    }
+    40%,
+    80% {
+        translate: 2px 0;
+    }
+}
+
+@keyframes landing-spin {
+    to {
+        rotate: 360deg;
+    }
+}
+
+@keyframes landing-roll-in {
+    from {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+}
+
+@keyframes landing-pop {
+    0% {
+        scale: 0;
+    }
+    60% {
+        scale: 1.18;
+    }
+}
+
+@keyframes landing-flash {
+    from {
+        background: rgba(var(--sb-purple-rgb), 0.24);
+    }
+}
+
+@keyframes landing-pip-in {
+    from {
+        scale: 0;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .landing-pip {
+        animation: landing-pip-in 0.3s $pop-ease;
+
+        &.is-head {
+            animation: landing-ring 1.8s ease-out infinite;
+        }
+        &[data-tone='error'] {
+            animation: landing-shake 0.36s ease-in-out;
+        }
+        &.is-fixing::after {
+            content: '';
+            position: absolute;
+            inset: -4.5px;
+            border: 1.5px solid transparent;
+            border-top-color: var(--sb-yellow);
+            border-radius: 50%;
+            animation: landing-spin 1s linear infinite;
+        }
+        &.is-gone {
+            animation: landing-gone 0.5s ease-in forwards;
+        }
+    }
+    .landing-roll {
+        animation: landing-roll-in 0.38s $fold-ease;
+    }
+    .landing-badge {
+        animation: landing-pop 0.42s $pop-ease;
+    }
+    .landing-row.is-fresh {
+        animation: landing-flash 2.4s ease-out;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing-pip.is-gone {
+        display: none;
+    }
+}

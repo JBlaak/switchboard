@@ -11,6 +11,10 @@
  * | Needs you | `needs you`                            | Needs you                         |
  * | Merged    | `merged` (the session is archived)     | Merged (then Done)                |
  *
+ * Each stage also has a tone, the colour every place draws it in: purple
+ * merging or merged, green ready (it only waits its turn), yellow in
+ * progress or needs you, grey held, red an error (a refused merge).
+ *
  * The sidebar's pill, the plan cards' `planQueuePill`, the project page's
  * Merge queue section and the inbox's In progress pill all read it, in both
  * lanes. PRs that are not landed keep each place's own words (only the
@@ -22,10 +26,31 @@ import type {InboxItem, InboxStage} from '../inbox/model';
 import {landedKey, type HeldReason, type LandedView, type LaneStage, type LaneStageKind, type LaneView} from './model';
 import type {MergeManagerState} from './model';
 
+export type StageTone = 'merging' | 'ready' | 'progress' | 'blocked' | 'error';
+
+/** A stage's colour, as every place draws it. */
+export function stageTone(stage: LaneStage): StageTone {
+    switch (stage.kind) {
+        case 'head':
+        case 'merged':
+            return 'merging';
+        case 'waiting':
+            return 'ready';
+        case 'fixing':
+            return 'progress';
+        case 'needsYou':
+            return stage.reason.kind === 'merge-refused' ? 'error' : 'progress';
+        case 'held':
+            return 'blocked';
+    }
+}
+
 /** What every place says of one landed PR's stage. */
 export interface StageWords {
     /** The stage, for the pill's colour (`is-<kind>`). */
     readonly kind: LaneStageKind;
+    /** Its colour; `error` adds `is-error` to a pill. */
+    readonly tone: StageTone;
     /** The short pill: "landed · 2nd", "held · @ana", "merging", "fixing", "needs you". */
     readonly pill: string;
     /** The same, as a label: "Landed · 2nd", "Held · @ana", "Merging", "Fixing", "Needs you". */
@@ -71,6 +96,10 @@ export function stageWords(
     place: number | null = null,
     base: (branch: string) => string = (branch) => branch,
 ): StageWords {
+    return {...said(stage, place, base), tone: stageTone(stage)};
+}
+
+function said(stage: LaneStage, place: number | null, base: (branch: string) => string): Omit<StageWords, 'tone'> {
     switch (stage.kind) {
         case 'waiting': {
             const at = stage.position ?? place;
@@ -97,7 +126,7 @@ export function stageWords(
     }
 }
 
-function heldWords(reason: HeldReason, base: (branch: string) => string): StageWords {
+function heldWords(reason: HeldReason, base: (branch: string) => string): Omit<StageWords, 'tone'> {
     switch (reason.kind) {
         case 'approval':
             return words('held', 'held · approval', null, 'Held until it is approved');
@@ -133,7 +162,7 @@ function needsYouTitle(reason: Extract<LaneStage, {kind: 'needsYou'}>['reason'])
     }
 }
 
-function words(kind: LaneStageKind, pill: string, flag: string | null, title: string): StageWords {
+function words(kind: LaneStageKind, pill: string, flag: string | null, title: string): Omit<StageWords, 'tone'> {
     return {kind, pill, label: pill.charAt(0).toUpperCase() + pill.slice(1), flag, title};
 }
 

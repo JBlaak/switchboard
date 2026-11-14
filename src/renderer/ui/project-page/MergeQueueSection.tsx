@@ -206,7 +206,9 @@ function OpenInMergeManager({lane}: {lane: LaneView | undefined}): JSX.Element |
 /** A stage, as a pill in the words every place shares (#441). */
 function StagePill({words}: {words: StageWords}): JSX.Element {
     return (
-        <span className={'pp-stage is-landed-' + words.kind} title={words.title}>
+        <span
+            className={'pp-stage is-landed-' + words.kind + (words.tone === 'error' ? ' is-error' : '')}
+            title={words.title}>
             <i aria-hidden="true" />
             {words.label}
         </span>

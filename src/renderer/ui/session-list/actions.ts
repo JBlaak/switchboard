@@ -265,6 +265,11 @@ export function toggleErrandShelf(open?: boolean): void {
     dispatch(open === undefined ? {type: 'errandShelfToggled'} : {type: 'errandShelfToggled', open});
 }
 
+/** Unfold the Landing shelf, or fold it again. */
+export function toggleLandingShelf(): void {
+    dispatch({type: 'landingShelfToggled'});
+}
+
 // ── Rename ──
 
 export function startRename(rowId: string): void {
