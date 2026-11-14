@@ -20,11 +20,14 @@ export const LAND_TOOL_DEFINITION: McpTool['definition'] = {
     name: LAND_TOOL_NAME,
     title: 'Land a pull request',
     description:
-        "Land a pull request: hand it to Switchboard's Merge manager, which merges it once it is approved and " +
-        "its checks are green, one at a time in its repository's lane. Pass the pull request's URL (as " +
-        '`gh pr create` prints it) or `owner/repo#number`. Only your own open pull requests that are ready for ' +
-        'review land; a draft, a closed one or a teammate’s is refused, and the result says why. Landing one that ' +
-        'is already landed says where it stands. Carry on with your reply after calling it.',
+        "Land a pull request: hand it to Switchboard's Merge manager, which MERGES IT AUTOMATICALLY once it is " +
+        "approved and its checks are green, one at a time in its repository's lane. The user usually reviews " +
+        'their own pull requests, including the ones you open, before they merge, and landing skips that. Only ' +
+        'call this when the user explicitly asked you to land, or merge, this pull request; never on your own ' +
+        'initiative, and never just because you opened one. Pass the pull request\'s URL (as `gh pr create` ' +
+        'prints it) or `owner/repo#number`. Only your own open pull requests that are ready for review land; a ' +
+        'draft, a closed one or a teammate’s is refused, and the result says why. Landing one that is already ' +
+        'landed says where it stands. Carry on with your reply after calling it.',
     inputSchema: {
         type: 'object',
         properties: {
@@ -39,15 +42,18 @@ export const LAND_TOOL_DEFINITION: McpTool['definition'] = {
 };
 
 /**
- * When to land, as the server's instructions: right after opening a pull
- * request, so the user does not have to press Land it on the row.
+ * When to land, as the server's instructions: only when the user asks for it.
+ * Landing merges without the user's own review, so a session never lands a
+ * pull request on its own initiative.
  */
 export const LAND_TOOL_INSTRUCTIONS =
-    `Switchboard's Merge manager merges pull requests for the user. After you open a pull request that is ready ` +
-    `for review (not a draft), land it with the \`${LAND_TOOL_NAME}\` tool (\`${LAND_TOOL_QUALIFIED_NAME}\`; load ` +
-    'its schema first if it is deferred), passing the URL `gh pr create` printed, and tell the user in one line ' +
-    'where it landed. Do not land it when the user asked you not to, asked for a draft, or said they will merge ' +
-    'it themselves.';
+    `Switchboard's Merge manager can merge pull requests for the user. The \`${LAND_TOOL_NAME}\` tool ` +
+    `(\`${LAND_TOOL_QUALIFIED_NAME}\`) hands a pull request to it, and it then MERGES AUTOMATICALLY once the ` +
+    'pull request is approved and green. The user usually reviews their own pull requests, including the ones ' +
+    'you open, before they merge, and landing skips that review. Never land a pull request on your own ' +
+    'initiative, and never just because you opened one or it is ready: only land it when the user explicitly ' +
+    'asks you to land or merge that pull request. When in doubt, do not land it; the user can press Land it ' +
+    'in Switchboard themselves.';
 
 /** Which pull request a call names. */
 export interface LandInput {
