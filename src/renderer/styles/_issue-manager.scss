@@ -379,6 +379,7 @@
     .im-stage.is-working i,
     .im-stage.is-prCi i {
         animation: im-pulse 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 

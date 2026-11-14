@@ -44,6 +44,7 @@ import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import {installMergeManager} from '../ui/merge-manager/install-merge-manager';
 import {installMergeManagerPage} from '../ui/merge-manager/install-merge-manager-page';
 import {installBugPage} from '../ui/bug-manager/install-bug-page';
+import {installLoopPause} from '../lib/motion/loops';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -55,6 +56,7 @@ export function bootstrap(): void {
     installIpcListeners();
     installIpcBridge(window.api, dispatch, bufferTerminalData);
     installLayout();
+    installLoopPause();
     installToolbar();
     installSidebarKeyboard();
     installShortcuts();

@@ -624,6 +624,7 @@
     .bm-stage.is-run i,
     .bm-stage.is-ci i {
         animation: bm-pulse 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 

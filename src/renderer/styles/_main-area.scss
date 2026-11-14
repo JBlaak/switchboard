@@ -243,6 +243,7 @@
 #terminal-header-status.connecting::before {
     background: var(--sb-yellow);
     animation: sb-connecting-pulse 1.2s ease-in-out infinite;
+    animation-play-state: var(--loop-state, running);
 }
 
 @keyframes sb-connecting-pulse {
@@ -419,10 +420,12 @@
 .rc.is-connecting .rc-flow {
     opacity: 0.55;
     animation: rc-crawl 700ms linear infinite;
+    animation-play-state: var(--loop-state, running);
 }
 
 .rc.is-connecting .rc-spark {
     animation: rc-travel 1400ms ease-in-out infinite;
+    animation-play-state: var(--loop-state, running);
 }
 
 @keyframes rc-crawl {

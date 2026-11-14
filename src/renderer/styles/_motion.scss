@@ -4,6 +4,14 @@
    (lib/motion/reflow.ts), and the entrance dialogs make. The springs themselves
    are inline transforms written by lib/motion/spring.ts. */
 
+/* Every animation that loops forever follows `--loop-state`
+   (`animation-play-state: var(--loop-state, running)` beside it), so the
+   window stops drawing frames while it is hidden or out of focus
+   (lib/motion/loops.ts). */
+:root.loops-paused {
+    --loop-state: paused;
+}
+
 .confetti {
     position: fixed;
     inset: 0;
