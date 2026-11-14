@@ -122,7 +122,6 @@ test('a Claude session can be stopped, archived, snoozed and resumed with a conf
         archive: 'Archive',
         snooze: true,
         resume: true,
-        handOff: false,
         bringBack: false,
     });
 });
@@ -137,7 +136,6 @@ test('a remote session can be disconnected, archived and snoozed, not resumed', 
         archive: 'Archive',
         snooze: true,
         resume: false,
-        handOff: false,
         bringBack: false,
     });
 });
@@ -152,7 +150,6 @@ test('a plain terminal can only be stopped', () => {
         archive: null,
         snooze: false,
         resume: false,
-        handOff: false,
         bringBack: false,
     });
 });

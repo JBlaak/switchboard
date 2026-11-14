@@ -27,11 +27,9 @@ import {openSessionWorkFromRow} from '../session-work/actions';
 import {highlightedSession} from '../../state/main-area-slice';
 import {TaskMarker} from '../session-task/TaskMarker';
 import {HandoffMarker} from '../session-handoff/HandoffMarker';
-import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
 import type {JSX, MouseEvent} from 'react';
 import type {SessionListRow} from '../../state/session-list-layout';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
-import type {HandoffHost} from '../../../application/services/project-handoff';
 
 export interface SessionItemProps {
     row: SessionListRow;
@@ -184,8 +182,6 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
     );
 }
 
-const NO_HOSTS: readonly HandoffHost[] = [];
-
 interface RowActionsProps {
     row: SessionListRow;
     onOpenWork: (e: MouseEvent<HTMLElement>) => void;
@@ -206,17 +202,15 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
     const path = row.projectPath || session.projectPath;
     const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
     const canOpenWork = useCanOpenWork(session.sessionId, workOffReason(session, path, vm) !== null);
-    const hosts = useStore((state) => state.handoff.hosts) ?? NO_HOSTS;
     const copy = useStore((state) => isVmCopyIn(state.agentHost, path));
-    const buttons = rowButtons(session, {vm, copy, hosts: hosts.length});
+    const buttons = rowButtons(session, {vm, copy});
     const snooze = useRef<HTMLButtonElement>(null);
     const [snoozing, setSnoozing] = useState(false);
-    const [pickingHost, setPickingHost] = useState(false);
     const closeSnooze = useCallback(() => setSnoozing(false), []);
     const snoozedUntil =
         session.snoozedUntil && Date.parse(session.snoozedUntil) > Date.now() ? session.snoozedUntil : null;
     return (
-        <div className={'session-actions' + (snoozing || pickingHost ? ' menu-open' : '')}>
+        <div className={'session-actions' + (snoozing ? ' menu-open' : '')}>
             {canOpenWork === true && (
                 <button
                     className="session-work-btn"
@@ -263,15 +257,6 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
                         const moon = snooze.current?.querySelector<HTMLElement>('.snooze-moon');
                         if (moon) onSnooze(moon, until);
                     }}
-                />
-            )}
-            {buttons.handOff && (
-                <HandOffSessionButton
-                    sessionId={session.sessionId}
-                    hosts={hosts}
-                    className="session-handoff-btn"
-                    html={HTML.handOff}
-                    onMenu={setPickingHost}
                 />
             )}
             {buttons.bringBack && (

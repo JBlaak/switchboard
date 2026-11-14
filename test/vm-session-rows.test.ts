@@ -74,7 +74,6 @@ test('a Claude session on a VM stops and resumes like a local one', () => {
         archive: 'Archive',
         snooze: true,
         resume: true,
-        handOff: false,
         bringBack: false,
     });
 });
@@ -101,7 +100,6 @@ test('a session on an agentless remote still only disconnects', () => {
         archive: 'Archive',
         snooze: true,
         resume: false,
-        handOff: false,
         bringBack: false,
     });
 });
@@ -116,7 +114,6 @@ test('a local Claude session is unchanged', () => {
         archive: 'Archive',
         snooze: true,
         resume: true,
-        handOff: false,
         bringBack: false,
     });
 });

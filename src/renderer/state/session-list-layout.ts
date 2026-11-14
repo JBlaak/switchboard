@@ -195,8 +195,6 @@ export interface RowButtons {
     /** Snoozing is keyed on the session id, like archiving; an archived row has nothing to snooze. */
     readonly snooze: boolean;
     readonly resume: boolean;
-    /** Hand off to… (#276 stage 3): a local Claude session, once there is a VM host. */
-    readonly handOff: boolean;
     /** Bring back (#276): a Claude session on a VM copy of a local project, the counterpart of Hand off to…. */
     readonly bringBack: boolean;
 }
@@ -228,13 +226,13 @@ export function canBringBackSession(session: SessionRow, {vm, copy}: {vm: boolea
  * works — it is keyed on the session id alone — and doubles as "forget this
  * one". A session on a VM (`vm`, #276) is the exception: it has one, on the
  * agent. A plain terminal has nothing to archive or resume either. Stop is
- * always there; the stylesheet shows it only while something runs. Hand off
- * to… is there for a local Claude session once there are `hosts` to hand it to;
- * Bring back for a Claude session on a VM `copy` of a local project.
+ * always there; the stylesheet shows it only while something runs. Bring back
+ * is there for a Claude session on a VM `copy` of a local project. Hand off
+ * to… is not a row button: it lives in the session tray and elsewhere.
  */
 export function rowButtons(
     session: SessionRow,
-    {vm = false, copy = false, hosts = 0}: {vm?: boolean; copy?: boolean; hosts?: number} = {},
+    {vm = false, copy = false}: {vm?: boolean; copy?: boolean} = {},
 ): RowButtons {
     // A session on a VM (#276) runs on the agent as a local one does: stopping
     // it stops it, and a Claude session there resumes like one here.
@@ -245,7 +243,6 @@ export function rowButtons(
         archive: session.type === 'terminal' ? null : session.archived ? 'Unarchive' : 'Archive',
         snooze: session.type !== 'terminal' && !session.archived,
         resume: !disconnects && !shell,
-        handOff: canHandOffSession(session, hosts),
         bringBack: canBringBackSession(session, {vm, copy}),
     };
 }

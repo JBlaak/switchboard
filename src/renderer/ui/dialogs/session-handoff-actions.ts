@@ -1,6 +1,6 @@
 /**
- * What session hand-off does (#276 stage 3): Hand off to… from a row or the
- * terminal header, the dialog's preview, ticks and run, and Cancel while it
+ * What session hand-off does (#276 stage 3): Hand off to… from the session
+ * tray, the dialog's preview, ticks and run, and Cancel while it
  * waits for the turn to end. The components call these, never `window.api`
  * or the store.
  *

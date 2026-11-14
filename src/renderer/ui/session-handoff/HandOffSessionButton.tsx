@@ -1,12 +1,11 @@
 /**
- * Hand off to… for one session (#276 stage 3), in a row's actions and in the
- * terminal header.
+ * Hand off to… for one session (#276 stage 3), in the session tray. The
+ * session list's rows do not offer it.
  *
  * Shown only where `canHandOffSession` allows it, which the caller decides.
  * With one host it opens the dialog at once; with several a small menu picks
- * one, hanging below the button in a portal on the body, out of the row's
- * clipped action strip, as the snooze menu does. The menu goes on a choice,
- * Escape, a click elsewhere or a scroll.
+ * one, hanging below the button in a portal on the body, as the snooze menu
+ * does. The menu goes on a choice, Escape, a click elsewhere or a scroll.
  */
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';

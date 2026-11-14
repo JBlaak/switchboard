@@ -772,21 +772,40 @@ test.describe('project hand-off', () => {
 test.describe('session hand-off', () => {
     test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
 
-    /** Hand off to… on a row; the row's buttons show while the pointer is over it. */
-    async function handOffButton(page: Page, sessionId: string): Promise<Locator> {
-        const row = sessionItem(page, sessionId);
-        await row.hover();
-        return row.getByRole('button', {name: 'Hand off to…', exact: true});
+    /** Hand off… in the open session's tray, which hovering the bar opens (#343). */
+    async function trayHandOffButton(page: Page): Promise<Locator> {
+        await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+        return page.getByRole('region', {name: 'Session tools'}).getByRole('button', {name: 'Hand off…'});
     }
+
+    test('a local Claude session’s row offers no Hand off to… on hover, and keeps its other buttons', async ({
+        page,
+    }) => {
+        /* Given */
+        const row = sessionItem(page, S.loginFix);
+
+        /* When */
+        await row.hover();
+
+        /* Then */
+        await expect(row.getByRole('button', {name: 'Snooze', exact: true})).toBeVisible();
+        await expect(row.getByRole('button', {name: 'Archive', exact: true})).toBeVisible();
+        await expect(row.getByRole('button', {name: 'Resume with config', exact: true})).toBeVisible();
+        await expect(row.getByRole('button', {name: /^Hand off/})).toHaveCount(0);
+
+        /* When */
+        await row.getByRole('button', {name: 'Snooze', exact: true}).click();
+
+        /* Then */
+        await expect(page.getByRole('menu', {name: 'Snooze until'})).toBeVisible();
+    });
 
     test('Hand off to… in a local Claude session’s tray opens the hand-off dialog for it', async ({page, home}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
 
         /* When */
-        // In the session tray (#343), which hovering the bar opens.
-        await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
-        await page.getByRole('region', {name: 'Session tools'}).getByRole('button', {name: 'Hand off…'}).click();
+        await (await trayHandOffButton(page)).click();
 
         /* Then */
         const dialog = handOffDialog(page);
@@ -797,10 +816,12 @@ test.describe('session hand-off', () => {
     test('a busy session waits for its turn with Cancel, shows Waiting… and Handing off… on its row, then continues on the VM', async ({
         page,
         app,
+        home,
     }) => {
         /* Given */
         await setHostStub(app, 'sessionHandoff', {...STUB_SESSION_HANDOFF, phaseDelayMs: 400, waitingMs: 1200});
-        await (await handOffButton(page, S.loginFix)).click();
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await (await trayHandOffButton(page)).click();
         const dialog = handOffDialog(page);
 
         /* Then */
@@ -836,7 +857,7 @@ test.describe('session hand-off', () => {
         await expect(sessionItem(page, S.loginFix).getByText('Handing off…', {exact: true})).toBeVisible();
 
         /* When */
-        await (await handOffButton(page, S.loginFix)).click();
+        await (await trayHandOffButton(page)).click();
 
         /* Then */
         await expect(dialog).toContainText('Handing off the checkout…');
