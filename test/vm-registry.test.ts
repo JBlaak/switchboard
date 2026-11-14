@@ -297,3 +297,29 @@ test("a new folder on a VM is recorded only when the VM is registered with an ag
         'no agent stored on the records',
     );
 });
+
+// ── Forgetting a removed worktree's projects ──
+
+test('a removed VM worktree drops its project and those inside it, the repository stays', () => {
+    /* Given */
+    const settings = settingsWith({
+        remoteProjects: [
+            remote(),
+            remote({dir: '~/projects/site/.claude/worktrees/x'}),
+            remote({dir: '~/projects/site/.claude/worktrees/x/web'}),
+        ],
+    });
+
+    /* When */
+    const gone = settings.forgetRemoteProjectsIn(
+        'ssh://dev@vm.local//home/dev/projects/site/.claude/worktrees/x',
+        '/home/dev',
+    );
+
+    /* Then */
+    assert.equal(gone.length, 2);
+    assert.deepEqual(
+        settings.remoteProjects().map((r) => r.dir),
+        ['~/projects/site'],
+    );
+});

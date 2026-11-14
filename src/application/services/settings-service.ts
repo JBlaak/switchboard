@@ -20,7 +20,8 @@ import {
 } from '../../domain/settings/settings';
 import {parseSavedPrompts, SAVED_PROMPTS_SETTING} from '../../domain/settings/saved-prompts';
 import type {SavedPrompt, SavedPromptLists} from '../../domain/settings/saved-prompts';
-import {normalizeRemoteDir, parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
+import {parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
+import {remoteProjectsIn, vmDirForms} from '../../domain/project/vm-worktree-projects';
 import type {
     EffectiveSettings,
     GlobalSettings,
@@ -338,6 +339,27 @@ export class SettingsService {
         return this.findRemoteProject(projectPath);
     }
 
+    /**
+     * Drop the VM projects that are `folder` or lie inside it, once that folder
+     * (a worktree the archive cleanup removed) is gone, so they stop being
+     * listed. `home` is the VM user's home, which matches a project stored as
+     * `~/…` to the absolute path git names the worktree by.
+     *
+     * Answers the paths of the projects dropped.
+     */
+    public forgetRemoteProjectsIn(folder: string, home: string | null): string[] {
+        const gone = remoteProjectsIn(this.global().remoteProjects || [], folder, home);
+        if (gone.length > 0) {
+            const drop = new Set(gone);
+            this.updateGlobal((settings) => {
+                settings.remoteProjects = (settings.remoteProjects || []).filter(
+                    (r) => !drop.has(remoteProjectPath(r)),
+                );
+            });
+        }
+        return gone;
+    }
+
     public removeRemoteProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             settings.remoteProjects = (settings.remoteProjects || []).filter(
@@ -511,11 +533,7 @@ function parentProject(
     dir: string | null,
     home: string | null,
 ): RemoteProjectSetting | null {
-    const forms = (d: string | null | undefined): string[] => {
-        const raw = normalizeRemoteDir(d) ?? '~';
-        const expanded = home ? expandVmHome(raw, home) : null;
-        return expanded && expanded !== raw ? [raw, expanded] : [raw];
-    };
+    const forms = (d: string | null | undefined): string[] => vmDirForms(d, home);
     const targets = forms(dir);
     let best: {remote: RemoteProjectSetting; depth: number} | null = null;
     for (const remote of remotes) {
@@ -525,15 +543,6 @@ function parentProject(
         }
     }
     return best?.remote ?? null;
-}
-
-/** A VM folder with `~` (or a bare relative folder) anchored at the VM user's home. */
-function expandVmHome(dir: string, home: string): string {
-    const root = home.replace(/\/+$/, '');
-    if (dir === '~') return root;
-    if (dir.startsWith('~/')) return root + dir.slice(1);
-    if (dir.startsWith('/')) return dir;
-    return root + '/' + dir;
 }
 
 /** The settings-store key the hand-off's ticked files of a local project are kept under. */
