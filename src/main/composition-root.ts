@@ -1077,9 +1077,11 @@ export function buildContainer(): Container {
         log,
         agentlessRemote,
     });
-    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
-        queueErrands.turnEnded(sessionIds, archiving, currentId),
-    );
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) => {
+        queueErrands.turnEnded(sessionIds, archiving, currentId);
+        // An errand that stopped without archiving needs you, on the phones too.
+        phoneSessions?.errandsChanged();
+    });
 
     // The CI job queue under the merge queue: its jobs by runner pool, and Bump.
     const ciJobQueue = new CiJobQueueService({github, clock, timers, log});
@@ -1515,6 +1517,8 @@ export function buildContainer(): Container {
             tasks,
         }),
         settings,
+        // Which sessions are errands, so the phones keep them apart (#432).
+        errands: {mergeManager: () => mergeManager.state(), queue: () => queueErrands.errands()},
         renderer,
         // Hold-to-talk: Whisper's model is fetched into user data on first use.
         voice: {

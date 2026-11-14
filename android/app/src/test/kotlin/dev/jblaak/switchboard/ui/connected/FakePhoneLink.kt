@@ -3,7 +3,9 @@ package dev.jblaak.switchboard.ui.connected
 import dev.jblaak.switchboard.link.LinkState
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.ErrandKind
 import dev.jblaak.switchboard.protocol.PendingQuestions
+import dev.jblaak.switchboard.protocol.PhoneErrand
 import dev.jblaak.switchboard.protocol.PhoneSession
 import dev.jblaak.switchboard.protocol.Question
 import dev.jblaak.switchboard.protocol.QuestionOption
@@ -48,6 +50,7 @@ fun phoneSession(
     state: SessionState = SessionState.Idle,
     owner: TerminalOwner = TerminalOwner.Mac,
     waiting: WaitingReason? = null,
+    errand: PhoneErrand? = null,
 ): PhoneSession {
     return PhoneSession(
         id = id,
@@ -59,7 +62,17 @@ fun phoneSession(
         waiting = waiting,
         owner = owner,
         changedAt = 0,
+        errand = errand,
     )
+}
+
+fun phoneErrand(
+    kind: ErrandKind = ErrandKind.Fix,
+    number: Int = 431,
+    doing: String = "fixing checks",
+    needsYou: Boolean = false,
+): PhoneErrand {
+    return PhoneErrand(kind, number, repository = "jblaak/switchboard", doing = doing, needsYou = needsYou)
 }
 
 fun question(text: String, multiSelect: Boolean = false, vararg labels: String): Question {

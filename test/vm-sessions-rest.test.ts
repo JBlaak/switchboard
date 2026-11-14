@@ -30,6 +30,7 @@ import {
     silentLog,
 } from './support/fakes';
 import {HOST_SETTINGS, scriptedAgent, settle} from './support/scripted-agent';
+import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
 import type {AgentDialer} from '../src/application/ports/agent-link';
 import type {SettingsStore} from '../src/application/ports/settings-store';
 import type {PhoneSessionsServiceDeps} from '../src/application/services/phone-sessions-service';
@@ -463,6 +464,7 @@ test("the phone's row of a VM session is labelled with its host", async () => {
         projects: {list: () => []},
         questions: {pending: () => [], answer: () => ({ok: true})},
         grill: {views: () => []},
+        errands: {mergeManager: () => EMPTY_MERGE_MANAGER_STATE, queue: () => []},
         voice: {connected() {}, message() {}, disconnected() {}},
         battery: {connected() {}, disconnected() {}},
         clock: h.clock,

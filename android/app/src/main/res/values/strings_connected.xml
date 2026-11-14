@@ -155,6 +155,19 @@
         <item quantity="other">%1$d working</item>
     </plurals>
     <string name="sessions_elapsed_now">now</string>
+    <!-- A fix errand's icon, read out. -->
+    <string name="sessions_errand_fix">Fix errand</string>
+    <!-- A stuck errand's line in Needs you: the project, then why it waits. -->
+    <string name="sessions_errand_meta">%1$s · errand · %2$s</string>
+    <!-- A nudge errand's icon, read out. -->
+    <string name="sessions_errand_nudge">Nudge errand</string>
+    <!-- An errand in the sheet: the pull request's number, then what it is doing. -->
+    <string name="sessions_errand_title">#%1$d · %2$s</string>
+    <plurals name="sessions_errands_count">
+        <item quantity="one">%1$d errand</item>
+        <item quantity="other">%1$d errands</item>
+    </plurals>
+    <string name="sessions_errands_title">Errands</string>
     <string name="sessions_empty">Nothing is running on your Mac. Ask Patch to start a session.</string>
     <string name="sessions_link_connected">%1$s · connected</string>
     <string name="sessions_link_offline">%1$s · offline</string>

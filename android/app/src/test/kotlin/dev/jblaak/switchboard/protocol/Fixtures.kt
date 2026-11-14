@@ -83,6 +83,46 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     "pair-pending" to ServerMessage.PairPending,
     "pair-accepted" to ServerMessage.PairAccepted(deviceId = "d-7"),
     "pair-rejected" to ServerMessage.PairRejected(reason = PairRejection.WrongCode),
+    "sessions-errands" to ServerMessage.Sessions(
+        sessions = listOf(
+            PhoneSession(
+                id = "s-4",
+                name = "Fix checks on #431",
+                project = "switchboard",
+                projectPath = SWITCHBOARD_PATH,
+                remote = null,
+                state = SessionState.Busy,
+                waiting = null,
+                owner = TerminalOwner.Mac,
+                changedAt = 1792756980000,
+                errand = PhoneErrand(
+                    kind = ErrandKind.Fix,
+                    number = 431,
+                    repository = "jblaak/switchboard",
+                    doing = "fixing checks",
+                    needsYou = false,
+                ),
+            ),
+            PhoneSession(
+                id = "s-5",
+                name = "Nudge the reviewer on #398",
+                project = "switchboard",
+                projectPath = SWITCHBOARD_PATH,
+                remote = null,
+                state = SessionState.NeedsYou,
+                waiting = WaitingReason.Terminal,
+                owner = TerminalOwner.Mac,
+                changedAt = 1792757040000,
+                errand = PhoneErrand(
+                    kind = ErrandKind.Nudge,
+                    number = 398,
+                    repository = "jblaak/switchboard",
+                    doing = "stopped",
+                    needsYou = true,
+                ),
+            ),
+        ),
+    ),
     "update-required" to ServerMessage.UpdateRequired(protocol = 2, macVersion = "2.9.0"),
     "sessions" to ServerMessage.Sessions(
         sessions = listOf(

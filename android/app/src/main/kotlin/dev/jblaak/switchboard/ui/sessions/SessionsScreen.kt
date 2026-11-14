@@ -20,16 +20,20 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,14 +48,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jblaak.switchboard.R
+import dev.jblaak.switchboard.protocol.ErrandKind
 import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.theme.StatusColors
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.AddIcon
 import dev.jblaak.switchboard.ui.connected.LaptopIcon
 import dev.jblaak.switchboard.ui.connected.MoreIcon
+import dev.jblaak.switchboard.ui.connected.PaperPlaneIcon
 import dev.jblaak.switchboard.ui.connected.PatchFigure
 import dev.jblaak.switchboard.ui.connected.PhoneIcon
+import dev.jblaak.switchboard.ui.connected.WrenchIcon
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
 import nl.jblaak.patch.PatchMood
@@ -74,6 +81,7 @@ fun SessionsScreen(
     onMenuClick: () -> Unit,
 ) {
     val now = rememberMinuteClock()
+    var errandsOpen by remember { mutableStateOf(false) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.safeDrawingPadding()) {
             LazyColumn(
@@ -88,6 +96,9 @@ fun SessionsScreen(
                 section(SessionStatus.NeedsYou, list.needsYou, now, onSessionClick)
                 section(SessionStatus.Working, list.working, now, onSessionClick)
                 section(SessionStatus.Ready, list.ready, now, onSessionClick)
+                if (list.errands.isNotEmpty()) {
+                    item(key = "errands") { ErrandsChip(list, onClick = { errandsOpen = true }, modifier = Modifier.animateItem()) }
+                }
             }
             ExtendedFloatingActionButton(
                 onClick = onAskPatchClick,
@@ -101,6 +112,16 @@ fun SessionsScreen(
                     .padding(end = 16.dp, bottom = 16.dp),
             )
         }
+    }
+    if (errandsOpen && list.errands.isNotEmpty()) {
+        ErrandsSheet(
+            errands = list.errands,
+            onErrandClick = { row ->
+                errandsOpen = false
+                onSessionClick(row)
+            },
+            onClose = { errandsOpen = false },
+        )
     }
 }
 
@@ -215,6 +236,105 @@ private fun CountChip(text: String, status: StatusColors) {
 }
 
 @Composable
+private fun ErrandsChip(list: SessionList, onClick: () -> Unit, modifier: Modifier) {
+    val colors = SwitchboardTheme.colors
+    val needingYou = list.errandsNeedingYou
+    val text = if (needingYou > 0) {
+        pluralStringResource(R.plurals.sessions_count_needs_you, needingYou, needingYou)
+    } else {
+        pluralStringResource(R.plurals.sessions_errands_count, list.errands.size, list.errands.size)
+    }
+    val fill = if (needingYou > 0) colors.needsYou.fill else colors.bgPanel
+    val ink = if (needingYou > 0) colors.needsYou.ink else colors.textMuted
+    Box(modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .height(32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(fill)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp),
+        ) {
+            Icon(WrenchIcon, contentDescription = null, tint = ink, modifier = Modifier.size(14.dp))
+            Text(text, style = MaterialTheme.typography.labelMedium, color = ink)
+        }
+    }
+}
+
+/** Every errand, one row each; tapping one opens its session as a row in the list does. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ErrandsSheet(errands: List<SessionRow>, onErrandClick: (SessionRow) -> Unit, onClose: () -> Unit) {
+    val colors = SwitchboardTheme.colors
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.bgPanel,
+    ) {
+        Text(
+            text = stringResource(R.string.sessions_errands_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.textStrong,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        )
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(errands, key = { it.id }) { row ->
+                ErrandSheetRow(row, onClick = { onErrandClick(row) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrandSheetRow(row: SessionRow, onClick: () -> Unit) {
+    val colors = SwitchboardTheme.colors
+    val errand = row.errand ?: return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        ErrandIcon(
+            errand.kind,
+            tint = if (errand.needsYou) colors.needsYou.dot else colors.textDim,
+            modifier = Modifier.size(18.dp),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                text = stringResource(R.string.sessions_errand_title, errand.number, errand.doing),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (errand.needsYou) colors.needsYou.ink else colors.textStrong,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = errand.repository,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** A wrench for a fix, a paper plane for a nudge. */
+@Composable
+private fun ErrandIcon(kind: ErrandKind, tint: Color, modifier: Modifier) {
+    Icon(
+        imageVector = if (kind == ErrandKind.Fix) WrenchIcon else PaperPlaneIcon,
+        contentDescription = stringResource(if (kind == ErrandKind.Fix) R.string.sessions_errand_fix else R.string.sessions_errand_nudge),
+        tint = tint,
+        modifier = modifier,
+    )
+}
+
+@Composable
 private fun EmptySessions() {
     Text(
         text = stringResource(R.string.sessions_empty),
@@ -275,11 +395,19 @@ private fun NeedsYouRow(row: SessionRow, now: Long, onClick: () -> Unit, modifie
             .clickable(onClick = onClick)
             .padding(16.dp),
     ) {
-        Dot(colors.needsYou.dot, size = 10, modifier = Modifier.padding(top = 7.dp))
+        if (row.errand != null) {
+            ErrandIcon(row.errand.kind, tint = colors.needsYou.dot, modifier = Modifier.padding(top = 2.dp).size(18.dp))
+        } else {
+            Dot(colors.needsYou.dot, size = 10, modifier = Modifier.padding(top = 7.dp))
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             RowTitle(row, MaterialTheme.typography.titleMedium)
             Text(
-                text = "${row.project} · ${waitingText(row.waiting)}",
+                text = if (row.errand != null) {
+                    stringResource(R.string.sessions_errand_meta, row.project, waitingText(row.waiting))
+                } else {
+                    "${row.project} · ${waitingText(row.waiting)}"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textMuted,
                 maxLines = 1,
@@ -452,12 +580,15 @@ fun Dot(color: Color, size: Int, modifier: Modifier = Modifier) {
 @Composable
 internal fun SessionsScreenPreview() {
     val now = System.currentTimeMillis()
+    val stuckNudge = previewRow("7", "Nudge the reviewer on #398", "switchboard", SessionStatus.NeedsYou, Waiting.Terminal, TerminalPlace.Mac, now)
+        .copy(errand = Errand(ErrandKind.Nudge, 398, "jblaak/switchboard", "stopped", needsYou = true))
     SwitchboardTheme {
         SessionsScreen(
             list = SessionList(
                 needsYou = listOf(
                     previewRow("1", "Phone access pairing flow", "switchboard", SessionStatus.NeedsYou, Waiting.Questions(3), TerminalPlace.Mac, now - 2.minutes.inWholeMilliseconds),
                     previewRow("2", "Citius reconnect after sleep", "kmm-sessionmanager", SessionStatus.NeedsYou, Waiting.Terminal, TerminalPlace.Mac, now - 9.minutes.inWholeMilliseconds),
+                    stuckNudge,
                 ),
                 working = listOf(
                     previewRow("3", "Release notes for v2.8.2", "switchboard", SessionStatus.Working, null, TerminalPlace.ThisPhone, now),
@@ -465,6 +596,11 @@ internal fun SessionsScreenPreview() {
                 ),
                 ready = listOf(
                     previewRow("5", "Grill follow-ups from #192", "switchboard", SessionStatus.Ready, null, TerminalPlace.OtherPhone("Pixel 8"), now),
+                ),
+                errands = listOf(
+                    previewRow("6", "Fix checks on #431", "switchboard", SessionStatus.Working, null, TerminalPlace.Mac, now)
+                        .copy(errand = Errand(ErrandKind.Fix, 431, "jblaak/switchboard", "fixing checks", needsYou = false)),
+                    stuckNudge,
                 ),
             ),
             macName = "joris-mbp.local",
