@@ -156,7 +156,7 @@
 /* ---- List and detail ---- */
 .bm-split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(300px, 36%, 440px);
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 30%, 400px);
     flex: 1;
     min-height: 0;
 }
@@ -200,14 +200,28 @@
     }
 }
 
+// Dot | the text | the sparkline | the numbers. The last two are fixed, so
+// every row's graph sits in the same place whatever its title.
 .bm-row {
     display: grid;
-    grid-template-columns: 10px 96px minmax(0, 1fr) auto;
-    gap: 12px;
+    grid-template-columns: 10px minmax(0, 1fr) 160px 150px;
+    gap: 14px;
     align-items: center;
-    padding: 9px 10px;
+    padding: 10px 10px;
     border-radius: var(--sb-r-row);
     cursor: pointer;
+
+    // The signal's colour: the sparkline and "× its average".
+    --bm-line: var(--sb-text-muted);
+    &.bm-sig-new {
+        --bm-line: var(--sb-blue);
+    }
+    &.bm-sig-trending {
+        --bm-line: var(--sb-orange);
+    }
+    &.bm-sig-regressed {
+        --bm-line: var(--sb-red);
+    }
 
     &:hover {
         background: var(--sb-bg-panel);
@@ -224,8 +238,10 @@
 }
 
 .bm-dot {
+    align-self: start;
     width: 7px;
     height: 7px;
+    margin-top: 27px;
     border-radius: 50%;
 
     .is-unread & {
@@ -236,44 +252,132 @@
 .bm-row-text {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 3px;
     min-width: 0;
+}
 
-    > b,
-    > span {
+// Signal, severity and triage, small, above the title.
+.bm-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 20px;
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+
+    .bm-chip {
+        padding: 2px 6px;
+        font-size: 9.5px;
+    }
+    .bm-stage {
+        padding: 2px 8px;
+        font-size: 11px;
+    }
+}
+
+.bm-sev {
+    font: 700 10px var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+
+    &.is-error {
+        color: rgba(var(--sb-red-rgb), 0.85);
+    }
+    &.is-warning {
+        color: var(--sb-yellow);
+    }
+}
+
+.bm-triage-line {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--sb-text-muted);
+
+    &.is-running {
+        color: var(--sb-lav-ink);
+    }
+    &.is-stopped {
+        color: var(--sb-orange);
+    }
+}
+
+// A triage's suggestion: Fix green, safe to snooze yellow, backlog blue, needs you red.
+.bm-suggests {
+    font-weight: 700;
+
+    &.is-fix {
+        color: var(--sb-accent);
+    }
+    &.is-snooze {
+        color: var(--sb-yellow);
+    }
+    &.is-backlog {
+        color: var(--sb-blue);
+    }
+    &.is-needsYou {
+        color: var(--sb-red);
+    }
+}
+
+.bm-row-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font: 600 13.5px/1.35 var(--sb-font-head);
+    color: var(--sb-text-dim);
+
+    .is-unread & {
+        font-weight: 700;
+        color: var(--sb-text-strong);
+    }
+}
+
+.bm-row-class {
+    color: var(--sb-text-muted);
+    font-weight: 600;
+}
+
+.bm-row-msg {
+    color: inherit;
+}
+
+.bm-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 2px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--sb-text-faint);
+
+    > * {
+        min-width: 0;
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
     }
-    > b {
-        font: 600 13.5px var(--sb-font-head);
-        color: var(--sb-text-dim);
+    > * + *::before {
+        content: '·';
+        margin-right: 10px;
+        color: var(--sb-text-dimmest);
     }
-    .is-unread & > b {
-        font-weight: 700;
-        color: var(--sb-text-strong);
-    }
-    > span {
-        font-size: 12px;
+    code {
+        font: 11.5px var(--sb-font-mono);
         color: var(--sb-text-muted);
     }
 }
 
-.bm-src {
-    margin-right: 6px;
-    padding: 1px 5px;
-    border-radius: 5px;
-    background: var(--sb-bg-raised);
-    box-shadow: inset 0 0 0 1px var(--sb-line);
-    font: 800 9.5px var(--sb-font-head);
-    font-style: normal;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--sb-text-dim);
-}
-
 .bm-seen-again {
-    grid-column: 3 / -1;
+    grid-column: 2 / -1;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -286,36 +390,61 @@
     gap: 6px;
 }
 
+.bm-row-spark {
+    display: block;
+    width: 160px;
+    height: 40px;
+}
+
 .bm-nums {
     display: flex;
-    align-items: center;
-    gap: 14px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
     font-size: 12px;
     color: var(--sb-text-muted);
     font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
 
     b {
         color: var(--sb-text);
-    }
-    --bm-line: var(--sb-text-muted);
-    &.is-new {
-        --bm-line: var(--sb-blue);
-    }
-    &.is-trending {
-        --bm-line: var(--sb-orange);
-    }
-    &.is-regressed {
-        --bm-line: var(--sb-red);
+        font-weight: 700;
     }
 }
 
+.bm-times {
+    color: var(--bm-line);
+    font-weight: 600;
+}
+
+.bm-nums-sub {
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+
+    b {
+        color: var(--sb-text-muted);
+        font-weight: 600;
+    }
+}
+
+// A narrow list keeps the title and the numbers, not the line.
+@container (max-width: 620px) {
+    .bm-row {
+        grid-template-columns: 10px minmax(0, 1fr) 150px;
+    }
+    .bm-row-spark {
+        display: none;
+    }
+}
+
+/* ---- Sparklines ----
+   The box never changes: loading is a faint shape with a shimmer across it,
+   then the line draws in and its fill fades in; empty is the baseline only. */
 .bm-spark {
     display: block;
     flex-shrink: 0;
-
-    &.is-empty {
-        display: inline-block;
-    }
+    overflow: visible;
 
     // The detail's chart takes the box's width.
     &.is-fluid {
@@ -324,17 +453,30 @@
     }
 }
 
-// A narrow list keeps the title and the numbers, not the line.
-@container (max-width: 620px) {
-    .bm-nums .bm-spark,
-    .bm-nums .bm-spark.is-empty {
-        display: none;
-    }
-}
-
 .bm-spark-base {
     stroke: var(--sb-line);
     stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.bm-spark-ghost {
+    fill: var(--sb-line);
+    opacity: 0.35;
+}
+
+.bm-spark-sweep-edge {
+    stop-color: var(--sb-text-faint);
+    stop-opacity: 0;
+}
+
+.bm-spark-sweep-mid {
+    stop-color: var(--sb-text-faint);
+    stop-opacity: 0.22;
+}
+
+// Without motion the sweep stays out of sight; the ghost alone says loading.
+.bm-spark-sweep {
+    opacity: 0;
 }
 
 .bm-spark-fill {
@@ -351,6 +493,57 @@
 
 .bm-spark-dot {
     fill: var(--bm-line, var(--sb-accent));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .bm-spark-sweep {
+        opacity: 1;
+        transform-box: fill-box;
+        animation: bm-sweep 1.6s ease-in-out infinite;
+    }
+
+    .bm-spark-line {
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+        animation: bm-draw 600ms ease-out forwards;
+    }
+
+    .bm-spark-fill {
+        opacity: 0;
+        animation: bm-fill-in 500ms ease-out 250ms forwards;
+    }
+
+    .bm-spark-dot {
+        opacity: 0;
+        animation: bm-fade-in 200ms ease-out 550ms forwards;
+    }
+}
+
+@keyframes bm-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(200%);
+    }
+}
+
+@keyframes bm-draw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes bm-fill-in {
+    to {
+        opacity: 0.14;
+    }
+}
+
+@keyframes bm-fade-in {
+    to {
+        opacity: 1;
+    }
 }
 
 /* ---- Chips and stage pills ---- */
@@ -617,6 +810,113 @@
     margin: 0;
     font-size: 12px;
     color: var(--sb-text-faint);
+}
+
+/* ---- Quick triage ---- */
+.bm-triage {
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.28);
+
+    .bm-box-label {
+        color: var(--sb-lav-ink);
+    }
+}
+
+.bm-triage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.bm-triage-when {
+    flex: 1;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+}
+
+.bm-link {
+    appearance: none;
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sb-accent);
+    font: 600 12px var(--sb-font-body);
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 2px;
+        border-radius: 3px;
+    }
+}
+
+.bm-triage-wait,
+.bm-triage-stopped {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--sb-text-muted);
+}
+
+.bm-triage-stopped {
+    color: var(--sb-orange);
+}
+
+// While the errand reads, the line shimmers like a loading sparkline.
+.bm-triage-wait {
+    color: var(--sb-lav-ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .bm-triage-wait {
+        background: linear-gradient(90deg, var(--sb-lav-ink) 0%, var(--sb-text-strong) 50%, var(--sb-lav-ink) 100%);
+        background-size: 200% 100%;
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent;
+        animation: bm-text-sweep 1.8s linear infinite;
+    }
+}
+
+@keyframes bm-text-sweep {
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: -100% 0;
+    }
+}
+
+.bm-triage-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin: 0;
+
+    dt {
+        font: 700 10px var(--sb-font-head);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--sb-text-dimmest);
+    }
+    dd {
+        margin: 2px 0 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--sb-text-dim);
+    }
+}
+
+.bm-triage-where {
+    display: block;
+    margin-top: 3px;
+    font: 11.5px var(--sb-font-mono);
+    color: var(--sb-text-muted);
+    overflow-wrap: anywhere;
 }
 
 .bm-menu {

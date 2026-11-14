@@ -1,8 +1,8 @@
 /**
  * What the Bug manager page does (#414): opening and closing it, reading the
  * Bug manager's items and what Bugsnag says of each, and what you do to a
- * bug: seen, snooze, backlog, Fix, Open session, Stop working on it, and the
- * answers to "seen again after the merge". The page's components call these
+ * bug: seen, snooze, backlog, Fix, quick triage, Open session, Stop working
+ * on it, and the answers to "seen again after the merge". The page's components call these
  * and nothing else.
  */
 import {dispatch, getState} from '../../state/app-store';
@@ -167,6 +167,27 @@ export async function fixBug(key: string): Promise<void> {
     }
 }
 
+/**
+ * T: a quick triage. Main starts a read-only errand session on the bug and
+ * answers with the item carrying it; the verdict comes later, with
+ * `inboxChanged`. Nothing is done with it here: it only picks the primary
+ * button.
+ */
+export async function triageBug(key: string): Promise<void> {
+    if (getState().bugPage.triaging) return;
+    dispatch({type: 'bugTriaging', key});
+    dispatch({type: 'bugPageNoticed', notice: null});
+    try {
+        const result = await window.api.bugTriage(key);
+        if (result.ok) dispatch({type: 'bugItemChanged', item: result.item});
+        else dispatch({type: 'bugPageNoticed', notice: result.reason});
+    } catch (err) {
+        dispatch({type: 'bugPageNoticed', notice: 'Could not start the triage: ' + (err as Error).message});
+    } finally {
+        dispatch({type: 'bugTriaging', key: null});
+    }
+}
+
 /** O: the bug on the Bugsnag dashboard, in the browser. */
 export async function openBugInBugsnag(key: string): Promise<void> {
     await loadBugDetail(key);
@@ -190,6 +211,20 @@ export async function openFixSession(item: InboxItem): Promise<void> {
             .sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified))[0];
     if (session) await openSession(session);
     else dispatch({type: 'bugPageNoticed', notice: 'The Fix session is no longer in the list'});
+}
+
+/** Open session on a triage: its errand on screen, by the id it goes by now, as launched, or by its worktree. */
+export async function openTriageSession(item: InboxItem): Promise<void> {
+    const triage = item.triage;
+    if (!triage) return;
+    const session =
+        sessionMap.get(triage.currentId) ??
+        sessionMap.get(triage.sessionId) ??
+        [...sessionMap.values()]
+            .filter((row) => row.projectPath === triage.worktree)
+            .sort((a, b) => Date.parse(b.modified) - Date.parse(a.modified))[0];
+    if (session) await openSession(session);
+    else dispatch({type: 'bugPageNoticed', notice: 'The triage session is no longer in the list'});
 }
 
 export async function stopWorkingOnBug(key: string): Promise<void> {

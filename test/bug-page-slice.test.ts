@@ -201,3 +201,68 @@ test('without a row only the cursor keys act', () => {
     assert.equal(bugKeyAction('f', null), null);
     assert.deepEqual(bugKeyAction('ArrowDown', null), {kind: 'cursor', step: 1});
 });
+
+test('T triages a bug in the inbox, snoozed, in the backlog or done, not one in progress', () => {
+    /* Given */
+    const sortable = [
+        item('a'),
+        item('b', {state: {kind: 'read'}}),
+        item('c', {state: {kind: 'snoozed', until: null}}),
+        item('d', {state: {kind: 'backlog'}}),
+        item('e', {state: {kind: 'done', at: NOW}}),
+    ];
+    const fixing = item('f', {state: {kind: 'inProgress', stage: 'working'}});
+
+    /* When */
+    const actions = sortable.map((row) => bugKeyAction('t', row));
+    const inProgress = bugKeyAction('t', fixing);
+
+    /* Then */
+    assert.deepEqual(
+        actions,
+        sortable.map((row) => ({kind: 'triage', key: row.key})),
+    );
+    assert.equal(inProgress, null);
+});
+
+test('T does nothing while a triage runs, and triages again once it stopped or has its verdict', () => {
+    /* Given */
+    const base = {sessionId: 's', currentId: 's', worktree: '/w', startedAt: NOW, verdict: null, stoppedAt: null};
+    const running: InboxItem = {...item('a'), triage: base};
+    const stopped: InboxItem = {...item('b'), triage: {...base, stoppedAt: NOW + 1}};
+    const judged: InboxItem = {
+        ...item('c'),
+        triage: {
+            ...base,
+            verdict: {
+                happened: 'h',
+                why: 'w',
+                where: null,
+                impact: 'i',
+                suggestion: 'snooze',
+                summary: 's',
+                confidence: 'low',
+                at: NOW,
+            },
+        },
+    };
+
+    /* When */
+    const actions = [running, stopped, judged].map((row) => bugKeyAction('t', row));
+
+    /* Then */
+    assert.deepEqual(actions, [null, {kind: 'triage', key: stopped.key}, {kind: 'triage', key: judged.key}]);
+});
+
+test('a triage being started is held until it answers', () => {
+    /* Given */
+    const state = page([item('a')]);
+
+    /* When */
+    const starting = bugPageReducer(state, {type: 'bugTriaging', key: 'bug:p-api:a'});
+    const answered = bugPageReducer(starting, {type: 'bugTriaging', key: null});
+
+    /* Then */
+    assert.equal(starting.triaging, 'bug:p-api:a');
+    assert.equal(answered.triaging, null);
+});

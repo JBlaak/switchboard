@@ -45,6 +45,8 @@ export interface BugPageState {
     readonly snooze: {readonly key: string; readonly options: readonly SnoozeOptionView[] | null} | null;
     /** A Fix being prepared and launched. */
     readonly fixing: string | null;
+    /** A quick triage (T) being started. */
+    readonly triaging: string | null;
     /** One line about the last thing that went wrong; null when nothing did. */
     readonly notice: string | null;
 }
@@ -67,6 +69,7 @@ export type BugPageEvent =
     | {type: 'bugSnoozeOpened'; key: string; options: readonly SnoozeOptionView[] | null}
     | {type: 'bugSnoozeClosed'}
     | {type: 'bugFixing'; key: string | null}
+    | {type: 'bugTriaging'; key: string | null}
     | {type: 'bugPageNoticed'; notice: string | null};
 
 export const initialBugPageState: BugPageState = {
@@ -81,6 +84,7 @@ export const initialBugPageState: BugPageState = {
     trends: {},
     snooze: null,
     fixing: null,
+    triaging: null,
     notice: null,
 };
 
@@ -127,6 +131,8 @@ export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPa
             return state.snooze ? {...state, snooze: null} : state;
         case 'bugFixing':
             return {...state, fixing: event.key};
+        case 'bugTriaging':
+            return {...state, triaging: event.key};
         case 'bugPageNoticed':
             return {...state, notice: event.notice};
         default:
