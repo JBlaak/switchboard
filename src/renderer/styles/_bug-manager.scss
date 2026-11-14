@@ -500,6 +500,7 @@
         opacity: 1;
         transform-box: fill-box;
         animation: bm-sweep 1.6s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 
     .bm-spark-line {
@@ -624,6 +625,7 @@
     .bm-stage.is-run i,
     .bm-stage.is-ci i {
         animation: bm-pulse 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 
@@ -880,6 +882,7 @@
         -webkit-background-clip: text;
         color: transparent;
         animation: bm-text-sweep 1.8s linear infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 

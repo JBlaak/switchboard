@@ -63,6 +63,7 @@
 @media (prefers-reduced-motion: no-preference) {
     .ask.is-waiting .ask-box:focus {
         animation: ask-thinking 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 

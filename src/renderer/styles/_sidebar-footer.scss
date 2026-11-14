@@ -145,6 +145,7 @@
 #update-notice-bar.indeterminate #update-notice-bar-fill {
     width: 30%;
     animation: update-notice-slide 1.2s ease-in-out infinite;
+    animation-play-state: var(--loop-state, running);
 }
 @keyframes update-notice-slide {
     from {

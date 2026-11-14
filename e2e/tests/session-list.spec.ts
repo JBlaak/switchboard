@@ -264,6 +264,37 @@ test.describe('row state', () => {
         await expect(row).toHaveClass(/\bneeds-attention\b/);
     });
 
+    test("a busy row's spinner stops while the window is out of focus and turns again on focus", async ({
+        page,
+        home,
+    }) => {
+        /* Given */
+        const login = await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await login.status({state: 'working'});
+        const dot = sessionItem(page, S.loginFix).getByTestId('session-status-dot');
+        await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bcli-busy\b/);
+        const playState = () => dot.evaluate((el) => getComputedStyle(el).animationPlayState);
+        const focusTo = (focused: boolean) =>
+            page.evaluate((focused) => {
+                Object.defineProperty(document, 'hasFocus', {value: () => focused, configurable: true});
+                window.dispatchEvent(new Event(focused ? 'focus' : 'blur'));
+            }, focused);
+        await focusTo(true);
+        await expect.poll(playState).toBe('running');
+
+        /* When */
+        await focusTo(false);
+
+        /* Then */
+        await expect.poll(playState).toBe('paused');
+
+        /* When */
+        await focusTo(true);
+
+        /* Then */
+        await expect.poll(playState).toBe('running');
+    });
+
     test('a plain terminal main started gets a row with the terminal badge and only a stop button', async ({
         page,
         app,

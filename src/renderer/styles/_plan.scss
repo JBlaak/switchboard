@@ -333,6 +333,7 @@ a.pv-num:hover {
 @media (prefers-reduced-motion: no-preference) {
     .pv-refresh.refreshing {
         animation: pv-refresh-pulse 1.6s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 
@@ -1093,6 +1094,7 @@ a.pv-num:hover {
         border-top-color: transparent;
         border-radius: 50%;
         animation: spin-dot 0.8s linear infinite;
+        animation-play-state: var(--loop-state, running);
     }
 }
 
