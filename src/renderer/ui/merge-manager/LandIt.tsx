@@ -20,10 +20,12 @@ export interface LandItProps {
     pr: LandCandidate;
     /** `sm` in the tight places: the tray and the project page's rows. */
     size?: 'sm';
+    /** Where the rocket takes off instead of the button, or null for the button: the header's session row in the sidebar. */
+    launchFrom?(): Element | null;
 }
 
 /** Land it for `pr`, or its landed stage; nothing for a PR that is neither yours nor landed. */
-export function LandIt({pr, size}: LandItProps): JSX.Element | null {
+export function LandIt({pr, size, launchFrom}: LandItProps): JSX.Element | null {
     const lanes = useStore((state) => state.mergeManager.state);
     const offer = landOffer(pr, lanes);
     const busy = useStore((state) => landBusy(state.mergeManager, pr.repository, pr.number));
@@ -32,7 +34,7 @@ export function LandIt({pr, size}: LandItProps): JSX.Element | null {
             offer={offer}
             busy={busy}
             size={size}
-            onLand={(from) => void landPullRequest(pr.repository, pr.number, from)}
+            onLand={(button) => void landPullRequest(pr.repository, pr.number, launchFrom?.() ?? button)}
             onUnland={() => void unlandPullRequest(pr.repository, pr.number)}
             onOpen={() => openMergeManager(landedKey(pr.repository, pr.number))}
         />
