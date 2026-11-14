@@ -832,7 +832,8 @@ export function buildContainer(): Container {
         log,
     });
     // The session starts in the main window, which stays behind the app the user
-    // is in; only the New Session picker brings it forward.
+    // is in; only the New Session picker and a project opened from Quick Ask's
+    // search bring it forward.
     const mainWindow: MainWindowHost = {
         ensureOpen: () => {
             if (!window) openWindow({inactive: true});

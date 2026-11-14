@@ -32,6 +32,29 @@ test('editing: ⌘Enter sends to a quick session, and Shift+⌘Enter is a new li
     assert.deepEqual(actions, ['quick', null]);
 });
 
+test('searching: Enter opens the match, the arrows move, ⌘Enter is still a quick session, Esc closes', () => {
+    /* When */
+    const actions = [
+        press('Enter'),
+        press('ArrowDown'),
+        press('ArrowUp'),
+        {...press('Enter'), metaKey: true},
+        press('Enter', true),
+        press('Escape'),
+    ].map((key) => quickAskKey('editing', key, true));
+
+    /* Then */
+    assert.deepEqual(actions, ['open', 'hitDown', 'hitUp', 'quick', null, 'dismiss']);
+});
+
+test("nothing matching: the arrows are the caret's and Enter asks Patch", () => {
+    /* When */
+    const actions = [press('Enter'), press('ArrowDown')].map((key) => quickAskKey('editing', key, false));
+
+    /* Then */
+    assert.deepEqual(actions, ['send', null]);
+});
+
 test('waiting: Esc cancels, and Enter and Tab are kept from the box', () => {
     /* When */
     const actions = [press('Escape'), press('Enter'), press('Tab')].map((key) => quickAskKey('waiting', key));

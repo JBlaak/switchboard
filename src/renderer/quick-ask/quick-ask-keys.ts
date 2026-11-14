@@ -5,21 +5,29 @@
  *
  * The box's keys are the empty screen's (`ask-keys`). The pop-up adds Esc to
  * close it while editing, and keeps every key to itself while a result shows.
+ * While the text matches a project (`searching`), Enter opens the highlighted
+ * match and ↑/↓ move the highlight; ⌘Enter is still a quick session.
  */
 import {askKey} from '../ui/ask/ask-keys';
 import type {AskKey, AskKeyPress} from '../ui/ask/ask-keys';
 import type {QuickAskPhase} from '../state/quick-ask-slice';
 
-export type QuickAskKey = AskKey | 'dismiss' | 'undo';
+export type QuickAskKey = AskKey | 'dismiss' | 'undo' | 'open' | 'hitUp' | 'hitDown';
 
 /** A key press, with ⌘ for ⌘Enter and for ⌘Z on the saved line. */
 export type QuickAskKeyPress = AskKeyPress;
 
-export function quickAskKey(phase: QuickAskPhase, press: QuickAskKeyPress): QuickAskKey | null {
+export function quickAskKey(phase: QuickAskPhase, press: QuickAskKeyPress, searching = false): QuickAskKey | null {
     if (press.isComposing) return null;
     switch (phase) {
         case 'editing':
-            return press.key === 'Escape' ? 'dismiss' : askKey(phase, press);
+            if (press.key === 'Escape') return 'dismiss';
+            if (searching) {
+                if (press.key === 'ArrowUp') return 'hitUp';
+                if (press.key === 'ArrowDown') return 'hitDown';
+                if (press.key === 'Enter' && !press.shiftKey && !press.metaKey) return 'open';
+            }
+            return askKey(phase, press);
         case 'waiting':
         case 'choosing':
             return askKey(phase, press);

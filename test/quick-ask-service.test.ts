@@ -117,6 +117,7 @@ function harness({
     servers = ['blaaktasks', 'james'],
     blaakTasksUrl = TASKS_URL,
     urls = {blaaktasks: TASKS_URL} as Record<string, string>,
+    archived = [] as Project[],
 } = {}) {
     const {router, requests, calls} = fakeRouter();
     const {cli, calls: cliCalls} = fakeCaller();
@@ -130,7 +131,7 @@ function harness({
     let shown: () => void = () => {};
     const service = new QuickAskService({
         router,
-        projects: {list: (showArchived) => (showArchived ? [] : PROJECTS)},
+        projects: {list: (showArchived) => (showArchived ? archived : PROJECTS)},
         skills: {
             list: (projectPaths) => {
                 skillLookups.push(projectPaths);
@@ -821,4 +822,59 @@ test('quick ask: with nothing captured, ⌘Z does nothing', async () => {
     /* Then */
     assert.deepEqual(undone, {ok: false});
     assert.deepEqual([h.cliCalls.length, h.mcp.written.length], [0, 0]);
+});
+
+// ── Project search ──
+
+const session = (modified: string) => ({modified}) as Project['sessions'][number];
+
+test('quick ask: the search offers the local projects by folder name, most recently worked in first', () => {
+    /* Given */
+    const {service} = harness({
+        archived: [
+            {projectPath: APP, folder: '-code-app', sessions: [session('2026-11-01T10:00:00Z')]},
+            {projectPath: API, folder: '-code-app-api', sessions: [session('2026-11-10T10:00:00Z')]},
+            {projectPath: 'ssh://box/srv', folder: 'ssh', sessions: [session('2026-11-12T10:00:00Z')], remote: true},
+            {
+                projectPath: `${APP}/.claude/worktrees/try`,
+                folder: '-code-app--claude-worktrees-try',
+                sessions: [session('2026-11-05T10:00:00Z')],
+            },
+        ],
+    });
+
+    /* When */
+    const hits = service.searchable();
+
+    /* Then */
+    assert.deepEqual(hits, [
+        {projectPath: API, folder: 'app-api'},
+        {projectPath: APP, folder: 'app'},
+    ]);
+});
+
+test('quick ask: opening a project starts an empty session there and brings the main window forward', () => {
+    /* Given */
+    const {service, renderer, window} = harness({archived: PROJECTS});
+
+    /* When */
+    const reply = service.open(API);
+
+    /* Then */
+    assert.deepEqual(reply, {kind: 'started', folder: 'app-api'});
+    assert.deepEqual(renderer.only('launchRequested'), [['launchRequested', API, '']]);
+    assert.deepEqual(window, ['bringForward']);
+});
+
+test('quick ask: a remote the search never offers is not opened', () => {
+    /* Given */
+    const {service, renderer, window} = harness({archived: PROJECTS});
+
+    /* When */
+    const reply = service.open('ssh://box/srv');
+
+    /* Then */
+    assert.deepEqual(reply, {kind: 'unlocked'});
+    assert.deepEqual(renderer.only('launchRequested'), []);
+    assert.deepEqual(window, []);
 });

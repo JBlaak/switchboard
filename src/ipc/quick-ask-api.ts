@@ -10,8 +10,9 @@ import type {Unsubscribe} from './api';
 import type {QuickAskReply} from '../domain/ask/quick-ask';
 
 import type {CaptureTarget} from '../domain/ask/model';
+import type {ProjectHit} from '../domain/ask/project-search';
 
-export type {CaptureTarget};
+export type {CaptureTarget, ProjectHit};
 /** What came of a send, or of a choice from the list; main's `QuickAskService` answers it. */
 export type {QuickAskReply};
 
@@ -32,6 +33,10 @@ export interface QuickAskApi {
     start(projectPath: string): Promise<QuickAskReply>;
     /** Tab: the New Session picker in the main window. */
     openPicker(): Promise<void>;
+    /** The local projects the pop-up searches before it asks Patch, most recently worked in first. */
+    searchable(): Promise<ProjectHit[]>;
+    /** Enter on a project the search found: an empty session there, the main window brought forward. */
+    open(projectPath: string): Promise<QuickAskReply>;
     /** ⌘Z after a capture. */
     undo(): Promise<{ok: boolean}>;
     /** Hide the pop-up. */

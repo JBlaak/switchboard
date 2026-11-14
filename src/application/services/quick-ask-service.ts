@@ -28,6 +28,11 @@
  *
  * ⌘Enter skips the routing call: a quick session starts on the text as typed.
  *
+ * Before any of that, the pop-up searches the local projects it is given
+ * here, most recently worked in first, and Enter on one opens a new session
+ * there with no prompt. Unlike a routed start, that brings the main window
+ * forward: the user picked a project to work in, not a task to hand over.
+ *
  * The capture call is cold. Warming it would mean warming both servers'
  * processes each time the pop-up shows, before the route says which one, and
  * keeping a config with the token on disk while they wait; captures are the
@@ -46,6 +51,8 @@ import {
 import {NO_QUICK_FOLDER_LINE, quickAskOutcome} from '../../domain/ask/quick-ask';
 import {quickRouteArgs, quickRouteBootArgs, quickRoutePrompt, readQuickRouteRun} from '../../domain/ask/quick-route';
 import type {QuickAskOutcome, QuickAskReply} from '../../domain/ask/quick-ask';
+import {byRecency, sessionRecency} from '../../domain/project/project-recency';
+import type {ProjectHit} from '../../domain/ask/project-search';
 import type {CaptureReceipt} from '../../domain/ask/capture';
 import type {CaptureTarget, QuickRouteResult, RouteRequest} from '../../domain/ask/model';
 import type {ClaudeRun} from '../../domain/ask/route';
@@ -178,6 +185,24 @@ export class QuickAskService {
         if (folder) return this.launch(folder, text);
         this.handOff(text, NO_QUICK_FOLDER_LINE);
         return {kind: 'handedOff'};
+    }
+
+    /** The local projects the pop-up searches, most recently worked in first; no remotes, no worktrees. */
+    public searchable(): ProjectHit[] {
+        const all = this.deps.projects.list(true);
+        return routeCandidates(all)
+            .map(({projectPath}) => ({projectPath, folder: folderName(projectPath)}))
+            .sort(byRecency(sessionRecency(all), (hit) => hit.projectPath));
+    }
+
+    /** Enter on a project the search found: a new session there, with the main window brought forward. */
+    public open(projectPath: string): QuickAskReply {
+        if (!this.searchable().some((hit) => hit.projectPath === projectPath)) return {kind: 'unlocked'};
+        this.choosing = null;
+        this.failed = null;
+        this.deps.mainWindow.bringForward();
+        this.deps.renderer.launchRequested(projectPath, '');
+        return {kind: 'started', folder: folderName(projectPath)};
     }
 
     /** A choice from the list, started on the rewritten prompt. */

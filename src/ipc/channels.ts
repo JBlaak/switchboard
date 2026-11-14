@@ -126,6 +126,8 @@ export const INVOKE = {
     quickAskStart: 'quick-ask:start',
     quickAskOpenPicker: 'quick-ask:open-picker',
     quickAskUndo: 'quick-ask:undo',
+    quickAskSearchable: 'quick-ask:searchable',
+    quickAskOpen: 'quick-ask:open',
 
     // Host
     openExternal: 'open-external',

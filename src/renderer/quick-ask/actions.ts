@@ -7,7 +7,7 @@
  * answer, so the late answer to a cancelled send cannot close anything.
  */
 import {dispatch, getState} from './store';
-import {canClose, quickAskPhase} from '../state/quick-ask-slice';
+import {canClose, projectHits, quickAskPhase, selectedHit} from '../state/quick-ask-slice';
 import {slabMotion} from './motion';
 import type {CaptureTarget, QuickAskLooks, QuickAskReply} from '../../ipc/quick-ask-api';
 
@@ -85,6 +85,33 @@ export async function undo(): Promise<void> {
     }, UNDONE_MS);
 }
 
+// ── Project search ──
+
+/** Each open: the local projects as they are now, for the search. */
+async function loadProjects(): Promise<void> {
+    const projects = await window.quickAsk.searchable().catch(() => null);
+    if (projects) dispatch({type: 'quickAskProjectsLoaded', projects});
+}
+
+export function stepHit(step: 1 | -1): void {
+    dispatch({type: 'quickAskHitStepped', step});
+}
+
+export function hoverHit(index: number): void {
+    dispatch({type: 'quickAskHitHovered', index});
+}
+
+/** Enter on a match, or a click on one: an empty session there, Switchboard brought forward. */
+export async function openHit(index?: number): Promise<void> {
+    if (index !== undefined && index < projectHits(getState()).length) hoverHit(index);
+    const hit = selectedHit(getState());
+    if (!hit) return;
+    dispatch({type: 'quickAskOpenSent'});
+    await answer(getState().box.asked, window.quickAsk.open(hit.projectPath));
+    // Switchboard is in front with the session; the pop-up has nothing left to say.
+    if (quickAskPhase(getState()) === 'started') close();
+}
+
 // ── The choice list ──
 
 export function stepChoice(step: 1 | -1): void {
@@ -125,6 +152,7 @@ export function shown(looks?: QuickAskLooks): void {
     clearRestoreTimer();
     if (looks) applyLooks(looks);
     dispatch({type: 'quickAskShown'});
+    void loadProjects();
     slabMotion.open();
 }
 

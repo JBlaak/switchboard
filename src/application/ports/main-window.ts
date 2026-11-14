@@ -3,7 +3,8 @@
  *
  * Quick Ask (#142) starts its sessions there while Switchboard stays in the
  * background, so the window has to exist without being made active (R4), and
- * only the New Session picker brings it forward.
+ * only the New Session picker, and a project opened from the pop-up's search,
+ * bring it forward.
  */
 export interface MainWindowHost {
     /** Open it, without focus, if it is closed; nothing when it is open. */

@@ -12,7 +12,7 @@
 import {useEffect, useRef} from 'react';
 import {useStoreOf} from '../ui/use-store-of';
 import {AskField} from '../ui/ask/AskField';
-import {quickAskPhase, savedLabel, savingLine} from '../state/quick-ask-slice';
+import {projectHits, quickAskPhase, savedLabel, savingLine} from '../state/quick-ask-slice';
 import {store} from './store';
 import {overSlab, quickAskKey} from './quick-ask-keys';
 import {slabMotion} from './motion';
@@ -23,11 +23,14 @@ import {
     close,
     closeChoices,
     hoverChoice,
+    hoverHit,
+    openHit,
     openPicker,
     send,
     sendQuick,
     startChoice,
     stepChoice,
+    stepHit,
     undo,
 } from './actions';
 import type {JSX, KeyboardEvent} from 'react';
@@ -97,19 +100,33 @@ export function QuickAsk(): JSX.Element {
     }, []);
 
     const phase = quickAskPhase(state);
+    const hits = projectHits(state);
 
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-        const action = quickAskKey(phase, {
-            key: e.key,
-            shiftKey: e.shiftKey,
-            metaKey: e.metaKey,
-            isComposing: e.nativeEvent.isComposing,
-        });
+        const action = quickAskKey(
+            phase,
+            {
+                key: e.key,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey,
+                isComposing: e.nativeEvent.isComposing,
+            },
+            hits.length > 0,
+        );
         if (!action) return;
         e.preventDefault();
         switch (action) {
             case 'send':
                 void send();
+                return;
+            case 'open':
+                void openHit();
+                return;
+            case 'hitUp':
+                stepHit(-1);
+                return;
+            case 'hitDown':
+                stepHit(1);
                 return;
             case 'quick':
                 void sendQuick();
@@ -156,7 +173,7 @@ export function QuickAsk(): JSX.Element {
                 <AskField
                     ask={state.box}
                     boxRef={box}
-                    placeholder="Ask Patch anything…"
+                    placeholder="Search projects, or ask Patch anything…"
                     ariaLabel="Ask Patch"
                     choiceLabel={(_projectPath, index) => state.folders[index] ?? _projectPath}
                     onChange={changeText}
@@ -165,8 +182,48 @@ export function QuickAsk(): JSX.Element {
                     onPickChoice={(index) => void startChoice(index)}
                     answerEscHint="close"
                 />
+                {hits.length > 0 && <ProjectMatches state={state} />}
                 <QuickAskResult state={state} />
                 <QuickAskFoot state={state} />
+            </div>
+        </div>
+    );
+}
+
+/** The local projects the text matches; Enter opens the highlighted one, and with none Enter asks Patch. */
+function ProjectMatches({state}: {state: QuickAskState}): JSX.Element {
+    const hits = projectHits(state);
+    const selected = Math.min(state.hit, hits.length - 1);
+    return (
+        <div className="ask-choices quick-ask-matches" data-testid="quick-ask-matches">
+            <div className="ask-choice-list" role="listbox" aria-label="Matching projects">
+                {hits.map((hit, index) => (
+                    <div
+                        key={hit.projectPath}
+                        className={'ask-choice' + (index === selected ? ' selected' : '')}
+                        role="option"
+                        aria-selected={index === selected}
+                        title={hit.projectPath}
+                        onMouseEnter={() => hoverHit(index)}
+                        // Keep the focus, and the list's keys, in the box.
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void openHit(index)}>
+                        {hit.folder}
+                    </div>
+                ))}
+            </div>
+            <div className="ask-hints">
+                <span>
+                    <kbd className="sw-kbd">↵</kbd>open
+                </span>
+                <span>
+                    <kbd className="sw-kbd">↑</kbd>
+                    <kbd className="sw-kbd">↓</kbd>pick
+                </span>
+                <span>
+                    <kbd className="sw-kbd">⌘↵</kbd>quick session
+                </span>
+                <span>keep typing to ask Patch</span>
             </div>
         </div>
     );
