@@ -28,6 +28,7 @@
  */
 import type {TrendingThresholds} from '../bugsnag/connection';
 import {bugSignals} from './signals';
+import {triageErrands} from './triage';
 import {inboxKey, isUrgent, managerOf, sourceOf} from './model';
 import type {
     BugFacts,
@@ -272,6 +273,20 @@ export function managerCounts(items: readonly InboxItem[], manager: InboxManager
     return {unread, urgent};
 }
 
-export function inboxSummary(items: readonly InboxItem[], configured: ConfiguredManagers): InboxSummary {
-    return {bug: managerCounts(items, 'bug'), issue: managerCounts(items, 'issue'), configured, triaging: []};
+/**
+ * Both managers' counts, which are set up, and the Bug manager's triage
+ * errands for the Errands shelf (`triageErrands`): a stopped one leaves it
+ * once its session is `gone` (archived).
+ */
+export function inboxSummary(
+    items: readonly InboxItem[],
+    configured: ConfiguredManagers,
+    gone?: (sessionId: string) => boolean,
+): InboxSummary {
+    return {
+        bug: managerCounts(items, 'bug'),
+        issue: managerCounts(items, 'issue'),
+        configured,
+        triaging: triageErrands(items, gone),
+    };
 }

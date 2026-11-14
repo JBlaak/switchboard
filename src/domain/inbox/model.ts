@@ -216,6 +216,12 @@ export interface BugTriage {
     readonly currentId: string;
     /** The worktree it runs in. */
     readonly worktree: string;
+    /**
+     * `owner/repo` of the linked project, or its folder name without a GitHub
+     * remote, as the Errands shelf names it. Absent on a triage kept before it
+     * was recorded: the worktree's project folder stands in.
+     */
+    readonly repository?: string;
     /** Epoch ms. */
     readonly startedAt: number;
     /** Its verdict, once it finished. */

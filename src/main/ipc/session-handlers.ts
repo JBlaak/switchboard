@@ -65,6 +65,8 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
         app.repository.setArchived(sessionId, archived);
         if (!archived) return {archived: 0};
         app.phoneSessions.sessionArchived(sessionId);
+        // A stopped triage errand leaves the Errands shelf with its session.
+        app.inbox.refreshSummary();
         void app.worktreeCleanup.afterArchive(sessionId);
         const markDone = await app.tasks.archived(sessionId, {byUser: true});
         return markDone ? {archived: 1, markDone} : {archived: 1};

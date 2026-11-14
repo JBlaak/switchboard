@@ -286,6 +286,8 @@ async function mac() {
         phoneAccess: phone.access,
         phoneSessions: phone.sessions,
         worktreeCleanup,
+        // No triage errands to drop off the Errands shelf.
+        inbox: {refreshSummary: () => {}},
         // BlaakTasks off: archiving offers nothing (#248).
         tasks: {archived: async () => null},
     } as unknown as Container;

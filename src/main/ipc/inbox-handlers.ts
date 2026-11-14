@@ -3,7 +3,8 @@
  * what the pages do to an item from the renderer (seen, snooze, backlog,
  * notes), the Issue manager's thread, comments, Start and Stop (#415), and
  * the Bug manager page's Fix (#414): preparing it, the session that started,
- * Stop working on it, and the answers to "seen again". Staging and finishing
+ * Stop working on it, and the answers to "seen again"; and its quick triage
+ * (T), whose session main starts. Staging and finishing
  * an item are main's own, from following its PR.
  */
 import {INVOKE} from '../../ipc/channels';
@@ -34,6 +35,7 @@ export function registerInboxHandlers(ipc: IpcRegistrar, app: Container): void {
         if (typeof sessionId !== 'string' || sessionId === '') throw new Error('a session id is text');
         return app.bugFix.fixStarted(asKey(key), sessionId);
     });
+    ipc.handle(INVOKE.bugTriage, (key: unknown) => app.bugTriage.start(asKey(key)));
     ipc.handle(INVOKE.bugStopWorking, (key: unknown) => app.bugFix.stopWorking(asKey(key)));
     ipc.handle(INVOKE.bugCloseAgain, (key: unknown) => app.bugFix.closeAgain(asKey(key)));
     ipc.handle(INVOKE.bugTreatAsRegressed, (key: unknown) => app.bugFix.treatAsRegressed(asKey(key)));

@@ -56,7 +56,7 @@ import {ScheduleService} from '../application/services/schedule-service';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
 import {SessionRestoreService} from '../application/services/session-restore-service';
-import {defaultSessionOptions} from '../domain/launch/session-options';
+import {defaultSessionOptions, type SessionOptions} from '../domain/launch/session-options';
 import {SessionLifecycle} from '../application/services/session-lifecycle';
 import {SessionTransitionDetector} from '../application/services/session-transition-detector';
 import {SessionStatsService} from '../application/services/session-stats-service';
@@ -81,6 +81,7 @@ import {IssueManagerService} from '../application/services/issue-manager-service
 import {MergeManagerService} from '../application/services/merge-manager-service';
 import {FixErrandService} from '../application/services/fix-errand-service';
 import {BugFixService} from '../application/services/bug-fix-service';
+import {BugTriageService} from '../application/services/bug-triage-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -289,6 +290,8 @@ export interface Container {
     readonly issueManager: IssueManagerService;
     /** The Bug manager page's Fix (#414): its worktree and prompt, the PR it follows, the merge and seen again. */
     readonly bugFix: BugFixService;
+    /** The Bug manager page's quick triage (T): a read-only errand session per bug that reports a verdict. */
+    readonly bugTriage: BugTriageService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -419,6 +422,8 @@ export function buildContainer(): Container {
     const backgroundTasks = new BackgroundTaskService({transcripts, renderer, log});
     // Built after the inbox and the merge queue watch, below; told every CLI state change and end.
     let bugFix: BugFixService | null = null;
+    // Built beside the Bug manager's Fix, below; told when a session waits on you or ends.
+    let bugTriage: BugTriageService | null = null;
     const lifecycle = new SessionLifecycle({
         registry,
         terminals,
@@ -431,7 +436,10 @@ export function buildContainer(): Container {
             cliStateChanged: (sessionId, session, change) => {
                 prompter.cliStateChanged(sessionId, session, change);
                 backgroundTasks.cliStateChanged(sessionId, session, change);
-                if (change.kind === 'needs-attention') fixErrands.needsAttention(sessionId);
+                if (change.kind === 'needs-attention') {
+                    fixErrands.needsAttention(sessionId);
+                    bugTriage?.needsAttention(sessionId);
+                }
                 bugFix?.cliStateChanged(sessionId, session, change);
             },
             sessionEnded: (sessionId, session) => {
@@ -440,6 +448,7 @@ export function buildContainer(): Container {
                 backgroundTasks.sessionEnded(sessionId);
                 sessionRestore.ended(sessionId, session);
                 fixErrands.sessionEnded(sessionId);
+                bugTriage?.sessionEnded(sessionId);
             },
         },
     });
@@ -479,6 +488,14 @@ export function buildContainer(): Container {
         errandTool: {
             isErrand: (launchId) => fixErrands.isErrand(launchId),
             finish: (launchId, args) => fixErrands.finish(launchId, args),
+        },
+        // A bug's triage errand finishing itself (`finish_triage`), offered to triages only.
+        triageTool: {
+            isTriage: (launchId) => bugTriage?.isTriage(launchId) ?? false,
+            finish: (launchId, args) =>
+                bugTriage
+                    ? bugTriage.finish(launchId, args)
+                    : {ok: false, message: 'The Bug manager is not running yet, so nothing was recorded.'},
         },
         onePassword: {receive: (...args) => onePasswordHeadsUp.receive(...args)},
         log,
@@ -1171,6 +1188,8 @@ export function buildContainer(): Container {
         timers,
         log,
         agentlessRemote,
+        // A stopped triage leaves the Errands shelf once its session is archived.
+        sessionGone: (sessionId) => Boolean(repository.getMeta(sessionId)?.archived),
     });
 
     // The Issue manager page (#415).
@@ -1250,6 +1269,31 @@ export function buildContainer(): Container {
         return null;
     };
 
+    /**
+     * An errand's session, started by main in its worktree: the project's own
+     * launch settings, but in auto mode (from `options`) and in this worktree.
+     * Fix errands' and triage errands'.
+     */
+    const errandSessions = {
+        async start({sessionId, worktree, options}: {sessionId: string; worktree: string; options: SessionOptions}) {
+            const {
+                worktree: _worktree,
+                worktreeName: _worktreeName,
+                dangerouslySkipPermissions: _skip,
+                ...defaults
+            } = defaultSessionOptions(settings.effective(worktree));
+            const opened = await launcher.open({
+                sessionId,
+                projectPath: worktree,
+                isNew: true,
+                options: {...defaults, ...options},
+            });
+            if (!opened.ok) return {ok: false as const, reason: opened.error ?? 'the session did not start'};
+            renderer.sessionStarted(sessionId, worktree);
+            return {ok: true as const};
+        },
+    };
+
     // Fix errands (#437): sessions the Merge manager starts by itself when a
     // lane's head fails out, in a detached worktree of the local checkout.
     const fixErrands = new FixErrandService({
@@ -1258,26 +1302,7 @@ export function buildContainer(): Container {
         github,
         checkoutOf,
         git: workspace,
-        sessions: {
-            async start({sessionId, worktree, options}) {
-                // The project's own launch settings, but in auto mode and in this worktree.
-                const {
-                    worktree: _worktree,
-                    worktreeName: _worktreeName,
-                    dangerouslySkipPermissions: _skip,
-                    ...defaults
-                } = defaultSessionOptions(settings.effective(worktree));
-                const opened = await launcher.open({
-                    sessionId,
-                    projectPath: worktree,
-                    isNew: true,
-                    options: {...defaults, ...options},
-                });
-                if (!opened.ok) return {ok: false, reason: opened.error ?? 'the session did not start'};
-                renderer.sessionStarted(sessionId, worktree);
-                return {ok: true};
-            },
-        },
+        sessions: errandSessions,
         archive: archiveTool,
         ids,
         clock,
@@ -1418,6 +1443,25 @@ export function buildContainer(): Container {
         log,
     });
     bugFix = bugFixService;
+
+    // The Bug manager page's quick triage (T): a read-only errand session per
+    // bug in a detached worktree of its linked project, finishing with `finish_triage`.
+    const bugTriageService = new BugTriageService({
+        inbox,
+        bugsnag,
+        git: workspace,
+        remotes: git,
+        detail: (key) => bugFixService.detail(key),
+        sessions: errandSessions,
+        archive: archiveTool,
+        ids,
+        clock,
+        log,
+    });
+    bugTriage = bugTriageService;
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        bugTriageService.turnEnded(sessionIds, archiving, currentId),
+    );
 
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.
     // Starting from a task routes with its own Ask Patch, never cancelling the
@@ -1697,6 +1741,7 @@ export function buildContainer(): Container {
         inbox,
         issueManager,
         bugFix: bugFixService,
+        bugTriage: bugTriageService,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();
