@@ -1,6 +1,7 @@
 /**
- * The Errands shelf: the sessions Switchboard started by itself for a pull
- * request (the Merge manager's fix errands, the merge queue's Nudge and Fix),
+ * The Errands shelf: the sessions Switchboard started by itself (the Merge
+ * manager's fix errands, the merge queue's Nudge and Fix, the Bug manager's
+ * quick triage),
  * docked under the session list instead of ranked among the user's own rows.
  *
  * Rendered into `#sidebar-errands`, between `#sidebar-content` and the
@@ -174,8 +175,9 @@ interface ErrandRowProps {
 }
 
 /**
- * One errand on one line: its kind, `#431 · fixing checks`, and where it runs
- * and how long ago it started, which give way to PR ↗, Stop and archive on
+ * One errand on one line: its kind, `#431 · fixing checks` (or `Triage · `
+ * and the bug's title), and where it runs and how long ago it started, which
+ * give way to PR ↗ (not for a triage, which has no PR), Stop and archive on
  * hover. A click anywhere else opens its session, as a sidebar row's does.
  * The archive button is the one the keyboard's `e` presses
  * (`.session-archive-btn`). Renaming is not offered: the name is the errand's.
@@ -184,6 +186,7 @@ function ErrandRow({laid, cursor, onScreen, now, leaving, actions}: ErrandRowPro
     const {entry, errand} = laid;
     const {sessionId} = entry.session;
     const name = errandRowName(errand);
+    const pullRequestUrl = errandPullRequestUrl(errand);
     const button =
         (handler: (pressed: HTMLButtonElement) => void) =>
         (e: MouseEvent<HTMLButtonElement>): void => {
@@ -211,13 +214,15 @@ function ErrandRow({laid, cursor, onScreen, now, leaving, actions}: ErrandRowPro
                 {errandPlace(errand)} · {formatDate(new Date(entry.session.created), now)}
             </span>
             <span className="errand-row-actions">
-                <button
-                    type="button"
-                    className="errand-row-btn"
-                    title={`Open #${errand.number} in the browser`}
-                    onClick={button(() => actions.openPullRequest(errandPullRequestUrl(errand)))}>
-                    PR ↗
-                </button>
+                {pullRequestUrl && (
+                    <button
+                        type="button"
+                        className="errand-row-btn"
+                        title={`Open #${errand.number} in the browser`}
+                        onClick={button(() => actions.openPullRequest(pullRequestUrl))}>
+                        PR ↗
+                    </button>
+                )}
                 <button
                     type="button"
                     className="errand-row-btn is-stop"

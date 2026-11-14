@@ -2,10 +2,11 @@
  * The Bug manager page's keys (#414), bare and never in an input: J/K (↓/↑)
  * move the cursor and mark the row seen; on the row under it F fixes (on an
  * in-progress bug ⏎ or F opens its session), S snoozes, B sends it to the
- * backlog and O opens it in Bugsnag. Only the keys that fit the row's state
- * act.
+ * backlog, O opens it in Bugsnag and T starts a quick triage (not while one
+ * runs). Only the keys that fit the row's state act.
  */
 import type {InboxItem} from '../../../domain/inbox/model';
+import {triagePhase} from './bug-row-words';
 
 export type BugKeyAction =
     | {readonly kind: 'cursor'; readonly step: 1 | -1}
@@ -13,7 +14,8 @@ export type BugKeyAction =
     | {readonly kind: 'openSession'; readonly item: InboxItem}
     | {readonly kind: 'snooze'; readonly key: string}
     | {readonly kind: 'backlog'; readonly key: string}
-    | {readonly kind: 'bugsnag'; readonly key: string};
+    | {readonly kind: 'bugsnag'; readonly key: string}
+    | {readonly kind: 'triage'; readonly key: string};
 
 /** Whether the item is one you can still sort: in the inbox, snoozed or in the backlog. */
 function sortable(item: InboxItem): boolean {
@@ -37,6 +39,10 @@ export function bugKeyAction(key: string, row: InboxItem | null): BugKeyAction |
             return sortable(row) && row.state.kind !== 'backlog' ? {kind: 'backlog', key: row.key} : null;
         case 'o':
             return {kind: 'bugsnag', key: row.key};
+        case 't':
+            return (sortable(row) || row.state.kind === 'done') && triagePhase(row.triage) !== 'running'
+                ? {kind: 'triage', key: row.key}
+                : null;
         default:
             return null;
     }

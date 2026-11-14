@@ -565,3 +565,48 @@ test('finish_errand is offered to a fix errand only, and its call goes to the er
     assert.equal(call.result.isError, false);
     assert.deepEqual(finished, [['errand-1', {outcome: 'pushed', note: 'rebased'}]]);
 });
+
+// ── finish_triage ──
+
+test('finish_triage is offered to a triage errand only, and its call goes to the triages', async (t) => {
+    /* Given */
+    const finished: unknown[] = [];
+    const server = new QuestionHookServer({
+        receiver: {receive: () => ({withdraw() {}}), turnEnded() {}, promptSubmitted() {}, subagentChanged() {}},
+        archiveTool: {request: () => ({ok: true, message: 'archived'}), turnEnded() {}},
+        triageTool: {
+            isTriage: (launchId) => launchId === 'triage-1',
+            finish: (launchId, args) => {
+                finished.push([launchId, args]);
+                return {ok: true, message: 'Recorded: fix.'};
+            },
+        },
+        log: silentLog,
+    });
+    await server.start();
+    t.after(() => server.stop());
+    const mcp = async (launchId: string, body: unknown) =>
+        (
+            await post(`${server.url}/mcp/${launchId}`, JSON.stringify(body), {
+                [QUESTION_HOOK_TOKEN_HEADER]: server.token,
+            })
+        ).json() as Promise<any>;
+    const list = {jsonrpc: '2.0', id: 1, method: 'tools/list'};
+
+    /* When */
+    const triageTools = await mcp('triage-1', list);
+    const otherTools = await mcp('s1', list);
+    const call = await mcp('triage-1', {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {name: 'finish_triage', arguments: {suggestion: 'fix'}},
+    });
+
+    /* Then */
+    const names = (answer: any) => answer.result.tools.map((tool: {name: string}) => tool.name);
+    assert.ok(names(triageTools).includes('finish_triage'));
+    assert.ok(!names(otherTools).includes('finish_triage'));
+    assert.equal(call.result.isError, false);
+    assert.deepEqual(finished, [['triage-1', {suggestion: 'fix'}]]);
+});

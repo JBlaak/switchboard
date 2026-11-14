@@ -4,10 +4,12 @@
  *
  * The Bug manager's head and when it last checked; the tabs (Inbox, In
  * progress, Done, Snoozed, Backlog) with their counts; the filters over
- * the inbox; the bugs grouped by local project, each row with
- * its signal, where it came from, a 7-day sparkline, users and events; and
- * the row under the cursor in detail beside them, with Fix, Snooze and
- * Backlog, or, while a Fix works on it, its stage, PR and session.
+ * the inbox; the bugs grouped by local project, each row with its signal,
+ * severity and triage on a top line, its title over two lines, where it
+ * happens and when it was first and last seen, a 7-day sparkline and
+ * today's events against its average; and the row under the cursor in
+ * detail beside them, with its triage, Fix, Snooze, Backlog and Triage, or,
+ * while a Fix works on it, its stage, PR and session.
  *
  * Its keys, while it has the focus and never in an input, are `page-keys`;
  * Esc closes the snooze menu, then the page.
@@ -30,11 +32,21 @@ import {inProgressPill, landedForItem, needsYouInProgress} from '../../../domain
 import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tabs';
 import {seenAgainLine} from '../../../domain/inbox/seen-again';
 import {fixBranch} from '../../../domain/inbox/fix';
-import type {BugFacts, InboxItem, InboxStage} from '../../../domain/inbox/model';
+import type {BugFacts, BugTriage, InboxItem, InboxStage} from '../../../domain/inbox/model';
 import type {BugsnagProjectSetting} from '../../../domain/bugsnag/connection';
 import {bugKeyAction} from './page-keys';
 import {ManagerFigure} from './ManagerFigure';
 import {Sparkline} from './Sparkline';
+import {
+    TRIAGE_SUGGESTION_LABEL,
+    compactCount,
+    groupedCount,
+    primarySortAction,
+    relativeAge,
+    timesItsAverage,
+    triagePhase,
+    type BugSortAction,
+} from './bug-row-words';
 import {
     backlogBug,
     chooseBugFilter,
@@ -50,10 +62,12 @@ import {
     openBugSnooze,
     openFixSession,
     openInBrowser,
+    openTriageSession,
     snoozeBug,
     stepBugCursor,
     stopWorkingOnBug,
     treatBugAsRegressed,
+    triageBug,
 } from './page-actions';
 
 export function BugManagerPage(): JSX.Element | null {
@@ -121,6 +135,10 @@ function BugManagerView(): JSX.Element {
                 break;
             case 'bugsnag':
                 void openBugInBugsnag(action.key);
+                break;
+            case 'triage':
+                if (fixDisabled(state.projects, rowOf(state, action.key))) return;
+                void triageBug(action.key);
                 break;
         }
     };
@@ -248,6 +266,9 @@ function BugManagerView(): JSX.Element {
                     <kbd className="sw-kbd">B</kbd> backlog
                 </span>
                 <span>
+                    <kbd className="sw-kbd">T</kbd> triage
+                </span>
+                <span>
                     <kbd className="sw-kbd">O</kbd> open in Bugsnag
                 </span>
             </footer>
@@ -259,7 +280,7 @@ function rowOf(state: BugPageState, key: string): InboxItem | null {
     return state.items.find((item) => item.key === key) ?? null;
 }
 
-/** Fix needs the Bugsnag project linked to a local project. */
+/** Fix, and a triage, need the Bugsnag project linked to a local project. */
 function fixDisabled(projects: readonly BugsnagProjectSetting[], item: InboxItem | null): boolean {
     return !item || !projects.find((project) => project.id === item.source)?.localProject;
 }
@@ -314,15 +335,20 @@ function signalOf(item: InboxItem): Signal {
     return 'plain';
 }
 
-const SIGNAL_LABEL: Record<Signal, string> = {trending: 'Trending', regressed: 'Regressed', new: 'New', plain: 'Open'};
+const SIGNAL_LABEL: Record<Exclude<Signal, 'plain'>, string> = {
+    trending: 'Trending',
+    regressed: 'Regressed',
+    new: 'New',
+};
 
 function bugTitle(facts: BugFacts): string {
     return [facts.errorClass, facts.message].filter(Boolean).join(': ') || facts.errorId;
 }
 
-function SignalChip({item}: {item: InboxItem}): JSX.Element {
+/** A bug's signal chip; a plain open bug has none. */
+function SignalChip({item}: {item: InboxItem}): JSX.Element | null {
     const signal = signalOf(item);
-    return <span className={`bm-chip is-${signal}`}>{SIGNAL_LABEL[signal]}</span>;
+    return signal === 'plain' ? null : <span className={`bm-chip is-${signal}`}>{SIGNAL_LABEL[signal]}</span>;
 }
 
 const STAGE_TONE: Record<InboxStage, string> = {
@@ -349,7 +375,7 @@ function StagePill({item, stage}: {item: InboxItem; stage: InboxStage}): JSX.Ele
 }
 
 /** A row's badge: the stage of a bug being fixed, Fixed or Seen again under Done, else its signal. */
-function StateBadge({item}: {item: InboxItem}): JSX.Element {
+function StateBadge({item}: {item: InboxItem}): JSX.Element | null {
     if (item.state.kind === 'inProgress') {
         return <StagePill item={item} stage={item.state.stage} />;
     }
@@ -365,9 +391,8 @@ function StateBadge({item}: {item: InboxItem}): JSX.Element {
     return <SignalChip item={item} />;
 }
 
-/** What a row says under its title. */
-function rowContext(item: InboxItem): string {
-    const facts = item.facts as BugFacts;
+/** What a row says of its state in place of where the bug happens: its Fix's PR, the snooze; null for a plain bug. */
+function rowStatus(item: InboxItem): string | null {
     const work = item.fix;
     if (item.state.kind === 'inProgress' && work) {
         const pr = work.pr ? `PR #${work.pr.number}` : 'no PR yet';
@@ -387,7 +412,23 @@ function rowContext(item: InboxItem): string {
             ? 'Snoozed until it changes'
             : `Snoozed until ${new Date(item.state.until).toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'})}`;
     }
-    return facts.context;
+    return null;
+}
+
+/** A row's triage on its top line: running, stopped, or its verdict in a line. */
+function RowTriage({triage}: {triage: BugTriage | null | undefined}): JSX.Element | null {
+    const phase = triagePhase(triage);
+    if (phase === 'none') return null;
+    if (phase === 'running') return <span className="bm-triage-line is-running">◌ triaging…</span>;
+    if (phase === 'stopped') return <span className="bm-triage-line is-stopped">triage stopped</span>;
+    const verdict = triage!.verdict!;
+    return (
+        <span className="bm-triage-line" title={verdict.summary}>
+            triaged:{' '}
+            <b className={`bm-suggests is-${verdict.suggestion}`}>{TRIAGE_SUGGESTION_LABEL[verdict.suggestion]}</b>
+            {verdict.summary ? ` — ${verdict.summary}` : ''}
+        </span>
+    );
 }
 
 function BugRow({item, page, selected}: {item: InboxItem; page: BugPageState; selected: boolean}): JSX.Element {
@@ -395,6 +436,10 @@ function BugRow({item, page, selected}: {item: InboxItem; page: BugPageState; se
     const signal = signalOf(item);
     const trend = page.trends[item.key];
     const notice = item.state.kind === 'done' ? item.fix?.seenAgain : null;
+    const status = rowStatus(item);
+    const times = timesItsAverage(facts);
+    const firstSeen = relativeAge(facts.firstSeen);
+    const lastSeen = relativeAge(facts.lastSeen);
     return (
         <div
             role="option"
@@ -402,27 +447,51 @@ function BugRow({item, page, selected}: {item: InboxItem; page: BugPageState; se
             data-bug-key={item.key}
             className={
                 'bm-row' +
+                ` bm-sig-${signal}` +
                 (item.state.kind === 'unread' ? ' is-unread' : '') +
                 (selected ? ' is-cursor' : '') +
                 (notice ? ' is-seen-again' : '')
             }
             onClick={() => moveBugCursor(item.key)}>
             <span className="bm-dot" aria-label={item.state.kind === 'unread' ? 'unread' : undefined} />
-            <StateBadge item={item} />
             <span className="bm-row-text">
-                <b>{bugTitle(facts)}</b>
-                <span>
-                    <i className="bm-src">{sourceName(page.projects, item.source)}</i>
-                    {notice ? null : rowContext(item)}
+                <span className="bm-row-top">
+                    <StateBadge item={item} />
+                    {facts.severity && <span className={`bm-sev is-${facts.severity}`}>{facts.severity}</span>}
+                    <RowTriage triage={item.triage} />
+                </span>
+                <b className="bm-row-title">
+                    {facts.errorClass || facts.message ? (
+                        <>
+                            <span className="bm-row-class">{facts.errorClass}</span>
+                            {facts.errorClass && facts.message ? ': ' : ''}
+                            <span className="bm-row-msg">{facts.message}</span>
+                        </>
+                    ) : (
+                        facts.errorId
+                    )}
+                </b>
+                <span className="bm-row-meta">
+                    {!notice && (status ? <span>{status}</span> : facts.context && <code>{facts.context}</code>)}
+                    {firstSeen && <span>first seen {firstSeen}</span>}
+                    {lastSeen && <span>last seen {lastSeen}</span>}
                 </span>
             </span>
-            <span className={`bm-nums is-${signal}`}>
-                <Sparkline values={trend ?? []} label={`${facts.events7d} events in the last 7 days`} />
+            <span className="bm-row-spark">
+                <Sparkline
+                    values={trend}
+                    width={160}
+                    height={40}
+                    label={`${groupedCount(facts.events7d)} events in the last 7 days`}
+                />
+            </span>
+            <span className="bm-nums">
                 <span>
-                    <b>{facts.users}</b> users
+                    <b>{groupedCount(facts.events24h)}</b> today
                 </span>
-                <span>
-                    <b>{facts.events}</b> ev
+                {times !== null && <span className="bm-times">{times.toFixed(1)}× its average</span>}
+                <span className="bm-nums-sub">
+                    <b>{groupedCount(facts.users)}</b> users · {compactCount(facts.events)} all time
                 </span>
             </span>
             {notice && (
@@ -545,22 +614,23 @@ function BugDetailPane({item, page}: {item: InboxItem; page: BugPageState}): JSX
                 </>
             ) : (
                 <>
+                    {item.triage && <TriageBox item={item} triage={item.triage} />}
                     <div className="bm-box">
                         <span className="bm-box-label">Last 7 days</span>
                         <Sparkline
-                            values={detail?.trend ?? page.trends[item.key] ?? []}
+                            values={detail?.trend ?? page.trends[item.key]}
                             width={380}
                             height={64}
                             fluid
-                            label={`${facts.events7d} events in the last 7 days`}
+                            label={`${groupedCount(facts.events7d)} events in the last 7 days`}
                         />
                         <div className="bm-kv">
                             <div>
-                                <b>{facts.users}</b>
+                                <b>{groupedCount(facts.users)}</b>
                                 <span>users</span>
                             </div>
                             <div>
-                                <b>{facts.events24h}</b>
+                                <b>{groupedCount(facts.events24h)}</b>
                                 <span>events · 24 h</span>
                             </div>
                             <div>
@@ -618,33 +688,115 @@ function shortDay(iso: string): string {
     return Number.isFinite(at.getTime()) ? at.toLocaleDateString(undefined, {day: 'numeric', month: 'short'}) : iso;
 }
 
+/**
+ * A bug's quick triage in the detail: the errand while it reads, or what it
+ * found, with its session a click away. It decides nothing; its suggestion
+ * only picks the primary button below.
+ */
+function TriageBox({item, triage}: {item: InboxItem; triage: BugTriage}): JSX.Element {
+    const phase = triagePhase(triage);
+    const verdict = triage.verdict;
+    const when = relativeAge(verdict?.at ?? triage.stoppedAt ?? triage.startedAt);
+    return (
+        <div
+            className={'bm-box bm-triage' + (phase === 'running' ? ' is-running' : '')}
+            aria-busy={phase === 'running'}>
+            <div className="bm-triage-head">
+                <span className="bm-box-label">Triage</span>
+                <span className="bm-triage-when">
+                    errand · {when}
+                    {verdict && ` · ${verdict.confidence} confidence`}
+                </span>
+                <button type="button" className="bm-link" onClick={() => void openTriageSession(item)}>
+                    Open session
+                </button>
+            </div>
+            {phase === 'running' && (
+                <p className="bm-triage-wait">Triaging… the errand is reading the error and the code.</p>
+            )}
+            {phase === 'stopped' && (
+                <p className="bm-triage-stopped">
+                    The errand stopped without a verdict. Open its session to see how far it got, or triage again.
+                </p>
+            )}
+            {verdict && (
+                <dl className="bm-triage-blocks">
+                    <div>
+                        <dt>What happened</dt>
+                        <dd>{verdict.happened}</dd>
+                    </div>
+                    <div>
+                        <dt>Why</dt>
+                        <dd>
+                            {verdict.why}
+                            {verdict.where && <code className="bm-triage-where">{verdict.where}</code>}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Impact</dt>
+                        <dd>{verdict.impact}</dd>
+                    </div>
+                    <div>
+                        <dt>Suggests</dt>
+                        <dd>
+                            <b className={`bm-suggests is-${verdict.suggestion}`}>
+                                {TRIAGE_SUGGESTION_LABEL[verdict.suggestion]}
+                            </b>
+                            {verdict.summary && ` — ${verdict.summary}`}
+                        </dd>
+                    </div>
+                </dl>
+            )}
+        </div>
+    );
+}
+
 function SortActions({item, page}: {item: InboxItem; page: BugPageState}): JSX.Element {
     const unlinked = fixDisabled(page.projects, item);
     const fixing = page.fixing === item.key;
+    const triaging = page.triaging === item.key;
     const snoozing = page.snooze?.key === item.key ? page.snooze : null;
+    const phase = triagePhase(item.triage);
+    const shown = new Set<BugSortAction>(['fix']);
+    if (item.state.kind !== 'snoozed') shown.add('snooze');
+    if (item.state.kind !== 'backlog') shown.add('backlog');
+    const primary = primarySortAction(item.triage, shown);
+    const kind = (action: BugSortAction): string => 'sw-btn' + (primary === action ? ' is-primary' : '');
+    const withNotes = item.triage?.verdict?.suggestion === 'fix';
     return (
         <>
             <div className="bm-actions">
                 <button
                     type="button"
-                    className="sw-btn is-primary"
+                    className={kind('fix')}
                     disabled={unlinked || page.fixing !== null}
                     title={unlinked ? 'Link a project first' : `Fix on ${fixBranch((item.facts as BugFacts).errorId)}`}
                     onClick={() => void fixBug(item.key)}>
-                    {fixing ? 'Starting…' : 'Fix'} <kbd className="sw-kbd">F</kbd>
+                    {fixing ? 'Starting…' : withNotes ? 'Fix with triage notes' : 'Fix'} <kbd className="sw-kbd">F</kbd>
                 </button>
-                {item.state.kind !== 'snoozed' && (
+                {shown.has('snooze') && (
                     <button
                         type="button"
-                        className="sw-btn"
+                        className={kind('snooze')}
                         aria-expanded={snoozing !== null}
                         onClick={() => (snoozing ? closeBugSnooze() : void openBugSnooze(item.key))}>
                         Snooze ▾ <kbd className="sw-kbd">S</kbd>
                     </button>
                 )}
-                {item.state.kind !== 'backlog' && (
-                    <button type="button" className="sw-btn" onClick={() => void backlogBug(item.key)}>
+                {shown.has('backlog') && (
+                    <button type="button" className={kind('backlog')} onClick={() => void backlogBug(item.key)}>
                         Backlog <kbd className="sw-kbd">B</kbd>
+                    </button>
+                )}
+                {phase !== 'running' && (
+                    <button
+                        type="button"
+                        className="sw-btn"
+                        disabled={unlinked || page.triaging !== null}
+                        title={unlinked ? 'Link a project first' : 'A quick read-only look at what happened'}
+                        onClick={() => void triageBug(item.key)}>
+                        {triaging ? 'Starting…' : phase === 'none' ? 'Triage' : 'Triage again'}{' '}
+                        <kbd className="sw-kbd">T</kbd>
                     </button>
                 )}
             </div>

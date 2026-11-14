@@ -469,5 +469,6 @@ test('urgent counts the unread bugs that are trending or regressed', () => {
         bug: {unread: 3, urgent: 2},
         issue: {unread: 1, urgent: 0},
         configured: {bug: true, issue: true},
+        triaging: [],
     });
 });

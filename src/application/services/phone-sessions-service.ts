@@ -789,7 +789,9 @@ export class PhoneSessionsService {
             (byRepository[errand.repository] ??= []).push(errand);
         }
         const out = new Map<string, ErrandEntry>();
-        for (const [sessionId, entry] of errandsBySession(this.deps.errands.mergeManager(), byRepository)) {
+        // No triage errands: the phone's errand needs a PR's number and knows only fix and nudge,
+        // so a triage lists there as an ordinary session (see `errandField`).
+        for (const [sessionId, entry] of errandsBySession(this.deps.errands.mergeManager(), byRepository, [])) {
             out.set(this.currentId(sessionId) ?? sessionId, entry);
         }
         return out;
@@ -814,7 +816,8 @@ export class PhoneSessionsService {
 
 /** The wire's `errand`, spread into a session: nothing for the user's own sessions, so older fields stay as they were. */
 function errandField(entry: ErrandEntry | undefined): {errand?: PhoneErrand} {
-    if (!entry) return {};
+    // A triage has no PR; a phone app reading `kind`/`number` strictly would drop the whole list over it.
+    if (!entry || entry.kind === 'triage' || entry.number === null) return {};
     const {kind, number, repository, doing, needsYou} = entry;
     return {errand: {kind, number, repository, doing, needsYou}};
 }

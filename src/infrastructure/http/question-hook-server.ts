@@ -23,7 +23,8 @@
  *
  * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
  * with `archive_session` and, where they are given, `show_page` and `land`;
- * to a fix errand (#437), `finish_errand` as well.
+ * to a fix errand (#437), `finish_errand` as well, and to a bug's triage
+ * errand, `finish_triage`.
  *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
@@ -44,6 +45,7 @@ import {parseOnePasswordHookInput} from '../../domain/onepassword/heads-up';
 import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
 import {pageTool, type PageInput} from '../../domain/session/page-tool';
 import {finishErrandTool} from '../../domain/merge-manager/errands';
+import {finishTriageTool} from '../../domain/inbox/triage';
 import {landTool, type LandInput} from '../../domain/merge-manager/land-tool';
 import {parseQuestionHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
@@ -93,6 +95,12 @@ export interface QuestionHookServerDeps {
      * it is one. Without it (the agent on a VM) the tool is not offered.
      */
     errandTool?: {isErrand(launchId: string): boolean; finish(launchId: string, args: unknown): ArchiveToolOutcome};
+    /**
+     * The Bug manager's triage errands: `finish_triage` is offered to a
+     * session only while it is one. Without it (the agent on a VM) the tool
+     * is not offered.
+     */
+    triageTool?: {isTriage(launchId: string): boolean; finish(launchId: string, args: unknown): ArchiveToolOutcome};
     /**
      * Where Bash calls that will reach 1Password go, held. Without one (the
      * agent on a VM) every Bash call is let go at once.
@@ -273,10 +281,12 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         const page = this.deps.pageTool;
         const errands = this.deps.errandTool;
         const land = this.deps.landTool;
+        const triage = this.deps.triageTool;
         const extra: McpTool<ArchiveToolOutcome | Promise<ArchiveToolOutcome>>[] = [
             ...(page ? [pageTool((input) => page.show(launchId, input))] : []),
             ...(land ? [landTool((input) => land.land(launchId, input))] : []),
             ...(errands?.isErrand(launchId) ? [finishErrandTool((args) => errands.finish(launchId, args))] : []),
+            ...(triage?.isTriage(launchId) ? [finishTriageTool((args) => triage.finish(launchId, args))] : []),
         ];
         const call: {pending?: Promise<ArchiveToolOutcome>; failure?: string} = {};
         const hold = (outcome: ArchiveToolOutcome | Promise<ArchiveToolOutcome>, failure: string) => {

@@ -3,11 +3,16 @@
  * session shows as an ordinary row (a stuck one in Blocked, any of them
  * among a filter's matches): one place, so the two never drift apart.
  */
-import {shortRepository, type ErrandEntry} from '../../../domain/session/errand-shelf';
+import {shortRepository, shortTitle, type ErrandEntry} from '../../../domain/session/errand-shelf';
 import type {LaidErrand} from '../../state/session-list-layout';
 
-/** The row's name: the PR and what the errand is doing on it, `#431 · fixing checks`. */
+/**
+ * The row's name: the PR and what the errand is doing on it, `#431 · fixing
+ * checks`, or for a triage the bug it looks into, `Triage · TypeError: x is
+ * undefined`. A stuck triage says so the way the others do: its red label.
+ */
 export function errandRowName(errand: ErrandEntry): string {
+    if (errand.number === null) return `Triage · ${shortTitle(errand.title ?? '')}`;
     return `#${errand.number} · ${errand.doing}`;
 }
 
@@ -16,8 +21,9 @@ export function errandPlace(errand: ErrandEntry): string {
     return errand.host ?? shortRepository(errand.repository);
 }
 
-/** The errand's pull request on GitHub. */
-export function errandPullRequestUrl(errand: ErrandEntry): string {
+/** The errand's pull request on GitHub; null for a triage, which has none. */
+export function errandPullRequestUrl(errand: ErrandEntry): string | null {
+    if (errand.number === null) return null;
     return `https://github.com/${errand.repository}/pull/${errand.number}`;
 }
 

@@ -105,6 +105,7 @@ export const INVOKE = {
     inboxPolledAt: 'inbox:polled-at',
     bugPrepareFix: 'bug:prepare-fix',
     bugFixStarted: 'bug:fix-started',
+    bugTriage: 'bug:triage',
     bugStopWorking: 'bug:stop-working',
     bugCloseAgain: 'bug:close-again',
     bugTreatAsRegressed: 'bug:treat-as-regressed',

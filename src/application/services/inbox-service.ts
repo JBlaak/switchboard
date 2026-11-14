@@ -19,10 +19,11 @@
  * still in the inbox's own states. After the sources, timed snoozes that are
  * up wake and done items older than seven days go.
  *
- * Every change is pushed to the renderer as both managers' counts and which
- * of them are set up (`inboxChanged`); the pages ask for the items
- * themselves. Settings → Bug manager and a project's Watch issues say when
- * what is watched may have changed (`settingsChanged`): a manager that came
+ * Every change is pushed to the renderer as both managers' counts, which of
+ * them are set up and the Bug manager's triage errands (`inboxChanged`), and
+ * after each poll when that differs (a triage's session archived since); the
+ * pages ask for the items themselves. Settings → Bug manager and a
+ * project's Watch issues say when what is watched may have changed (`settingsChanged`): a manager that came
  * or went is pushed at once, and new sources are polled without waiting.
  */
 import {bugFacts} from '../../domain/inbox/bugs';
@@ -94,6 +95,8 @@ export interface InboxServiceDeps {
     log: Logger;
     /** An ssh project without an agent: no git or `gh` to ask. Every ssh project unless given. */
     agentlessRemote?: (projectPath: string) => boolean;
+    /** Whether a session is archived, so a stopped triage leaves the Errands shelf with it. */
+    sessionGone?: (sessionId: string) => boolean;
 }
 
 export class InboxService {
@@ -141,7 +144,12 @@ export class InboxService {
 
     /** Both managers' counts, and which of them are set up. */
     public summary(): InboxSummary {
-        return inboxSummary([...this.items.values()], this.configured());
+        return inboxSummary([...this.items.values()], this.configured(), this.deps.sessionGone);
+    }
+
+    /** Something outside the items the summary reads changed (a session archived): push it when it differs. */
+    public refreshSummary(): void {
+        this.push();
     }
 
     /**
@@ -237,6 +245,7 @@ export class InboxService {
         const items = [...this.items.values()];
         this.commit(wakeDue(items, now), expired(items, now));
         this.lastPolledAt = now;
+        this.push();
     }
 
     private async pollBugs(): Promise<void> {

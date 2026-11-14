@@ -6,7 +6,8 @@
  * **Fix.** The bug's Bugsnag project must be linked to a local project. A
  * worktree of that project is made on `fix/bugsnag-<first 8 of the error
  * id>` (reused when it exists), and the prompt states the `/fix-bugsnag`
- * conventions itself (`fixPrompt`). Like an issue start, main only prepares:
+ * conventions itself (`fixPrompt`), with a quick triage's verdict when one
+ * finished. Like an issue start, main only prepares:
  * the renderer starts Claude in the worktree and says so (`fixStarted`),
  * which moves the item to In progress.
  *
@@ -178,6 +179,7 @@ export class BugFixService {
             branch: made.branch,
             url: detail?.url ?? null,
             frames: detail?.frames.filter((frame) => frame.inProject).map((frame) => frame.line) ?? [],
+            triage: item.triage?.verdict ?? null,
         });
         this.prepared.set(key, {projectPath: root, repository, worktreePath: made.worktreePath, branch: made.branch});
         return {ok: true, projectPath: root, worktreePath: made.worktreePath, branch: made.branch, prompt};

@@ -52,6 +52,8 @@ interface World {
     issues: Record<string, InboxIssuesAnswer | null>;
     /** Local projects with Watch issues on, and their repository. */
     watched: Record<string, string>;
+    /** Archived sessions. */
+    gone: Set<string>;
     now: number;
 }
 
@@ -66,6 +68,7 @@ function setup(overrides: Partial<World> = {}) {
         token: true,
         issues: {},
         watched: {},
+        gone: new Set(),
         now: NOW,
         ...overrides,
     };
@@ -109,6 +112,7 @@ function setup(overrides: Partial<World> = {}) {
             timers,
             log: silentLog,
             agentlessRemote: () => false,
+            sessionGone: (sessionId) => world.gone.has(sessionId),
         });
     return {world, store, renderer, timers, asked, inbox: make(), make};
 }
@@ -128,7 +132,12 @@ test("a project's first poll lists its open errors unread and counts them", asyn
     assert.deepEqual(inbox.summary().bug, {unread: 2, urgent: 0});
     assert.deepEqual(renderer.only('inboxChanged').at(-1), [
         'inboxChanged',
-        {bug: {unread: 2, urgent: 0}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}},
+        {
+            bug: {unread: 2, urgent: 0},
+            issue: {unread: 0, urgent: 0},
+            configured: {bug: true, issue: false},
+            triaging: [],
+        },
     ]);
 });
 
@@ -486,4 +495,34 @@ test('a settings change that changes nothing watched pushes nothing', async () =
 
     /* Then */
     assert.equal(renderer.only('inboxChanged').length, pushes);
+});
+
+test('a triage on a bug is pushed to the shelf, and a stopped one leaves it once its session is archived', async () => {
+    /* Given */
+    const {inbox, renderer, world} = setup();
+    world.errors[PROJECT] = [{error: bugsnagError('a')}];
+    await inbox.poll();
+    const key = inbox.list('bug')[0]!.key;
+    const triage = {
+        sessionId: 't1',
+        currentId: 't1',
+        worktree: '/code/connect/.claude/worktrees/triage/bugsnag-a',
+        repository: REPO,
+        startedAt: NOW,
+        verdict: null,
+        stoppedAt: NOW,
+    };
+
+    /* When */
+    inbox.update(key, (item) => ({...item, triage}));
+    const shelved = (renderer.only('inboxChanged').at(-1)![1] as InboxSummary).triaging;
+    world.gone.add('t1');
+    inbox.refreshSummary();
+
+    /* Then */
+    assert.deepEqual(
+        shelved.map((view) => [view.sessionId, view.needsYou]),
+        [['t1', true]],
+    );
+    assert.deepEqual((renderer.only('inboxChanged').at(-1)![1] as InboxSummary).triaging, []);
 });

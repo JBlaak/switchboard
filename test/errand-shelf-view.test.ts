@@ -27,6 +27,7 @@ function errand(sessionId: string, fields: Partial<ErrandEntry> = {}): ErrandEnt
         owner: 'merge-manager',
         repository: 'movelab/switchboard',
         number: 431,
+        title: null,
         doing: 'fixing checks',
         needsYou: false,
         host: null,
@@ -244,6 +245,71 @@ test('the header strip says whose errand it is and what it does, "Errand" in bol
     assert.match(
         html,
         /<span class="errand-strip-text"><strong>Errand<\/strong> for the merge queue · nudging the reviewer on #12 · archives itself<\/span>/,
+    );
+});
+
+// ── A triage ──
+
+const TRIAGE: Partial<ErrandEntry> = {
+    kind: 'triage',
+    owner: 'bug-manager',
+    number: null,
+    title: 'TypeError: Cannot read properties of undefined (reading x)',
+    doing: 'triaging',
+};
+
+test('a triage row shows a magnifier, "Triage · " and the short title, and offers no PR ↗', () => {
+    /* Given */
+    const errands = [laid(errand('t', TRIAGE), 2)];
+
+    /* When */
+    const html = render({errands});
+
+    /* Then */
+    assert.match(html, /<svg class="errand-row-glyph" data-kind="triage"[^>]*><circle/);
+    assert.match(html, /<span class="errand-row-name">Triage · TypeError: Cannot read properties of un…<\/span>/);
+    assert.match(html, /<span class="errand-row-meta">switchboard · 2h ago<\/span>/);
+    assert.doesNotMatch(html, /PR ↗/);
+    assert.match(html, />Stop<\/button>/);
+});
+
+test('a stuck triage stays out of the folded shelf and is marked like any stuck errand', () => {
+    /* Given */
+    const errands = [laid(errand('t', {...TRIAGE, doing: 'stopped', needsYou: true})), laid(errand('b'))];
+
+    /* When */
+    const html = render({errands, open: false});
+
+    /* Then */
+    assert.match(html, /class="errand-row needs-you" id="er-t"/);
+    assert.match(html, /1 needs you/);
+});
+
+test('a triage is named after its bug, and has no pull request to open', () => {
+    /* Given */
+    const entry = errand('t', {...TRIAGE, title: 'RangeError: bad length'});
+
+    /* When */
+    const name = errandRowName(entry);
+    const url = errandPullRequestUrl(entry);
+
+    /* Then */
+    assert.equal(name, 'Triage · RangeError: bad length');
+    assert.equal(url, null);
+});
+
+test('the header strip of a triage names the Bug manager and the bug', () => {
+    /* Given */
+    const entry = errand('t', {...TRIAGE, title: 'RangeError: bad length'});
+
+    /* When */
+    const html = renderToStaticMarkup(createElement(ErrandStripContent, {errand: entry}));
+
+    /* Then */
+    assert.match(html, /data-kind="triage"/);
+    assert.match(
+        html,
+        /<strong>Errand<\/strong> for the Bug manager · triaging RangeError: bad length · archives itself<\/span>/,
     );
 });
 

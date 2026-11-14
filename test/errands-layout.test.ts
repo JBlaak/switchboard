@@ -49,6 +49,7 @@ function errand(sessionId: string, needsYou = false): ErrandEntry {
         owner: 'merge-manager',
         repository: 'acme/app',
         number: 7,
+        title: null,
         doing: needsYou ? 'stopped' : 'fixing checks',
         needsYou,
         host: null,

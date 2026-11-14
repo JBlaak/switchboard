@@ -302,6 +302,8 @@ export interface SwitchboardApi {
     bugPrepareFix(key: string): Promise<FixPreparation>;
     /** The Fix session `bugPrepareFix` prepared started: the bug moves to In progress. */
     bugFixStarted(key: string, sessionId: string): Promise<InboxItem | null>;
+    /** T: start (or start again) a read-only triage errand on the bug; main starts its session. */
+    bugTriage(key: string): Promise<{ok: true; item: InboxItem} | {ok: false; reason: string}>;
     /** Stop working on a bug: back in the inbox, read. */
     bugStopWorking(key: string): Promise<InboxItem | null>;
     /** Seen again from an older release: mark it fixed in Bugsnag again and keep it in Done. */

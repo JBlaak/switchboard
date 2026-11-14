@@ -141,6 +141,7 @@ const api: SwitchboardApi = {
     inboxPolledAt: () => ipcRenderer.invoke(INVOKE.inboxPolledAt),
     bugPrepareFix: (key) => ipcRenderer.invoke(INVOKE.bugPrepareFix, key),
     bugFixStarted: (key, sessionId) => ipcRenderer.invoke(INVOKE.bugFixStarted, key, sessionId),
+    bugTriage: (key) => ipcRenderer.invoke(INVOKE.bugTriage, key),
     bugStopWorking: (key) => ipcRenderer.invoke(INVOKE.bugStopWorking, key),
     bugCloseAgain: (key) => ipcRenderer.invoke(INVOKE.bugCloseAgain, key),
     bugTreatAsRegressed: (key) => ipcRenderer.invoke(INVOKE.bugTreatAsRegressed, key),

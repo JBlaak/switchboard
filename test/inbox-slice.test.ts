@@ -12,6 +12,7 @@ const SUMMARY: InboxSummary = {
     bug: {unread: 3, urgent: 1},
     issue: {unread: 2, urgent: 0},
     configured: {bug: true, issue: true},
+    triaging: [],
 };
 
 /** The state after main pushed `summary`. */
@@ -43,6 +44,26 @@ test('the same counts again change nothing', () => {
 
     /* Then */
     assert.equal(again, state);
+});
+
+test('a triage starting or stopping is a change, with the same counts', () => {
+    /* Given */
+    const state = rootReducer(initialRendererState(), {type: 'inboxChanged', summary: SUMMARY});
+    const view = {sessionId: 't-1', key: 'k', title: 'Boom', repository: 'a/b', needsYou: false};
+
+    /* When */
+    const started = rootReducer(state, {type: 'inboxChanged', summary: {...SUMMARY, triaging: [view]}});
+    const same = rootReducer(started, {type: 'inboxChanged', summary: {...SUMMARY, triaging: [{...view}]}});
+    const stuck = rootReducer(same, {
+        type: 'inboxChanged',
+        summary: {...SUMMARY, triaging: [{...view, needsYou: true}]},
+    });
+
+    /* Then */
+    assert.notEqual(started, state);
+    assert.deepEqual(started.inbox.summary.triaging, [view]);
+    assert.equal(same, started);
+    assert.equal(stuck.inbox.summary.triaging[0].needsYou, true);
 });
 
 test('a manager that comes or goes is a change, with the same counts', () => {
