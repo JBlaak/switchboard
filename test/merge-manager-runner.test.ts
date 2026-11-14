@@ -10,6 +10,7 @@ import {
     FORCE_CANCEL_AFTER_MS,
     UPDATE_PATIENCE_MS,
     afterMerge,
+    beforeMerge,
     afterUpdate,
     isGreen,
     laneActions,
@@ -238,6 +239,18 @@ test('a waiting PR GitHub calls dirty is test-rebased once per head and trunk co
 });
 
 // ── What the answers lead to ──
+
+test('right before a merge: up to date merges, behind updates, an unanswered compare waits', () => {
+    /* When */
+    const upToDate = beforeMerge(false);
+    const behind = beforeMerge(true);
+    const unknown = beforeMerge(null);
+
+    /* Then */
+    assert.equal(upToDate, null);
+    assert.deepEqual(behind, {kind: 'update'});
+    assert.deepEqual(unknown, {kind: 'wait'});
+});
 
 test('after a merge: merged or 409 reads again, 405 updates again, GitHub out of reach waits, else needs you', () => {
     /* Then */

@@ -18,6 +18,7 @@ import type {
     ProjectReads,
     IssueManagerCalls,
     LaneReads,
+    LaneMergeChecks,
     LaneWrites,
     QueueLabelWrites,
     CiJobQueueCalls,
@@ -277,6 +278,7 @@ function setup(overrides: Partial<World> = {}) {
         | IssueManagerCalls
         | LaneReads
         | LaneWrites
+        | LaneMergeChecks
         | 'pullRequestForBranch'
         | 'recentTags'
         | 'refContains'

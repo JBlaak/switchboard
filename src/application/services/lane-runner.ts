@@ -9,7 +9,9 @@
  *
  * - the head is rebased onto the trunk (`updateBranch`, pinned to its head
  *   commit), or its cancelled runs started again;
- * - a green head is merged (`mergePullRequest`, pinned to the green commit);
+ * - a green head is compared with the trunk once more (`headBehind`) and, when
+ *   still up to date, merged (`mergePullRequest`, pinned to the green commit);
+ *   one behind is updated instead;
  * - runs of PRs waiting behind the head are cancelled, force-cancelled when
  *   that did not stop them;
  * - a waiting PR GitHub calls `dirty` is test-rebased (`TestRebase`), never
@@ -27,6 +29,7 @@ import {
     EMPTY_MEMORY,
     afterMerge,
     afterUpdate,
+    beforeMerge,
     confirmedConflicts,
     laneActions,
     updatesNotPushed,
@@ -39,7 +42,7 @@ import {
 import {landedKey, LANE_SAVINGS} from '../../domain/merge-manager/model';
 import type {LandedPullRequest, LaneRead, LaneSaving, SetAside} from '../../domain/merge-manager/model';
 import type {Clock} from '../ports/clock';
-import type {GitHubCli, LaneWrites} from '../ports/github-cli';
+import type {GitHubCli, LaneMergeChecks, LaneWrites} from '../ports/github-cli';
 import type {LaneSavings} from '../ports/lane-savings';
 import type {Logger} from '../ports/logger';
 import type {TestRebase} from '../ports/test-rebase';
@@ -48,7 +51,7 @@ import type {TestRebase} from '../ports/test-rebase';
 const FORGET_RUNS_AFTER_MS = 24 * 60 * 60_000;
 
 export interface LaneRunnerDeps {
-    github: Pick<GitHubCli, LaneWrites>;
+    github: Pick<GitHubCli, LaneWrites | LaneMergeChecks>;
     testRebase: TestRebase;
     savings: LaneSavings;
     clock: Clock;
@@ -186,13 +189,24 @@ export class LaneRunner {
                 return {kind: 'wait'};
             }
             case 'merge': {
+                const pr = read.pullRequests.find((candidate) => candidate.number === number);
+                // The poll's read may be stale: ask again whether the head is up to date with the trunk.
+                const behind = await github.headBehind(repository, read.trunk, action.sha);
+                const check = beforeMerge(behind);
+                if (check?.kind === 'update') {
+                    log.info(`[lane-runner] ${name}: behind ${read.trunk} right before merging, updating it`);
+                    return pr ? this.update(name, action.key, pr.id, action.sha, true) : {kind: 'reread'};
+                }
+                if (check) {
+                    log.warn(`[lane-runner] ${name}: not merged, could not compare it with ${read.trunk}`);
+                    return check;
+                }
                 const answer = await github.mergePullRequest(repository, number, action.sha, action.method);
                 const follow = afterMerge(answer);
                 if (answer.ok) log.info(`[lane-runner] ${name} merged (${action.method}) at ${action.sha}`);
                 else log.warn(`[lane-runner] ${name} not merged (${answer.status ?? 'no status'}):`, answer.reason);
                 // Not mergeable now: behind the trunk again, so bring it up to date.
                 if (follow.kind === 'update') {
-                    const pr = read.pullRequests.find((candidate) => candidate.number === number);
                     return pr ? this.update(name, action.key, pr.id, action.sha, true) : {kind: 'reread'};
                 }
                 return follow;

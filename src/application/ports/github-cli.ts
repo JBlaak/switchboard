@@ -193,6 +193,13 @@ export interface GitHubCli {
      */
     updateBranch(pullRequestId: string, expectedHeadOid: string): Promise<BranchUpdate>;
 
+    /**
+     * Whether commit `headOid` is behind branch `base` in `repo` (`base` has
+     * commits it does not), by GitHub's compare, asked fresh right before a
+     * merge. Null when unavailable.
+     */
+    headBehind(repo: string, base: string, headOid: string): Promise<boolean | null>;
+
     /** Merge PR `number` in `repo` with `method`, only while its head is still `sha` (`PUT …/pulls/{n}/merge`). */
     mergePullRequest(repo: string, number: number, sha: string, method: MergeMethod): Promise<MergeAnswer>;
 
@@ -267,6 +274,9 @@ export type QueueLabelWrites = 'addLabel' | 'removeLabel';
 
 /** What the Merge manager reads (#434). */
 export type LaneReads = 'queuedPullRequests' | 'laneRead' | 'workflowFiles';
+
+/** What the Switchboard lane runner reads again right before a merge. */
+export type LaneMergeChecks = 'headBehind';
 
 /** What the Switchboard lane runner writes (#435). */
 export type LaneWrites = 'updateBranch' | 'mergePullRequest' | 'cancelRun' | 'forceCancelRun' | 'rerunFailedJobs';

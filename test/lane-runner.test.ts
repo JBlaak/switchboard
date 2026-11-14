@@ -11,6 +11,7 @@ import {LaneRunner} from '../src/application/services/lane-runner';
 import type {
     BranchUpdate,
     GitHubCli,
+    LaneMergeChecks,
     LaneReads,
     LaneWrites,
     MergeAnswer,
@@ -56,6 +57,8 @@ interface World {
     merges: (MergeAnswer | (() => MergeAnswer))[];
     /** What the next updates answer, in turn; an update with none left rebases the branch. */
     updates: BranchUpdate[];
+    /** Head commits the compare right before a merge finds behind the trunk; `null` answers it could not compare. */
+    behind: Record<string, boolean | null>;
     /** What a test rebase of each branch answers. */
     rebases: Record<string, TestRebaseAnswer>;
     now: number;
@@ -67,13 +70,16 @@ function setup(prs: LanePullRequestRead[], world: Partial<World> = {}) {
         trunkOid: 'trunk-1',
         merges: [],
         updates: [],
+        behind: {},
         rebases: {},
         now: NOW,
         ...world,
     };
     const writes: string[] = [];
+    /** The compares asked right before a merge. */
+    const compared: string[] = [];
     const byId = (id: string) => Object.values(state.prs).find((pr) => pr.id === id);
-    const github: Pick<GitHubCli, LaneReads | QueueLabelWrites | LaneWrites> = {
+    const github: Pick<GitHubCli, LaneReads | QueueLabelWrites | LaneWrites | LaneMergeChecks> = {
         queuedPullRequests: async () => [],
         workflowFiles: async () => [],
         laneRead: async (repo, numbers) => ({
@@ -99,6 +105,10 @@ function setup(prs: LanePullRequestRead[], world: Partial<World> = {}) {
                 checks: [{name: 'Unit tests', state: 'queued', startedAt: null}],
             };
             return {ok: true};
+        },
+        headBehind: async (_repo, base, headOid) => {
+            compared.push(`${headOid} with ${base}`);
+            return headOid in state.behind ? state.behind[headOid] : false;
         },
         mergePullRequest: async (_repo, number, sha, method) => {
             writes.push(`merge #${number} at ${sha} by ${method}`);
@@ -167,7 +177,7 @@ function setup(prs: LanePullRequestRead[], world: Partial<World> = {}) {
             state.now += MIN;
         }
     };
-    return {state, service, runner, writes, rebased, savings, settle, stage, land};
+    return {state, service, runner, writes, compared, rebased, savings, pass, settle, stage, land};
 }
 
 test('only the head is updated, pinned to its head commit; nothing waiting is pushed', async () => {
@@ -211,6 +221,48 @@ test('a 405 on merge updates the head again, never leaving it stuck', async () =
     /* Then */
     assert.deepEqual(writes, ['merge #1 at oid-1 by squash', 'update #1 at oid-1']);
     assert.deepEqual(stage(1), {kind: 'head', step: 'checks'});
+});
+
+test('a green head behind the trunk right before the merge is updated instead of merged', async () => {
+    /* Given */
+    const {land, settle, writes, compared, stage} = setup([prRead(1)], {behind: {'oid-1': true}});
+    await land(1);
+
+    /* When */
+    await settle();
+
+    /* Then */
+    assert.deepEqual(compared, ['oid-1 with main']);
+    assert.deepEqual(writes, ['update #1 at oid-1']);
+    assert.deepEqual(stage(1), {kind: 'head', step: 'checks'});
+});
+
+test('a green head that could not be compared with the trunk is not merged this pass', async () => {
+    /* Given */
+    const {land, pass, writes, compared, stage} = setup([prRead(1)], {behind: {'oid-1': null}});
+    await land(1);
+
+    /* When */
+    await pass();
+
+    /* Then */
+    assert.deepEqual(compared, ['oid-1 with main']);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(stage(1), {kind: 'head', step: 'merging'});
+});
+
+test('a green head still up to date right before the merge is merged', async () => {
+    /* Given */
+    const {land, settle, writes, compared, stage} = setup([prRead(1)]);
+    await land(1);
+
+    /* When */
+    await settle();
+
+    /* Then */
+    assert.deepEqual(compared, ['oid-1 with main']);
+    assert.deepEqual(writes, ['merge #1 at oid-1 by squash']);
+    assert.equal(stage(1)?.kind, 'merged');
 });
 
 test('a 409 on merge reads the lane again and merges the head at its new commit', async () => {
