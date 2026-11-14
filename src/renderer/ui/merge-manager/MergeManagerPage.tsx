@@ -368,7 +368,16 @@ function MergedToday({
                 Merged today<span className="mm-group-meta">sessions archived</span>
             </div>
             {merged.map((pr) => (
-                <div key={pr.key} className="mm-row is-merged">
+                <div
+                    key={pr.key}
+                    role="link"
+                    tabIndex={0}
+                    title="Open on GitHub"
+                    className="mm-row is-merged"
+                    onClick={() => openRowOnGitHub(pr)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') openRowOnGitHub(pr);
+                    }}>
                     <span className="mm-place is-merged">✓</span>
                     <span className="mm-row-text">
                         <span className="mm-row-title">
