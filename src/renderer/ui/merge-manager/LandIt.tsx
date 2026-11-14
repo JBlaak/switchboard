@@ -1,7 +1,7 @@
 /**
  * Land it (#436), as each of its four places draws it: the button on your own
- * open PR, disabled with "Mark it ready for review first" on a draft, and,
- * once the PR is landed, its stage: "Landed · 2nd in switchboard ▾", whose
+ * open PR, which launches the rocket once the PR is landed, disabled with
+ * "Mark it ready for review first" on a draft, and, once the PR is landed, its stage: "Landed · 2nd in switchboard ▾", whose
  * menu has Open in Merge manager (#439) and Unland.
  *
  * `LandItControl` is the markup from what it is given, so a test can draw it;
@@ -32,7 +32,7 @@ export function LandIt({pr, size}: LandItProps): JSX.Element | null {
             offer={offer}
             busy={busy}
             size={size}
-            onLand={() => void landPullRequest(pr.repository, pr.number)}
+            onLand={(from) => void landPullRequest(pr.repository, pr.number, from)}
             onUnland={() => void unlandPullRequest(pr.repository, pr.number)}
             onOpen={() => openMergeManager(landedKey(pr.repository, pr.number))}
         />
@@ -43,7 +43,8 @@ export interface LandItControlProps {
     offer: LandOffer;
     busy: LandAction | null;
     size?: 'sm';
-    onLand(): void;
+    /** `from` is the button, for the rocket. */
+    onLand(from: Element): void;
     onUnland(): void;
     /** Open in Merge manager: its page, with this PR selected. */
     onOpen?(): void;
@@ -72,7 +73,7 @@ export function LandItControl({offer, busy, size, onLand, onUnland, onOpen}: Lan
             title={draft ? offer.hint : 'Hand it to the Merge manager'}
             onClick={(e: MouseEvent) => {
                 e.stopPropagation();
-                onLand();
+                onLand(e.currentTarget);
             }}>
             {busy === 'land' ? 'Landing…' : 'Land it'}
         </button>

@@ -13,7 +13,7 @@
  * cannot be seen and it is left as it is.
  *
  * The archive is the archive tool's (`sessionArchiver`): stopped, row
- * archived, window told, so the window launches the rocket for it.
+ * archived, window told, so the window throws the confetti for it.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {

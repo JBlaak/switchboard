@@ -6,18 +6,24 @@
  * in switchboard's lane", with Undo) or says why not. Main pushes the lanes
  * after either (`mergeManagerChanged`), which turns every place's button into
  * the PR's stage.
+ *
+ * A land from a Land it button launches the rocket from it once main took it.
  */
 import {dispatch, getState} from '../../state/app-store';
 import {sessionMap} from '../../state/session-store';
 import {landOffer, sessionLandCandidate} from '../../../domain/merge-manager/land-it';
 import type {LinkedPr} from '../../../domain/session/links';
 import {failureReason} from './failure-reason';
+import {launchRocket} from '../../lib/motion/rocket';
 
-/** Hand a PR to the Merge manager. */
-export async function landPullRequest(repository: string, number: number): Promise<void> {
+/** Hand a PR to the Merge manager; a land from a button (`from`) launches the rocket from it once it is landed. */
+export async function landPullRequest(repository: string, number: number, from?: Element): Promise<void> {
+    // Where the button is now: once landed it turns into the PR's stage.
+    const r = from?.getBoundingClientRect();
     dispatch({type: 'landStarted', repository, number, action: 'land'});
     try {
         const result = await window.api.mergeManagerLand(repository, number);
+        if (result.ok && r) launchRocket(r.left + r.width / 2, r.top + r.height / 2);
         dispatch({
             type: 'landFinished',
             repository,

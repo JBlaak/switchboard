@@ -21,8 +21,8 @@
     will-change: transform, opacity;
 }
 
-/* The rocket a landed session leaves with when it is archived
-   (lib/motion/rocket.ts, #440), instead of the confetti. */
+/* The rocket a Land it press launches once the PR is landed
+   (lib/motion/rocket.ts, #440). */
 .rocket-launch {
     position: fixed;
     inset: 0;

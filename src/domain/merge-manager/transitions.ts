@@ -29,7 +29,7 @@ export function landedTransitions(
     return {merged: entered('merged'), needsYou: entered('needsYou')};
 }
 
-/** The Dock bounces once when any PR went to Needs you; merges only show in the bubble and the rocket. */
+/** The Dock bounces once when any PR went to Needs you; merges only show in the bubble and the confetti. */
 export function bouncesDock(transitions: LandedTransitions): boolean {
     return transitions.needsYou.length > 0;
 }
