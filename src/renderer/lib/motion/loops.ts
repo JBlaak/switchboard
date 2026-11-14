@@ -1,7 +1,7 @@
 /**
  * Holding the looping animations still while nobody is looking.
  *
- * A spinner, a shimmer or a ripple that loops for as long as a session is
+ * A spinner or a ripple that loops for as long as a session is
  * busy or waiting keeps Chromium drawing frames at the display's full rate,
  * even while the window sits behind another app. Every rule that loops
  * forever reads its play state from `--loop-state` (see `_motion.scss`), and

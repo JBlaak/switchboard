@@ -739,8 +739,8 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ---- Background work: the turn ended, but a build, a test run or an agent it
-   started will wake it again. Still working, so the spinner, slower and without
-   the shimmer, since nothing is being written right now. ---- */
+   started will wake it again. Still working, so the spinner, only slower, since
+   nothing is being written right now. ---- */
 .session-item.background-work .session-status-dot,
 .session-item.background-work .session-status-dot.running {
     background: transparent;
@@ -766,32 +766,6 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
 .session-item.is-merging:not(.active) .session-summary {
     opacity: 0.6;
-}
-
-.session-item.cli-busy:not(.needs-attention) .session-summary {
-    background: linear-gradient(
-        110deg,
-        var(--sb-text-strong) 44%,
-        var(--sb-blue) 48%,
-        var(--sb-text-max) 50%,
-        var(--sb-blue) 52%,
-        var(--sb-text-strong) 56%
-    );
-    background-size: 300% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: shimmer-text 3s linear infinite;
-    animation-play-state: var(--loop-state, running);
-}
-
-@keyframes shimmer-text {
-    0% {
-        background-position: 200% 0;
-    }
-    100% {
-        background-position: -100% 0;
-    }
 }
 
 /* ---- Session info ---- */
@@ -1165,7 +1139,11 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     color: rgba(var(--sb-blue-rgb), 0.6);
 }
 
-/* ---- Needs attention indicator (ripple) ---- */
+/* ---- Needs attention indicator (ripple) ----
+   Three pulses to catch the eye, then the plain orange dot: a ripple that kept
+   going for as long as the session waited kept the window drawing frames. It
+   follows --loop-state, so pulses due while the window is out of focus wait
+   for you to come back. ---- */
 .session-item.needs-attention .session-status-dot,
 .session-item.needs-attention .session-status-dot.running {
     background: var(--sb-orange);
@@ -1181,7 +1159,7 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     inset: -2px;
     border-radius: 50%;
     border: 1.5px solid rgba(var(--sb-orange-rgb), 0.7);
-    animation: ripple-out 2s ease-out infinite;
+    animation: ripple-out 2s ease-out 3 forwards;
     animation-play-state: var(--loop-state, running);
 }
 
