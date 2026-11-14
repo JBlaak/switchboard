@@ -113,7 +113,7 @@
 /* ---- A row ---- */
 .im-row {
     display: grid;
-    grid-template-columns: 10px 84px minmax(0, 1fr) auto;
+    grid-template-columns: 10px 84px minmax(0, 1fr) auto auto;
     gap: 12px;
     align-items: center;
     padding: 10px;
@@ -230,6 +230,25 @@
     b {
         color: var(--sb-text);
     }
+}
+
+/* The row's quick Backlog button: on hover, on the selected row, or by Tab.
+   It keeps its column while hidden, so the comment counts don't shift. */
+.im-row-action {
+    grid-column: 4;
+    padding: 3px 9px;
+    font-size: 12px;
+    opacity: 0;
+
+    .im-row:hover &,
+    .im-row.is-selected &,
+    &:focus-visible {
+        opacity: 1;
+    }
+}
+
+.im-row-nums {
+    grid-column: 5;
 }
 
 /* ---- A started issue's stage: Switchboard's status colours ---- */

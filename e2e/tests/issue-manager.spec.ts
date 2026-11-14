@@ -137,3 +137,24 @@ test('⌘I opens the Issue manager on its issues, keeps your notes, and ⏎ star
     /* Then */
     await expect(managerPage(page).getByRole('option', {name: /#482/})).toContainText('Working');
 });
+
+test("a row's Backlog button puts the issue in the backlog at once, without selecting it", async ({page}) => {
+    /* Given */
+    await page.keyboard.press('Meta+i');
+    const row = managerPage(page).getByRole('option', {name: /#482 Export on the coach page/});
+    await expect(row).toBeVisible();
+
+    /* When */
+    await row.hover();
+    await row.getByRole('button', {name: 'Put #482 in the backlog'}).click();
+
+    /* Then: gone from the inbox, unselected, and listed under Backlog with no reload */
+    await expect(managerPage(page)).toContainText('Inbox zero.');
+    await expect(detail(page)).toHaveCount(0);
+    await managerPage(page)
+        .getByRole('tab', {name: /Backlog/})
+        .click();
+    const backlogged = managerPage(page).getByRole('option', {name: /#482/});
+    await expect(backlogged).toBeVisible();
+    await expect(backlogged.getByRole('button', {name: 'Put #482 in the backlog'})).toHaveCount(0);
+});

@@ -15,6 +15,7 @@ import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {jumpToSession} from '../session-work/plan/actions';
 import {pulseSessionRow} from '../session-list/pulse';
 import type {InboxItem} from '../../../domain/inbox/model';
+import {toBacklog} from '../../../domain/inbox/items';
 import type {InboxTab} from '../../../domain/inbox/tabs';
 import type {IssueFilter} from '../../../domain/inbox/issue-manager';
 import type {SnoozeOptionView} from '../../../application/services/inbox-settings-service';
@@ -281,9 +282,20 @@ export async function snoozeIssue(key: string, until: string | null): Promise<vo
     changed(await window.api.inboxSnooze(key, until).catch(() => null));
 }
 
+/**
+ * Into the backlog at once: the row leaves the list and is under Backlog
+ * before main answers, then takes main's copy. Should main fail, it comes
+ * back as it was, with a notice.
+ */
 export async function backlogIssue(key: string): Promise<void> {
+    const before = getState().issueManager.items?.find((item) => item.key === key);
+    if (!before) return;
     moveOnFrom(key);
-    changed(await window.api.inboxBacklog(key).catch(() => null));
+    changed(toBacklog(before));
+    const answer = await window.api.inboxBacklog(key).catch(() => null);
+    if (answer) return changed(answer);
+    changed(before);
+    dispatch({type: 'issueManagerNoticed', notice: 'Could not put it in the backlog.'});
 }
 
 // ── Elsewhere ──

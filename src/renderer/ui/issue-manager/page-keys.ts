@@ -17,6 +17,12 @@ export type IssueKeyAction =
           readonly item: InboxItem;
       };
 
+/** Whether the row's Backlog button shows: in the inbox or snoozed, not already in the backlog. */
+export function canBacklog(item: InboxItem): boolean {
+    const state = item.state.kind;
+    return state === 'unread' || state === 'read' || state === 'snoozed';
+}
+
 export function issueKeyAction(key: string, selected: InboxItem | null): IssueKeyAction | null {
     if (key === 'j' || key === 'ArrowDown') return {kind: 'step', step: 1};
     if (key === 'k' || key === 'ArrowUp') return {kind: 'step', step: -1};
