@@ -9,10 +9,7 @@ import {
     QUEUED_SEARCH,
     httpStatus,
     laneQuery,
-    queueEntriesQuery,
-    queueEntriesSearch,
     toBranchUpdateFailure,
-    toQueueEntries,
     toLaneRead,
     toQueuedPullRequests,
     toTrunkRules,
@@ -392,20 +389,4 @@ test('gh is asked the lane query with the owner and name as variables', async ()
     assert.deepEqual(asked[0].slice(-4), ['-f', 'owner=MoveLab-Studio', '-f', 'name=Connect']);
     assert.match(asked[0][3], /pr2450: pullRequest/);
     assert.doesNotMatch(asked[0][3], /pr-1/);
-});
-
-test("a repository's queue entries are everyone's open PRs with the queue's opt-in or next label, read as the lane reads them", () => {
-    /* When */
-    const search = queueEntriesSearch('MoveLab-Studio/Connect');
-    const entries = toQueueEntries({search: {nodes: [PR_NODE, {}]}}, 'MoveLab-Studio/Connect');
-
-    /* Then */
-    assert.equal(search, 'repo:MoveLab-Studio/Connect is:pr is:open label:"automerge:opt-in","automerge:next"');
-    assert.match(queueEntriesQuery(), /\.\.\. on PullRequest \{ \.\.\.laneFields \}/);
-    assert.match(queueEntriesQuery(), /fragment laneFields on PullRequest/);
-    assert.deepEqual(
-        entries?.map((pr) => [pr.number, pr.author, pr.repository]),
-        [[2450, 'JBlaak', 'MoveLab-Studio/Connect']],
-    );
-    assert.equal(toQueueEntries({}, 'MoveLab-Studio/Connect'), null);
 });

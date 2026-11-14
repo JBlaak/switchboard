@@ -11,9 +11,10 @@
  * 2. per repository with a landed or queued PR, its lane kind, from its
  *    workflow files and kept `LANE_KIND_RECHECK_MS` (`laneKind`);
  * 3. per repository, one slim read of its landed PRs only, with the trunk and
- *    its rules (`laneRead`), folded in by the domain (`syncLane`);
- * 4. per queue lane, its teammates' entries (`queueEntries`), which only the
- *    Merge manager's page shows (#439).
+ *    its rules (`laneRead`), folded in by the domain (`syncLane`).
+ *
+ * Only the user's own PRs are ever read into a lane: other people's PRs in a
+ * queue lane are not shown anywhere in the Merge manager.
  *
  * What each read said of a landed PR beyond its stage (who approved it, its
  * deciding checks) is kept beside it for the page too (`LandedFacts`).
@@ -55,7 +56,6 @@ import {
     mergeManagerState,
     setAside,
     syncLane,
-    teammateEntries,
     unlandLabels,
 } from '../../domain/merge-manager/landed';
 import {landedFacts} from '../../domain/merge-manager/stages';
@@ -69,7 +69,6 @@ import type {
     LaneRead,
     MergeManagerState,
     SetAside,
-    TeammateEntry,
     TrunkRules,
 } from '../../domain/merge-manager/model';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
@@ -116,8 +115,6 @@ export class MergeManagerService {
     private readonly rules = new Map<string, TrunkRules>();
     /** What the last read said of each landed PR beyond its stage, for the page (#439). */
     private readonly facts = new Map<string, LandedFacts>();
-    /** Each queue lane's teammates' entries (by lower-case `owner/repo`), as last read. */
-    private readonly teammates = new Map<string, readonly TeammateEntry[]>();
     private interval: TimerHandle | null = null;
     private polling: Promise<void> | null = null;
     /** A poll asked for while one ran: run once more after it. */
@@ -216,10 +213,7 @@ export class MergeManagerService {
 
     /** Every lane with a landed PR, and how many need you. */
     public state(): MergeManagerState {
-        return mergeManagerState([...this.landed.values()], this.rules, {
-            facts: this.facts,
-            teammates: this.teammates,
-        });
+        return mergeManagerState([...this.landed.values()], this.rules, {facts: this.facts});
     }
 
     /** A landed PR, or null when it is not landed. */
@@ -361,7 +355,6 @@ export class MergeManagerService {
             }
             this.fold(repository, read, kind, []);
             if (kind === 'switchboard') await this.runLane(repository, read);
-            else await this.readTeammates(repository, read.viewer);
         }
 
         const now = this.deps.clock.now();
@@ -380,16 +373,6 @@ export class MergeManagerService {
         const read = await this.deps.github.laneRead(repository, [...numbers]).catch(() => null);
         if (read) this.rules.set(repository.toLowerCase(), read.rules);
         return read;
-    }
-
-    /**
-     * A queue lane's teammates' entries, for the page (#439). One that could
-     * not be read keeps what it had.
-     */
-    private async readTeammates(repository: string, viewer: string): Promise<void> {
-        const entries = await this.deps.github.queueEntries(repository).catch(() => null);
-        if (entries)
-            this.teammates.set(repository.toLowerCase(), teammateEntries(entries, viewer, this.deps.clock.now()));
     }
 
     /**

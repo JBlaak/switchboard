@@ -5,7 +5,7 @@
    keys are the Issue manager's and the Tasks page's (.sw-header, .im-tiles,
    .im-body, .im-detail, .tk-keys); the stage pills are the shared stage
    words' (.pp-stage.is-landed-*). Its own: the host pill, the lane label,
-   the head card's steps, the faded teammates' rows and the timelines. */
+   the head card's steps and the timelines. */
 
 #merge-manager-page {
     position: absolute;
@@ -121,9 +121,6 @@
         background: var(--sb-bg-raised);
         box-shadow: inset 0 0 0 1px var(--sb-line);
     }
-    &.is-theirs {
-        opacity: 0.55;
-    }
     &.is-merged {
         cursor: default;
 
@@ -180,9 +177,6 @@
 
     .mm-row:hover {
         background: transparent;
-    }
-    &.is-theirs .mm-steps {
-        opacity: 0.55;
     }
 }
 

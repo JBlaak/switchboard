@@ -89,15 +89,6 @@ function setup(
                 pullRequests: prs,
             };
         },
-        queueEntries: async (repo) => {
-            calls.push(`entries ${repo}`);
-            if (state.unreachable.has(repo)) return null;
-            return Object.values(state.prs[repo] ?? {}).filter(
-                (pr) =>
-                    pr.state === 'open' &&
-                    pr.labels.some((label) => label === QUEUE_LABELS.optIn || label === QUEUE_LABELS.next),
-            );
-        },
         workflowFiles: async (repo) => {
             calls.push(`workflows ${repo}`);
             if (state.unreachable.has(repo)) return null;
@@ -571,7 +562,7 @@ test('a fix errand that stopped sends its PR to Needs you, and that is told on t
 
 // ── What the page shows besides (#439) ──
 
-test("a queue lane's teammates' entries are read with each poll and shown in the queue's order, mine left out", async () => {
+test("other people's PRs in a queue lane are never shown, only mine", async () => {
     /* Given */
     const {service} = setup({
         prs: {
@@ -598,35 +589,12 @@ test("a queue lane's teammates' entries are read with each poll and shown in the
     await service.poll();
 
     /* Then */
-    const lane = service.state().lanes[0];
+    const {lanes} = service.state();
     assert.deepEqual(
-        lane.teammates?.map((entry) => [entry.number, entry.author, entry.stage.kind, entry.place]),
-        [
-            [9, 'ana', 'head', 1],
-            [8, 'sam', 'waiting', 2],
-        ],
+        lanes.map((lane) => [lane.repository, lane.pullRequests.map((pr) => pr.number)]),
+        [[QUEUE_REPO, [7]]],
     );
-    assert.deepEqual(
-        lane.pullRequests.map((pr) => pr.number),
-        [7],
-    );
-});
-
-test('a Switchboard lane reads no teammates', async () => {
-    /* Given */
-    const {service, calls} = setup({prs: {[REPO]: {1: prRead(1)}}});
-    await service.land(REPO, 1);
-    calls.length = 0;
-
-    /* When */
-    await service.poll();
-
-    /* Then */
-    assert.equal(
-        calls.some((call) => call.startsWith('entries')),
-        false,
-    );
-    assert.equal(service.state().lanes[0].teammates, undefined);
+    assert.deepEqual(Object.keys(lanes[0]).sort(), ['approvalLostOnPush', 'kind', 'pullRequests', 'repository']);
 });
 
 test('a landed PR carries who approved it and how its required checks stand', async () => {

@@ -13,8 +13,8 @@
  *
  * The sidebar's pill, the plan cards' `planQueuePill`, the project page's
  * Merge queue section and the inbox's In progress pill all read it, in both
- * lanes. PRs that are not landed keep each place's own words, and so do
- * teammates' PRs in a queue lane (only the user's own PRs are ever landed).
+ * lanes. PRs that are not landed keep each place's own words (only the
+ * user's own PRs are ever landed).
  *
  * Pure, so the tests hold it still.
  */

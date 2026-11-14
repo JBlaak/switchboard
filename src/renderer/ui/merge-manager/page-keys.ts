@@ -2,8 +2,7 @@
  * What a key does on the Merge manager's page (#439): J/K (or ↓/↑) move to
  * the next or previous row, and on the selected one ⏎ opens its session or
  * its fix errand, T tries again, N nudges the reviewer it waits on, U unlands
- * it and O opens it on GitHub. A key the row does not offer does nothing:
- * a teammate's row has N only (and O).
+ * it and O opens it on GitHub. A key the row does not offer does nothing.
  *
  * Only keys without ⌘, ⌃ or ⌥ reach this, never one typed into a field.
  * Pure, so it is tested in node; the page carries the answer out.
