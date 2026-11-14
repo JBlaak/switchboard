@@ -37,6 +37,7 @@ import {LandToast} from './merge-manager/LandToast';
 import {MergeManagerPage} from './merge-manager/MergeManagerPage';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import {ErrandShelf} from './session-list/ErrandShelf';
+import {LandingShelf} from './session-list/LandingShelf';
 import {ErrandStrip} from './terminal/ErrandStrip';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
@@ -108,6 +109,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="sidebar-errands">
                 <ErrandShelf />
+            </Portal>
+            <Portal target="sidebar-landing">
+                <LandingShelf />
             </Portal>
             {/* At the foot of the main area: a drop's upload note, a Land it's toast, then what an archive brings (Undo above the Mark done offer). */}
             <Portal target="main">

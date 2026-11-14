@@ -53,6 +53,8 @@ export type SessionListEvent =
     | {type: 'sectionToggled'; tier: number}
     /** The Errands shelf's label was clicked, or the keyboard walked into it (`open`) or out of it. */
     | {type: 'errandShelfToggled'; open?: boolean}
+    /** The Landing shelf's line was clicked. */
+    | {type: 'landingShelfToggled'}
     | {type: 'renameStarted'; rowId: string}
     | {type: 'renameEnded'; rowId: string}
     /** The keyboard cursor moved (null: it is gone). See `ui/session-list/cursor`. */
@@ -77,6 +79,8 @@ export interface SessionListState {
     readonly foldedSections: readonly number[];
     /** The Errands shelf is unfolded. Kept for this run of the app only: it starts folded. */
     readonly errandShelfOpen: boolean;
+    /** The Landing shelf is unfolded. Kept for this run of the app only: it starts folded. */
+    readonly landingShelfOpen: boolean;
     /** The row with its rename input open. */
     readonly renaming: string | null;
     /** What the keyboard cursor is on: an element id, or `header:<group id>`. */
@@ -94,6 +98,7 @@ export const initialSessionListState: SessionListState = {
     olderExpanded: false,
     foldedSections: [],
     errandShelfOpen: false,
+    landingShelfOpen: false,
     renaming: null,
     cursor: null,
     leaving: {},
@@ -143,6 +148,9 @@ export function sessionListReducer(state: SessionListState, event: RendererEvent
             const open = event.open ?? !state.errandShelfOpen;
             return open === state.errandShelfOpen ? state : {...state, errandShelfOpen: open};
         }
+
+        case 'landingShelfToggled':
+            return {...state, landingShelfOpen: !state.landingShelfOpen};
 
         case 'renameStarted':
             return patch(state, {renaming: event.rowId});

@@ -337,7 +337,9 @@ function Row({
 
 function StagePill({row}: {row: PageRow}): JSX.Element {
     return (
-        <span className={'pp-stage is-landed-' + row.stage.kind} title={row.words.title}>
+        <span
+            className={'pp-stage is-landed-' + row.stage.kind + (row.words.tone === 'error' ? ' is-error' : '')}
+            title={row.words.title}>
             <i aria-hidden="true" />
             {rowStageLabel(row)}
         </span>
@@ -634,7 +636,7 @@ function FixingBody({row, facts, now}: {row: PageRow; facts: MergeManagerPageFac
                     <b>Failed out as the head</b> ·{' '}
                     {cause === 'conflict' ? 'a conflict with the trunk' : 'a failed required check'}
                 </Step>
-                <Step tone={running ? 'green' : undefined} at={errand ? clock(errand.startedAt) : undefined}>
+                <Step tone={running ? 'yellow' : undefined} at={errand ? clock(errand.startedAt) : undefined}>
                     {errand ? (
                         <>
                             <b>Errand</b> {cause === 'conflict' ? 'rebasing' : 'fixing the checks'} in its own worktree

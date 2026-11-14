@@ -94,7 +94,7 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     white-space: nowrap;
 
     &.is-needs-you {
-        color: var(--sb-red);
+        color: var(--sb-yellow);
     }
 }
 
@@ -107,7 +107,7 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     .is-needs-you > & {
         width: 6px;
         height: 6px;
-        background: var(--sb-red);
+        background: var(--sb-yellow);
     }
 }
 
@@ -182,11 +182,11 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     &.needs-you {
-        background: rgba(var(--sb-red-rgb), 0.1);
+        background: rgba(var(--sb-yellow-rgb), 0.1);
     }
 
     &.needs-you:hover {
-        background: rgba(var(--sb-red-rgb), 0.14);
+        background: rgba(var(--sb-yellow-rgb), 0.14);
     }
 
     &.kbd-cursor {
@@ -201,7 +201,7 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     color: var(--sb-text-muted);
 
     .needs-you > & {
-        color: var(--sb-red);
+        color: var(--sb-yellow);
     }
 }
 
@@ -289,7 +289,7 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     color: var(--sb-text-muted);
 
     .errand-needs-you & {
-        color: var(--sb-red);
+        color: var(--sb-yellow);
     }
 }
 
@@ -324,7 +324,7 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     &.needs-you .errand-strip-glyph {
-        color: var(--sb-red);
+        color: var(--sb-yellow);
     }
 }
 
