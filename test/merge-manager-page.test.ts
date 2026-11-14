@@ -1,12 +1,12 @@
 /**
  * The Merge manager's page (#439): its tiles, its lanes (grouped, ordered,
- * empty ones left out, teammates faded), Merged today, the CI saved
+ * empty ones left out, only the user's own PRs), Merged today, the CI saved
  * estimate, what each row offers and the keys; the facts main answers for it;
  * and the page's part of the renderer slice.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mergeManagerState, teammateEntries} from '../src/domain/merge-manager/landed';
+import {mergeManagerState} from '../src/domain/merge-manager/landed';
 import {
     ciRunsSaved,
     dayStart,
@@ -24,12 +24,11 @@ import {
 } from '../src/domain/merge-manager/page';
 import {landedFacts} from '../src/domain/merge-manager/stages';
 import {landedKey, type LandedPullRequest, type LaneStage} from '../src/domain/merge-manager/model';
-import {QUEUE_LABELS} from '../src/domain/project/merge-queue';
 import {MergeManagerPageService} from '../src/application/services/merge-manager-page-service';
 import {mergeKeyAction} from '../src/renderer/ui/merge-manager/page-keys';
 import {initialMergeManagerState, mergeManagerReducer} from '../src/renderer/state/merge-manager-slice';
 import type {FixErrand} from '../src/domain/merge-manager/errands';
-import {HEAD, ME, MIN, NOW, NO_RULES, REPO, RULES, landedPr, prRead} from './support/merge-manager-fixtures';
+import {HEAD, MIN, NOW, NO_RULES, REPO, RULES, landedPr, prRead} from './support/merge-manager-fixtures';
 
 const QUEUE = 'movelab/queued';
 const WAITING: LaneStage = {kind: 'waiting', willConflict: false, position: null};
@@ -150,35 +149,14 @@ test('lanes are grouped by repository; a Switchboard lane has its head first, th
     );
 });
 
-test("a queue lane goes in the queue's order with teammates' entries among mine, faded and not landed", () => {
+test("a queue lane goes in the queue's order, then the rest in land order", () => {
     /* Given */
-    const teammates = teammateEntries(
-        [
-            prRead(20, {
-                repository: QUEUE,
-                author: 'sam',
-                labels: [QUEUE_LABELS.optIn],
-                automerge: {state: 'pending', description: 'First in the merge queue'},
-            }),
-            prRead(21, {
-                repository: QUEUE,
-                author: 'ana',
-                labels: [QUEUE_LABELS.optIn],
-                automerge: {state: 'pending', description: 'Number 3 in the merge queue'},
-            }),
-            prRead(22, {repository: QUEUE, labels: [QUEUE_LABELS.optIn]}),
-            prRead(23, {repository: QUEUE, author: 'ben', labels: [QUEUE_LABELS.failed]}),
-        ],
-        ME,
-        NOW,
-    );
     const state = mergeManagerState(
         [
             queued(9, 30, {kind: 'waiting', willConflict: false, position: 2}),
             queued(8, 20, {kind: 'fixing', cause: 'checks'}),
         ],
         new Map(),
-        {teammates: new Map([[QUEUE, teammates]])},
     );
 
     /* When */
@@ -186,33 +164,17 @@ test("a queue lane goes in the queue's order with teammates' entries among mine,
 
     /* Then */
     assert.deepEqual(
-        lane.rows.map((candidate) => [candidate.number, candidate.order, candidate.teammate !== null]),
+        lane.rows.map((candidate) => [candidate.number, candidate.order]),
         [
-            [20, 1, true],
-            [9, 2, false],
-            [21, 3, true],
-            [8, null, false],
+            [9, 2],
+            [8, null],
         ],
     );
-    assert.equal(row([lane], 20).landed, null);
-    assert.equal(row([lane], 20).teammate?.author, 'sam');
 });
 
 test("a lane with nothing of the user's left in it is left out, merged PRs go to Merged today, newest first", () => {
     /* Given */
     const today = dayStart(NOW);
-    const teammate = teammateEntries(
-        [
-            prRead(20, {
-                repository: QUEUE,
-                author: 'sam',
-                labels: [QUEUE_LABELS.optIn],
-                automerge: {state: 'pending', description: 'First in the merge queue'},
-            }),
-        ],
-        ME,
-        NOW,
-    );
     const state = mergeManagerState(
         [
             landedPr(1, 50, 'switchboard', {kind: 'merged', at: today + 10 * MIN}),
@@ -220,7 +182,6 @@ test("a lane with nothing of the user's left in it is left out, merged PRs go to
             queued(9, 30, {kind: 'merged', at: today + 5 * MIN}),
         ],
         new Map(),
-        {teammates: new Map([[QUEUE, teammate]])},
     );
 
     /* When */
@@ -284,23 +245,8 @@ test("the head card says how far its checks are: 'Checks 1 of 2' while they run"
 
 // ── What a row offers, and the keys ──
 
-test('each stage offers its actions; a teammate’s row only Nudge', () => {
+test('each stage offers its actions', () => {
     /* Given */
-    const teammate = teammateEntries(
-        [
-            prRead(20, {
-                repository: QUEUE,
-                author: 'sam',
-                labels: [QUEUE_LABELS.optIn],
-                requestedReviewers: ['ana'],
-                review: 'review_required',
-                approvedBy: [],
-                automerge: {state: 'pending', description: 'Waits for a review by @ana'},
-            }),
-        ],
-        ME,
-        NOW,
-    );
     const state = mergeManagerState(
         [
             landedPr(1, 50, 'switchboard', HEAD),
@@ -311,12 +257,11 @@ test('each stage offers its actions; a teammate’s row only Nudge', () => {
             queued(9, 5, WAITING),
         ],
         new Map(),
-        {teammates: new Map([[QUEUE, teammate]])},
     );
     const lanes = pageLanes(state);
 
     /* When */
-    const offers = [1, 2, 3, 4, 5, 20].map((number) => rowActions(row(lanes, number)));
+    const offers = [1, 2, 3, 4, 5].map((number) => rowActions(row(lanes, number)));
 
     /* Then */
     assert.deepEqual(offers, [
@@ -326,7 +271,6 @@ test('each stage offers its actions; a teammate’s row only Nudge', () => {
         {open: {kind: 'session'}, tryAgain: false, nudge: 'ana', unland: true},
         // Try again clears Needs you for any reason (#432 story 14).
         {open: {kind: 'session'}, tryAgain: true, nudge: null, unland: true},
-        {open: null, tryAgain: false, nudge: 'ana', unland: false},
     ]);
 });
 

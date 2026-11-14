@@ -5,7 +5,7 @@
  * header, and what happened while merging was on a VM under the tiles; tiles that count the user's landed PRs by stage
  * and the CI runs saved this week; every lane, grouped by repository with its
  * kind, the head on top as a card with three steps and the rest in the lane's
- * order (teammates' queue entries faded); Merged today at the bottom; and the
+ * order (only the user's own PRs); Merged today at the bottom; and the
  * selected row's detail beside it, per stage, with its actions.
  *
  * What it shows is `domain/merge-manager/page`; its keys, while it has the
@@ -330,7 +330,7 @@ function Lane({
             </div>
             {lane.rows.map((row) =>
                 row.stage.kind === 'head' ? (
-                    <div key={row.key} className={'mm-headcard' + (row.teammate ? ' is-theirs' : '')}>
+                    <div key={row.key} className="mm-headcard">
                         <Row row={row} selected={selected === row.key} onSelect={onSelect} />
                         <ol className="mm-steps" aria-label="Where the head is">
                             {headSteps(row).map((step) => (
@@ -368,7 +368,7 @@ function Row({
             role="option"
             aria-selected={selected}
             data-merge-key={row.key}
-            className={'mm-row' + (selected ? ' is-selected' : '') + (row.teammate ? ' is-theirs' : '')}
+            className={'mm-row' + (selected ? ' is-selected' : '')}
             onClick={() => onSelect(row.key)}>
             <span className="mm-place">{row.order ?? '·'}</span>
             <span className="mm-row-text">
@@ -394,12 +394,10 @@ function StagePill({row}: {row: PageRow}): JSX.Element {
 
 /** A row's second line: whose it is or who approved it, and its branch. */
 function rowMeta(row: PageRow): string {
-    if (row.teammate) return `${row.teammate.author ?? 'someone'}'s · not yours`;
-    const approved = row.landed?.facts?.approvedBy ?? [];
-    const parts = [
-        approved.length > 0 ? 'approved by ' + approved.join(', ') : null,
-        row.landed?.headRef ?? null,
-    ].filter((part): part is string => !!part);
+    const approved = row.landed.facts?.approvedBy ?? [];
+    const parts = [approved.length > 0 ? 'approved by ' + approved.join(', ') : null, row.landed.headRef].filter(
+        (part): part is string => !!part,
+    );
     return parts.join(' · ');
 }
 
@@ -477,11 +475,9 @@ function Detail({
             <StageBody row={row} lane={lane} facts={page.facts} now={now} />
             {offers.tryAgain && <TryAgainBox row={row} page={page} />}
             <div className="im-actions">
-                {offers.open && (
-                    <button type="button" className="sw-btn is-primary" onClick={() => void openRowSession(row)}>
-                        {offers.open.kind === 'errand' ? 'Open errand' : 'Open session'} <kbd className="sw-kbd">↵</kbd>
-                    </button>
-                )}
+                <button type="button" className="sw-btn is-primary" onClick={() => void openRowSession(row)}>
+                    {offers.open.kind === 'errand' ? 'Open errand' : 'Open session'} <kbd className="sw-kbd">↵</kbd>
+                </button>
                 {offers.nudge && (
                     <button type="button" className="sw-btn" onClick={() => void nudgeFromPage(row)}>
                         Nudge {offers.nudge} <kbd className="sw-kbd">N</kbd>
@@ -538,16 +534,7 @@ function StageBody({
     const {stage} = row;
     switch (stage.kind) {
         case 'head':
-            return row.teammate ? (
-                <Box label="Not yours">
-                    <p>
-                        {row.teammate.author ?? 'A teammate'}&apos;s pull request is the queue&apos;s head. Yours behind
-                        it wait without updates, so they cost no CI until it merges or fails out.
-                    </p>
-                </Box>
-            ) : (
-                <HeadBody row={row} lane={lane} facts={facts} />
-            );
+            return <HeadBody row={row} lane={lane} facts={facts} />;
         case 'waiting':
             return (
                 <Box label="Waiting">
@@ -584,7 +571,7 @@ function HeadBody({
     lane: PageLane;
     facts: MergeManagerPageFacts | null;
 }): JSX.Element {
-    const checks = row.landed?.facts?.checks ?? [];
+    const checks = row.landed.facts?.checks ?? [];
     const passed = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
     const steps = headSteps(row);
     const tone = (index: number): 'purple' | 'yellow' | undefined =>
@@ -593,11 +580,9 @@ function HeadBody({
     return (
         <>
             <Box label="Where it is">
-                {row.landed && (
-                    <Step tone="purple" at={clock(row.landed.landedAt)}>
-                        <b>Landed</b>
-                    </Step>
-                )}
+                <Step tone="purple" at={clock(row.landed.landedAt)}>
+                    <b>Landed</b>
+                </Step>
                 <Step tone={tone(0)}>
                     <b>Head</b> ·{' '}
                     {lane.kind === 'switchboard' ? 'updated on the trunk (rebase)' : 'rebased by the queue'}

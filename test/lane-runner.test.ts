@@ -76,7 +76,6 @@ function setup(prs: LanePullRequestRead[], world: Partial<World> = {}) {
     const github: Pick<GitHubCli, LaneReads | QueueLabelWrites | LaneWrites> = {
         queuedPullRequests: async () => [],
         workflowFiles: async () => [],
-        queueEntries: async () => [],
         laneRead: async (repo, numbers) => ({
             repository: repo,
             viewer: 'joris',

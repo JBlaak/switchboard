@@ -70,7 +70,6 @@ export function stepMergeRow(step: 1 | -1): void {
  */
 export async function openRowSession(row: PageRow): Promise<void> {
     const open = rowActions(row).open;
-    if (!open) return;
     if (open.kind === 'errand') {
         if (!(await jumpToSession(open.sessionId))) notice(`#${row.number}'s errand is no longer in the list.`);
         return;

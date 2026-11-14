@@ -225,26 +225,6 @@ export interface LandedView extends LandedPullRequest {
     readonly facts?: LandedFacts;
 }
 
-/**
- * A teammate's PR in a queue lane (#439): never landed (only the user's own
- * PRs are), but it decides when the user's become the head, so the page shows
- * it, faded, with Nudge only.
- */
-export interface TeammateEntry {
-    /** `owner/repo#n` (`landedKey`). */
-    readonly key: string;
-    readonly repository: string;
-    readonly number: number;
-    readonly title: string;
-    readonly url: string;
-    /** The author's login; null for a deleted account. */
-    readonly author: string | null;
-    /** Read from the queue's labels and status, as the user's own are. */
-    readonly stage: LaneStage;
-    /** Its number in the queue: 1 for the head; null when the queue gave it none. */
-    readonly place: number | null;
-}
-
 export interface LaneView {
     readonly repository: string;
     readonly kind: LaneKind;
@@ -252,8 +232,6 @@ export interface LaneView {
     readonly approvalLostOnPush: boolean;
     /** In land order, merged ones last. */
     readonly pullRequests: readonly LandedView[];
-    /** Teammates' entries in a queue lane, in the queue's order; absent or empty otherwise. */
-    readonly teammates?: readonly TeammateEntry[];
 }
 
 /** Every lane with a landed PR, and how many PRs need you. */

@@ -29,7 +29,6 @@ import type {
     LaneView,
     MergeManagerState,
     SetAside,
-    TeammateEntry,
     TrunkRules,
 } from './model';
 
@@ -186,44 +185,12 @@ function isMine(pr: LanePullRequestRead, viewer: string): boolean {
     return pr.author !== null && pr.author.toLowerCase() === viewer.toLowerCase();
 }
 
-// ── Teammates (#439) ──
-
-/**
- * The teammates' entries in a queue lane, from a read of its open PRs that
- * carry the queue's labels: everyone's but the viewer's own (those are
- * landed), each staged as the queue says, in the queue's order (the head,
- * then by number in the queue, then the rest by PR number). A failed one has
- * left the queue and is not shown.
- */
-export function teammateEntries(reads: readonly LanePullRequestRead[], viewer: string, now: number): TeammateEntry[] {
-    const entries = reads
-        .filter((pr) => pr.state === 'open' && !isMine(pr, viewer) && !hasLabel(pr, QUEUE_LABELS.failed))
-        .map((pr): TeammateEntry => {
-            const stage = queueLaneStage(pr, null, now);
-            const place = stage.kind === 'head' ? 1 : stage.kind === 'waiting' ? stage.position : null;
-            return {
-                key: landedKey(pr.repository, pr.number),
-                repository: pr.repository,
-                number: pr.number,
-                title: pr.title,
-                url: pr.url,
-                author: pr.author,
-                stage,
-                place,
-            };
-        })
-        .filter((entry) => entry.stage.kind !== 'fixing' && entry.stage.kind !== 'needsYou');
-    return entries.sort((a, b) => (a.place ?? Infinity) - (b.place ?? Infinity) || a.number - b.number);
-}
-
 // ── What the renderer is shown ──
 
 /** What a lane view carries beyond the landed PRs (#439), as the service last read it. */
 export interface LaneExtras {
     /** Each landed PR's facts, by key. */
     readonly facts?: ReadonlyMap<string, LandedFacts>;
-    /** Each queue lane's teammates' entries, by lower-case `owner/repo`. */
-    readonly teammates?: ReadonlyMap<string, readonly TeammateEntry[]>;
 }
 
 /**
@@ -267,14 +234,12 @@ function laneView(
         const facts = pr.stage.kind === 'merged' ? undefined : extras.facts?.get(pr.key);
         return {...pr, place: place(pr), ...(facts ? {facts} : {})};
     };
-    const teammates = kind === 'queue' ? (extras.teammates?.get(repository.toLowerCase()) ?? []) : [];
     return {
         repository,
         kind,
         approvalLostOnPush:
             kind === 'switchboard' && (rules.get(repository.toLowerCase())?.approvalLostOnPush ?? false),
         pullRequests: [...open, ...done].map(({landed}) => placed(landed)),
-        ...(teammates.length > 0 ? {teammates} : {}),
     };
 }
 

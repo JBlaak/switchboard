@@ -18,7 +18,7 @@ import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
-import type {LanePullRequestRead, LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
 import type {BranchPullRequest} from '../../domain/inbox/stage';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
@@ -184,14 +184,6 @@ export interface GitHubCli {
      */
     workflowFiles(repo: string): Promise<WorkflowFile[] | null>;
 
-    /**
-     * Everyone's open PRs in `repo` that are in its merge queue
-     * (`automerge:opt-in` or `automerge:next`), as the lane read sees them:
-     * a queue lane's teammates' entries for the Merge manager's page (#439).
-     * Null when unavailable.
-     */
-    queueEntries(repo: string): Promise<LanePullRequestRead[] | null>;
-
     // ── The Switchboard lane runner's writes (#435), as the user, each pinned to a head SHA ──
 
     /**
@@ -274,7 +266,7 @@ export type IssueManagerCalls = 'issueThread' | 'assignSelf' | 'unassignSelf' | 
 export type QueueLabelWrites = 'addLabel' | 'removeLabel';
 
 /** What the Merge manager reads (#434). */
-export type LaneReads = 'queuedPullRequests' | 'laneRead' | 'workflowFiles' | 'queueEntries';
+export type LaneReads = 'queuedPullRequests' | 'laneRead' | 'workflowFiles';
 
 /** What the Switchboard lane runner writes (#435). */
 export type LaneWrites = 'updateBranch' | 'mergePullRequest' | 'cancelRun' | 'forceCancelRun' | 'rerunFailedJobs';

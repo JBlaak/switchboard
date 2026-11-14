@@ -10,12 +10,12 @@
  *   the head and each conflict found by a local test rebase instead of a push.
  * - **Lanes** are grouped by repository, each with its kind. The head comes
  *   first, as a card; a Switchboard lane goes on in land order, a queue lane
- *   in the queue's order (then the rest in land order), with teammates'
- *   entries among the user's, faded. A lane with nothing of the user's still
- *   in it is left out.
+ *   in the queue's order (then the rest in land order). Only the user's own
+ *   PRs are listed: other people's PRs in a queue lane are never shown. A
+ *   lane with nothing of the user's still in it is left out.
  * - **Merged today** goes at the bottom, newest first.
  * - **Actions** per row: ⏎ opens the session or the errand, T Try again, N
- *   Nudge, U Unland, O the PR on GitHub; teammates' rows have Nudge only.
+ *   Nudge, U Unland, O the PR on GitHub.
  *
  * Pure, so the tests hold it still. Times are epoch ms, days and weeks local.
  */
@@ -29,7 +29,6 @@ import type {
     LaneStageKind,
     LaneView,
     MergeManagerState,
-    TeammateEntry,
 } from './model';
 
 // ── What main answers for the page ──
@@ -145,7 +144,7 @@ function stageAt(stage: LaneStage): number {
 
 // ── Lanes ──
 
-/** One row of a lane on the page: one of the user's landed PRs, or a teammate's queue entry. */
+/** One row of a lane on the page: one of the user's landed PRs. */
 export interface PageRow {
     readonly key: string;
     readonly repository: string;
@@ -158,10 +157,8 @@ export interface PageRow {
     readonly words: StageWords;
     /** What the row's number column says: its place in the lane, or null for "·". */
     readonly order: number | null;
-    /** The user's own landed PR; null on a teammate's row. */
-    readonly landed: LandedView | null;
-    /** A teammate's queue entry; null on the user's own. */
-    readonly teammate: TeammateEntry | null;
+    /** The user's own landed PR. */
+    readonly landed: LandedView;
 }
 
 export interface PageLane {
@@ -177,7 +174,7 @@ export interface PageLane {
 export function pageLanes(state: MergeManagerState): PageLane[] {
     return state.lanes
         .map(pageLane)
-        .filter((lane) => lane.rows.some((row) => row.landed !== null))
+        .filter((lane) => lane.rows.length > 0)
         .sort((a, b) => a.repository.localeCompare(b.repository));
 }
 
@@ -187,9 +184,8 @@ function pageLane(lane: LaneView): PageLane {
         return under ? '#' + under.number : branch;
     };
     const own = lane.pullRequests.filter((pr) => pr.stage.kind !== 'merged');
-    const theirs = lane.kind === 'queue' ? (lane.teammates ?? []) : [];
-    const rows: Omit<PageRow, 'order'>[] = [
-        ...own.map((pr) => ({
+    const rows: Omit<PageRow, 'order'>[] = own
+        .map((pr) => ({
             key: pr.key,
             repository: lane.repository,
             number: pr.number,
@@ -199,25 +195,9 @@ function pageLane(lane: LaneView): PageLane {
             stage: pr.stage,
             words: stageWords(pr.stage, pr.place, base),
             landed: pr,
-            teammate: null,
             place: pr.place,
             landedAt: pr.landedAt,
-        })),
-        ...theirs.map((entry) => ({
-            key: entry.key,
-            repository: lane.repository,
-            number: entry.number,
-            title: entry.title,
-            url: entry.url,
-            lane: lane.kind,
-            stage: entry.stage,
-            words: stageWords(entry.stage, entry.place, base),
-            landed: null,
-            teammate: entry,
-            place: entry.place,
-            landedAt: Number.MAX_SAFE_INTEGER,
-        })),
-    ]
+        }))
         .map((row, index) => ({row, index}))
         .sort((a, b) => rank(a.row, lane.kind) - rank(b.row, lane.kind) || within(a, b, lane.kind))
         .map(({row}) => strip(row));
@@ -243,7 +223,7 @@ function rank(row: Sortable, kind: LaneKind): number {
 
 function within(a: {row: Sortable; index: number}, b: {row: Sortable; index: number}, kind: LaneKind): number {
     if (kind === 'queue' && a.row.place !== null && b.row.place !== null) return a.row.place - b.row.place;
-    // Land order: the user's own come in it already; teammates' after them, by PR number.
+    // Land order.
     return a.row.landedAt - b.row.landedAt || a.index - b.index || a.row.number - b.row.number;
 }
 
@@ -253,7 +233,7 @@ function strip({place: _place, landedAt: _landedAt, ...row}: Sortable): Omit<Pag
 
 function placeOf(row: Omit<PageRow, 'order'>): number | null {
     if (row.stage.kind === 'head') return 1;
-    return row.landed?.place ?? row.teammate?.place ?? null;
+    return row.landed.place;
 }
 
 /** The keys of every row J/K moves over, top to bottom. */
@@ -279,8 +259,8 @@ export function selectedRow(lanes: readonly PageLane[], key: string | null): Pag
 // ── What a row offers ──
 
 export interface RowActions {
-    /** ⏎: the PR's own session, or the fix errand's; null for a teammate's row. */
-    readonly open: {readonly kind: 'session'} | {readonly kind: 'errand'; readonly sessionId: string} | null;
+    /** ⏎: the PR's own session, or the fix errand's. */
+    readonly open: {readonly kind: 'session'} | {readonly kind: 'errand'; readonly sessionId: string};
     /** T: Try again, for any Needs you: a new fix errand once one gave up, else back to its place. */
     readonly tryAgain: boolean;
     /** N: the reviewer it waits on, who can be nudged (a user, not a team); null otherwise. */
@@ -293,7 +273,6 @@ export function rowActions(row: PageRow): RowActions {
     const {stage} = row;
     const nudge =
         stage.kind === 'held' && stage.reason.kind === 'review' && !stage.reason.team ? stage.reason.reviewer : null;
-    if (!row.landed) return {open: null, tryAgain: false, nudge, unland: false};
     const errand = row.landed.errand;
     const stopped = stage.kind === 'needsYou' && stage.reason.kind === 'errand-stopped';
     const open: RowActions['open'] =
@@ -324,7 +303,7 @@ export function laneKindLabel(kind: LaneKind): string {
 export function pageSubline(lanes: readonly PageLane[]): string {
     const switchboard = lanes.filter((lane) => lane.kind === 'switchboard').length;
     const queue = lanes.length - switchboard;
-    const landed = lanes.reduce((sum, lane) => sum + lane.rows.filter((row) => row.landed).length, 0);
+    const landed = lanes.reduce((sum, lane) => sum + lane.rows.length, 0);
     const kinds = [
         switchboard > 0 ? plural(switchboard, 'Switchboard lane', 'Switchboard lanes') : null,
         queue > 0 ? plural(queue, 'queue lane', 'queue lanes') : null,
@@ -332,9 +311,9 @@ export function pageSubline(lanes: readonly PageLane[]): string {
     return kinds.length === 0 ? 'Nothing landed' : `${kinds.join(', ')} · ${landed} landed`;
 }
 
-/** The row's stage pill: the head says its step ("Head · checks"), a teammate's head "Head · not yours". */
+/** The row's stage pill: the head says its step ("Head · checks"). */
 export function rowStageLabel(row: PageRow): string {
-    if (row.stage.kind === 'head') return row.teammate ? 'Head · not yours' : 'Head · ' + row.stage.step;
+    if (row.stage.kind === 'head') return 'Head · ' + row.stage.step;
     if (row.stage.kind === 'waiting') return 'Waiting';
     return row.words.label;
 }
@@ -343,15 +322,11 @@ export function rowStageLabel(row: PageRow): string {
 export function headSteps(row: PageRow): {label: string; state: 'done' | 'active' | 'todo'; progress: number}[] {
     if (row.stage.kind !== 'head') return [];
     const at = row.stage.step === 'updating' ? 0 : row.stage.step === 'checks' ? 1 : 2;
-    const checks = row.landed?.facts?.checks ?? [];
+    const checks = row.landed.facts?.checks ?? [];
     const passed = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
-    const checkLabel = row.teammate
-        ? 'Checks (the queue)'
-        : checks.length > 0
-          ? `Checks ${passed} of ${checks.length}`
-          : 'Checks';
+    const checkLabel = checks.length > 0 ? `Checks ${passed} of ${checks.length}` : 'Checks';
     const checkProgress = at > 1 ? 1 : at === 1 && checks.length > 0 ? passed / checks.length : 0;
-    return [row.teammate ? 'Rebased' : 'Updated on the trunk', checkLabel, 'Merge'].map((label, index) => ({
+    return ['Updated on the trunk', checkLabel, 'Merge'].map((label, index) => ({
         label,
         state: index < at ? 'done' : index === at ? 'active' : 'todo',
         progress: index === 1 ? checkProgress : index < at ? 1 : 0,
