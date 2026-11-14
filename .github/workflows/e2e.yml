@@ -1,7 +1,6 @@
 name: E2E
 
-# On macOS, which costs ten times the minutes of Linux, so this runs only where it can catch
-# something: on pull requests, not again on the push to main that merges one
+# Only where it can catch something: on pull requests, not again on the push to main that merges one
 # (the pull_request run already tested the merge result), and not when a pull
 # request only touches the Android app, unit tests or docs.
 on:
@@ -24,17 +23,18 @@ concurrency:
 jobs:
     # The Playwright suite in e2e/: the built app, launched through Electron
     # against a fixture home, with fake `claude` and `ssh` on the session PATH.
-    # macOS because the app is macOS-only (vibrancy, pmset, the zsh login shell
-    # the fakes are put on PATH through) and the baselines are Mac pixels.
-    # Pinned like build.yml: macos-latest stopped being assigned a runner.
+    # On Linux under Xvfb, which costs a tenth of the minutes of macOS. The
+    # screenshots are skipped (below), so what runs is the functional assertions,
+    # which the harness makes behave the same on both (see "On Linux" in
+    # CONTRIBUTING.md and e2e/support/launch.ts).
     #
     # Split in three shards: the suite (~240 tests, each launching the app) took
-    # 14 minutes on a usual runner, and a slow macOS runner runs every test about
-    # 1.7 times slower (#453 hit the 20-minute limit at 166 of 238). A shard
-    # takes about 5 minutes, so a slow runner still has room.
+    # 14 minutes on a usual macOS runner, and a slow one ran every test about 1.7
+    # times slower (#453 hit the 20-minute limit at 166 of 238). A shard took
+    # about 5 minutes there, so a slow runner still has room.
     e2e:
         name: e2e (${{ matrix.shard }}/3)
-        runs-on: macos-15
+        runs-on: ubuntu-24.04
         timeout-minutes: 20
         strategy:
             fail-fast: false
@@ -56,6 +56,16 @@ jobs:
             - name: Install setuptools (node-gyp distutils fix)
               run: python -m pip install setuptools
 
+            # Electron's GTK and NSS libraries, a display (Xvfb) and zsh, which the
+            # fixture's profile puts the fake CLIs on PATH through. The same list as
+            # "On Linux" in CONTRIBUTING.md.
+            - name: Install Electron's libraries, Xvfb and zsh
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0t64 libgbm1 libxss1 libnss3 \
+                      libasound2t64 libatk-bridge2.0-0t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+                      libxrandr2 libpango-1.0-0 libcups2t64 zsh
+
             # postinstall rebuilds better-sqlite3 and node-pty for Electron's ABI,
             # which both the app and the fixture's database seeding need.
             - name: Install dependencies
@@ -65,11 +75,11 @@ jobs:
               run: npm run build
 
             # Screenshot comparisons are skipped here: the baselines are rendered on
-            # a developer's Mac, and a runner's macOS version and GPU antialias text
+            # a developer's machine, and a runner's fonts and drivers draw text
             # differently enough to fail them without anything having changed. Every
             # functional assertion still runs. See "End-to-end tests" in CONTRIBUTING.md.
             - name: End-to-end tests
-              run: npx playwright test --config e2e/playwright.config.ts --shard=${{ matrix.shard }}/3
+              run: xvfb-run -a -s "-screen 0 1920x1080x24" npx playwright test --config e2e/playwright.config.ts --shard=${{ matrix.shard }}/3
               env:
                   SB_E2E_SKIP_SCREENSHOTS: '1'
 
