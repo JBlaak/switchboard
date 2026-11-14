@@ -1332,22 +1332,27 @@ export function buildContainer(): Container {
             key: vmHostKey({user: vm.user, host: vm.host, port: Number(vm.port) || 22}),
             name: vmHostLabel(vm),
         }));
-    // The errands a VM started by itself become rows here (#438, #442), on every
-    // connect and every read of a merging VM's lanes.
+    // The errands a VM started by itself become rows here (#438, #442), and the
+    // rows of those that archived themselves there are archived (#308), on every
+    // connect and every read of a merging VM's lanes. Rows first: an errand that
+    // started and finished between two reads needs its row before it is archived.
     const selfStarted = new SelfStartedCatchUp({settings, renderer, appVersion: agentVersion, log});
-    const catchUpSelfStarted = (host: VmHost): void => {
+    // Built further down, once the archiver's task service exists.
+    let selfArchiveCatchUp: SelfArchiveCatchUp | null = null;
+    const catchUpSelfSessions = async (host: VmHost): Promise<void> => {
         const connection = agents.connection(host);
         if (!connection.connected) return;
-        void selfStarted.catchUp({
+        await selfStarted.catchUp({
             host,
             home: connection.home,
             agentVersion: connection.agentVersion,
             listSelfStarted: () => connection.listSelfStarted(),
             forgetSelfStarted: (ids) => connection.forgetSelfStarted(ids),
         });
+        if (connection.connected) await selfArchiveCatchUp?.catchUp(connection);
     };
     agents.onConnected((connection) =>
-        catchUpSelfStarted({
+        void catchUpSelfSessions({
             user: connection.host.user,
             host: connection.host.host,
             port: Number(connection.host.port) || 22,
@@ -1379,7 +1384,7 @@ export function buildContainer(): Container {
         record: {read: () => settings.mergingHost(), write: (record) => settings.setMergingHost(record)},
         remoteRead: (key) => {
             const host = parseVmHostKey(key);
-            if (host) catchUpSelfStarted(host);
+            if (host) void catchUpSelfSessions(host);
         },
         stopSession: (sessionId) => void stopSession({registry, remote, lifecycle, terminals}, sessionId),
         renderer,
@@ -1641,9 +1646,9 @@ export function buildContainer(): Container {
             }
         }),
     );
-    // VM sessions that archived themselves while the Mac was away (#308): their
-    // rows are archived on every connect, as the archive tool would have, minus the stop.
-    const selfArchiveCatchUp = new SelfArchiveCatchUp({
+    // VM sessions that archived themselves on the VM (#308, #442): their rows are
+    // archived as the archive tool would have, minus the stop (see catchUpSelfSessions).
+    selfArchiveCatchUp = new SelfArchiveCatchUp({
         appVersion: agentVersion,
         remoteProjects: () => settings.remoteProjects(),
         archiver: sessionArchiver({
@@ -1658,7 +1663,6 @@ export function buildContainer(): Container {
         }),
         log,
     });
-    agents.onConnected((connection) => void selfArchiveCatchUp.connected(connection));
     // Files dropped on a VM session's terminal go up to its VM (#276 stage 5).
     const droppedFiles = new DroppedFilesService({
         registry,

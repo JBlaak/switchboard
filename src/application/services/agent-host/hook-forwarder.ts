@@ -421,7 +421,8 @@ export class HookForwarder implements HookForwarderPart {
     /**
      * Archive a session on the VM when its turn ends, Mac or no Mac: a fix
      * errand that finished (#442), which no Mac row stands for. Recorded as
-     * self-archived, so a Mac that shows it archives its row on its next connect.
+     * self-archived, so a Mac that shows it archives its row on its next connect
+     * or its next read of this VM's lanes, whichever comes first.
      */
     public archiveAtTurnEnd(launchId: string): ArchiveToolOutcome {
         this.hereArchives.add(launchId);

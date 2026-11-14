@@ -10,9 +10,10 @@ import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {scriptedAgent, settle} from './support/scripted-agent';
 
 /**
- * The Mac catching up on the VM sessions that archived themselves while it
- * was away (#308): on every connect it lists the agent's record, archives the
- * rows it knows without stopping them again, and has the agent forget them.
+ * The Mac catching up on the VM sessions that archived themselves on the VM
+ * (#308, #442): on every connect and every read of a merging VM's lanes it
+ * lists the agent's record, archives the rows it knows without stopping them
+ * again, and has the agent forget them.
  *
  * The scripted agent plays the host; its list and forget are answered by a
  * real HookForwarder over the record, so both halves meet over the framing.
@@ -86,7 +87,7 @@ function harness({
         log: silentLog,
     });
     const caughtUp: Promise<void>[] = [];
-    client.onConnected((connection) => void caughtUp.push(catchUp.connected(connection)));
+    client.onConnected((connection) => void caughtUp.push(catchUp.catchUp(connection)));
 
     return {
         agent,
@@ -97,6 +98,15 @@ function harness({
             await client.connection(HOST).whenConnected();
             await settle();
             await Promise.all(caughtUp);
+        },
+        /** Catch up again on the live link, as a read of the VM's lanes does. */
+        async laneRead() {
+            await catchUp.catchUp(client.connection(HOST));
+        },
+        /** Catch up twice at once, as a lane read during a connect's catch-up does. */
+        async twoAtOnce() {
+            const connection = client.connection(HOST);
+            await Promise.all([catchUp.catchUp(connection), catchUp.catchUp(connection)]);
         },
     };
 }
@@ -191,4 +201,36 @@ test('an agent at another version is not asked, since it would refuse the messag
     /* Then */
     assert.deepEqual(h.agent.sent('list-self-archived'), []);
     assert.deepEqual(h.archived, []);
+});
+
+test('a fix errand that archived itself while the Mac stays connected is archived on the next lane read', async () => {
+    /* Given */
+    const h = harness({record: [], projects: [vmProject(['errand'])]});
+    await h.connect();
+    h.file.text = JSON.stringify([{sessionId: 'errand', archivedAt: 5}]);
+
+    /* When */
+    await h.laneRead();
+
+    /* Then */
+    assert.deepEqual(h.archived, ['errand']);
+    assert.deepEqual(
+        h.agent.sent('forget-self-archived').map((m) => m.sessionIds),
+        [['errand']],
+    );
+    assert.deepEqual(JSON.parse(h.file.text ?? 'null'), []);
+});
+
+test('a catch-up while another runs for the same host is skipped, so a row is archived once', async () => {
+    /* Given */
+    const h = harness({record: [], projects: [vmProject(['errand'])]});
+    await h.connect();
+    h.file.text = JSON.stringify([{sessionId: 'errand', archivedAt: 5}]);
+
+    /* When */
+    await h.twoAtOnce();
+
+    /* Then */
+    assert.deepEqual(h.archived, ['errand']);
+    assert.equal(h.agent.sent('list-self-archived').length, 2);
 });
