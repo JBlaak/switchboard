@@ -15,6 +15,7 @@ import {pageLanes, rowActions, rowKeys, selectedRow, type PageRow} from '../../.
 import {jumpToSession} from '../session-work/plan/actions';
 import {nudgeReviewer} from '../project-page/merge-queue-actions';
 import {unlandPullRequest} from './land-actions';
+import {failureReason} from './failure-reason';
 
 // ── The page ──
 
@@ -106,7 +107,7 @@ export async function tryAgainFromPage(row: PageRow): Promise<void> {
     dispatch({
         type: 'mergeManagerTryAgainAnswered',
         key: row.key,
-        result: result.ok ? {ok: true} : {ok: false, reason: result.reason},
+        result: result.ok ? {ok: true} : {ok: false, reason: failureReason(result, 'Could not try again')},
     });
     if (result.ok) notice(`A new fix errand is on #${row.number}.`);
 }
