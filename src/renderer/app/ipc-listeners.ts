@@ -101,7 +101,7 @@ export function installIpcListeners(): void {
     // A VM session brought back (#276) continues here in its own row and terminal.
     onEvent('sessionBringBackPhase', ({sessionId}, state, previous) => onBroughtBack(sessionId, state, previous));
     onEvent('bringBackFinishedRun', ({sessionId}, state, previous) => onBroughtBack(sessionId, state, previous));
-    // Hand off to… on a row needs the VM hosts; an install or a removal changes which projects are on one.
+    // Hand off to… in the session tray needs the VM hosts; an install or a removal changes which projects are on one.
     onEvent('agentProjectsLoaded', (_event, state, previous) => {
         if (state.handoff.hosts === null || state.agentHost !== previous.agentHost) void loadHandoffHosts();
     });

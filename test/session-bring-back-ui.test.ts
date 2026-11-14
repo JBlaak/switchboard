@@ -77,7 +77,6 @@ test('Bring back shows on a Claude session on a VM copy of a local project', () 
 
     /* Then */
     assert.equal(buttons.bringBack, true);
-    assert.equal(buttons.handOff, false);
 });
 
 test('Bring back does not show on a VM project that is no copy, a VM terminal, or a local session', () => {

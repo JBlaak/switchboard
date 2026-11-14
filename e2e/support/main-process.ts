@@ -173,7 +173,7 @@ export interface HostStubs {
      * Session hand-off's back end (#276 stage 3), standing in for the ssh and
      * git that move a running session to a VM: every `session-handoff:*`
      * channel answers from here, so no test can reach a VM. Each request is
-     * recorded (see `sessionHandoffRequests`). Hand off to… on a row shows
+     * recorded (see `sessionHandoffRequests`). Hand off… in the tray shows
      * only once `handoff` has hosts, so the default is never reached.
      */
     sessionHandoff: SessionHandoffStub;

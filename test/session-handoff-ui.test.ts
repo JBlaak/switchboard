@@ -75,18 +75,26 @@ function started({busy = false, running = true} = {}): RendererState {
 
 test('a local Claude session offers Hand off to… once there is a host', () => {
     /* When */
-    const buttons = rowButtons(session(), {hosts: 1});
+    const offered = canHandOffSession(session(), 1);
 
     /* Then */
-    assert.equal(buttons.handOff, true);
+    assert.equal(offered, true);
 });
 
 test('a local Claude session offers no hand-off without a host', () => {
     /* When */
-    const buttons = rowButtons(session(), {hosts: 0});
+    const offered = canHandOffSession(session(), 0);
 
     /* Then */
-    assert.equal(buttons.handOff, false);
+    assert.equal(offered, false);
+});
+
+test('a session list row never offers Hand off to…, even with a host', () => {
+    /* When */
+    const buttons = rowButtons(session());
+
+    /* Then */
+    assert.equal('handOff' in buttons, false);
 });
 
 test('a session read off disk as Claude is offered the hand-off too', () => {
@@ -102,10 +110,10 @@ test('a session read off disk as Claude is offered the hand-off too', () => {
 
 test('a terminal is never handed off', () => {
     /* When */
-    const buttons = rowButtons(session({type: 'terminal'}), {hosts: 1});
+    const offered = canHandOffSession(session({type: 'terminal'}), 1);
 
     /* Then */
-    assert.equal(buttons.handOff, false);
+    assert.equal(offered, false);
 });
 
 test('a session on an ssh remote is never handed off', () => {
@@ -113,10 +121,10 @@ test('a session on an ssh remote is never handed off', () => {
     const remote = session({projectPath: 'ssh://me@box/app', type: 'remote', remoteKind: 'claude'});
 
     /* When */
-    const buttons = rowButtons(remote, {hosts: 1});
+    const offered = canHandOffSession(remote, 1);
 
     /* Then */
-    assert.equal(buttons.handOff, false);
+    assert.equal(offered, false);
 });
 
 test('a session already on a VM is never handed off', () => {
@@ -124,10 +132,10 @@ test('a session already on a VM is never handed off', () => {
     const vm = session({projectPath: COPY, type: 'remote', remoteKind: 'claude'});
 
     /* When */
-    const buttons = rowButtons(vm, {vm: true, hosts: 1});
+    const offered = canHandOffSession(vm, 1);
 
     /* Then */
-    assert.equal(buttons.handOff, false);
+    assert.equal(offered, false);
 });
 
 test('a row under a remote project path is never handed off, whatever its type says', () => {
