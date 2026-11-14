@@ -1,12 +1,15 @@
 /**
- * Catching up on the VM sessions that archived themselves while the Mac was
- * away (#308).
+ * Catching up on the VM sessions that archived themselves on the VM (#308).
  *
  * A VM session keeps running with no Mac connected, and may call
  * `archive_session` then. The agent accepts the call itself, stops the session
- * when its turn ends and records it on the VM. This is the Mac's half: on
- * every connect to a host it asks for that record, archives each row it knows
- * the normal way, and tells the agent to forget what it handled.
+ * when its turn ends and records it on the VM. A merging VM's fix errand that
+ * finished is archived there the same way, Mac or no Mac (#442). This is the
+ * Mac's half: on every connect to a host, and on every read of a merging VM's
+ * lanes, it asks for that record, archives each row it knows the normal way,
+ * and tells the agent to forget what it handled. Without the lane reads, an
+ * errand that finished while the Mac was connected kept its row until the
+ * link next came up.
  *
  * "The normal way" is the same archiver the archive tool uses, without its
  * stop: the session already stopped on the VM. So the row moves to Archived,
@@ -51,17 +54,30 @@ export interface SelfArchiveCatchUpDeps {
 }
 
 export class SelfArchiveCatchUp {
+    /** Hosts a catch-up is under way for: a lane read during a connect's catch-up is skipped. */
+    private readonly running = new Set<string>();
+
     constructor(private readonly deps: SelfArchiveCatchUpDeps) {}
 
     /**
-     * A host's link came up: archive the rows of the sessions that archived
-     * themselves there meanwhile, then have the agent forget them. Never
-     * throws; a failure is logged, and the record stays for the next connect.
+     * Archive the rows of the sessions that archived themselves on this host,
+     * then have the agent forget them. Never throws; a failure is logged, and
+     * the record stays for the next catch-up.
      */
-    public async connected(connection: SelfArchiveSource): Promise<void> {
-        const {appVersion, archiver, log} = this.deps;
-        if (connection.agentVersion !== appVersion) return;
+    public async catchUp(connection: SelfArchiveSource): Promise<void> {
+        if (connection.agentVersion !== this.deps.appVersion) return;
+        const key = agentHostKey(connection.host);
+        if (this.running.has(key)) return;
+        this.running.add(key);
+        try {
+            await this.handle(connection);
+        } finally {
+            this.running.delete(key);
+        }
+    }
 
+    private async handle(connection: SelfArchiveSource): Promise<void> {
+        const {archiver, log} = this.deps;
         let sessions: SelfArchivedSession[];
         try {
             sessions = await connection.listSelfArchived();
@@ -92,7 +108,7 @@ export class SelfArchiveCatchUp {
             const done = await connection.forgetSelfArchived(handled);
             if (!done.ok) log.warn(`[self-archive] ${connection.target} could not forget: ${done.error ?? ''}`);
         } catch (err) {
-            // Listed again on the next connect; archiving a row twice is harmless.
+            // Listed again on the next catch-up; archiving a row twice is harmless.
             log.warn(`[self-archive] could not tell ${connection.target} to forget: ${(err as Error).message}`);
         }
     }
