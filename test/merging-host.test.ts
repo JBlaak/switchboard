@@ -5,6 +5,7 @@ import {
     MAC_HOST,
     actionRoute,
     awayBubble,
+    awayRef,
     awaySummary,
     broughtBack,
     dismissedSummary,
@@ -197,4 +198,15 @@ test('the view names the VM, and says when it has not answered', () => {
         vms: [DEVBOX],
         offered: DEVBOX,
     });
+});
+
+test('an away PR says which repository it came from, without the owner', () => {
+    /* Given */
+    const pr = {key: 'k', repository: 'JBlaak/switchboard', number: 461, title: 'Shelf', url: 'u'};
+
+    /* When */
+    const ref = awayRef(pr);
+
+    /* Then */
+    assert.equal(ref, 'switchboard #461');
 });
