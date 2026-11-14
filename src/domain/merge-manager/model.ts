@@ -208,6 +208,8 @@ export interface DecidingCheck {
     readonly name: string;
     /** `missing` for a required check that has not reported on the head commit yet. */
     readonly state: LaneCheck['state'] | 'missing';
+    /** When it started, for the head's time left; null while queued or missing, absent from an older VM. */
+    readonly startedAt?: number | null;
 }
 
 /** What the last read said of a landed PR beyond its stage, for the Merge manager's page (#439). */

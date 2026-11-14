@@ -11,8 +11,9 @@
  * - the toast a land brings: "Landed #432 · 2nd in switchboard's lane", with
  *   Undo, or why it did not land. A newer one replaces it.
  *
- * And its page (#439, ⌘⇧L): the selected row, what main answered for the
- * page besides the lanes (CI saved, the errands, the checkouts), the note
+ * And its page (#439, ⌘⇧L): the selected row and whether its side view is
+ * open, what main answered for the page besides the lanes (CI saved, the
+ * errands, the checkouts, the CI run times), the note
  * typed for each Try again and how each went, and a line of what came of
  * the last action.
  *
@@ -52,8 +53,10 @@ export type MergeManagerEvent =
     | {type: 'mergeManagerPageRequested'; key?: string}
     /** Esc or ⌘⇧L on the page. */
     | {type: 'mergeManagerPageClosed'}
-    /** A row chosen: a click, J/K. */
+    /** A row chosen: a click, J/K. It opens the side view. */
     | {type: 'mergeManagerRowSelected'; key: string | null}
+    /** Esc, its ×, or a click on the row it shows. */
+    | {type: 'mergeManagerDetailClosed'}
     /** What main answered for the page besides the lanes. */
     | {type: 'mergeManagerPageFactsLoaded'; facts: MergeManagerPageFacts}
     /** The note for a PR's next Try again, as typed. */
@@ -70,6 +73,8 @@ export type TryAgainPhase = {readonly phase: 'busy'} | {readonly phase: 'failed'
 export interface MergeManagerPageState {
     /** The selected row's key (`landedKey`); null for none yet. */
     readonly selected: string | null;
+    /** The selected row's side view is open; closed as the page opens, so the lanes have the width. */
+    readonly detailOpen: boolean;
     readonly facts: MergeManagerPageFacts | null;
     /** `landedKey` → the note typed for its next Try again. */
     readonly notes: IdRecord<string>;
@@ -107,7 +112,7 @@ export const initialMergeManagerState: MergeManagerSliceState = {
     busy: {},
     toast: null,
     nextToastId: 1,
-    page: {selected: null, facts: null, notes: {}, tryAgain: {}, notice: null},
+    page: {selected: null, detailOpen: false, facts: null, notes: {}, tryAgain: {}, notice: null},
 };
 
 export function mergeManagerReducer(state: MergeManagerSliceState, event: RendererEvent): MergeManagerSliceState {
@@ -139,11 +144,23 @@ export function mergeManagerReducer(state: MergeManagerSliceState, event: Render
 function pageReducer(page: MergeManagerPageState, event: RendererEvent): MergeManagerPageState {
     switch (event.type) {
         case 'mergeManagerPageRequested': {
+            // Open in Merge manager shows that PR's side view; ⌘⇧L keeps the page as it was.
             const selected = event.key ?? page.selected;
-            return page.notice === null && selected === page.selected ? page : {...page, notice: null, selected};
+            const detailOpen = event.key ? true : page.detailOpen;
+            return page.notice === null && selected === page.selected && detailOpen === page.detailOpen
+                ? page
+                : {...page, notice: null, selected, detailOpen};
         }
-        case 'mergeManagerRowSelected':
-            return page.selected === event.key ? page : {...page, selected: event.key};
+        case 'mergeManagerPageClosed':
+            return page.detailOpen ? {...page, detailOpen: false} : page;
+        case 'mergeManagerRowSelected': {
+            const detailOpen = event.key !== null;
+            return page.selected === event.key && page.detailOpen === detailOpen
+                ? page
+                : {...page, selected: event.key, detailOpen};
+        }
+        case 'mergeManagerDetailClosed':
+            return page.detailOpen ? {...page, detailOpen: false} : page;
         case 'mergeManagerPageFactsLoaded':
             return {...page, facts: event.facts};
         case 'mergeManagerTryAgainNoteTyped':

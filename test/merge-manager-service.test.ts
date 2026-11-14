@@ -597,7 +597,7 @@ test("other people's PRs in a queue lane are never shown, only mine", async () =
     assert.deepEqual(Object.keys(lanes[0]).sort(), ['approvalLostOnPush', 'kind', 'pullRequests', 'repository']);
 });
 
-test('a landed PR carries who approved it and how its required checks stand', async () => {
+test('a landed PR carries who approved it and how its required checks stand, and since when', async () => {
     /* Given */
     const {service} = setup({
         prs: {
@@ -616,6 +616,6 @@ test('a landed PR carries who approved it and how its required checks stand', as
     /* Then */
     assert.deepEqual(service.state().lanes[0].pullRequests[0].facts, {
         approvedBy: ['ana'],
-        checks: [{name: 'Unit tests', state: 'running'}],
+        checks: [{name: 'Unit tests', state: 'running', startedAt: NOW - MIN}],
     });
 });

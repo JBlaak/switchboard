@@ -90,7 +90,10 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
                 savedByRepository: {},
                 errands: [],
                 checkouts: {'movelab/connect': '/code/connect'},
+                runMs: {},
             }),
+            runTimes: async (repositories) =>
+                Object.fromEntries(repositories.map((repository) => [repository.toLowerCase(), 11 * 60_000])),
         },
         vms: () => [DEVBOX],
         link: (key) => (key === DEVBOX.key ? link : null),
@@ -339,7 +342,7 @@ test("the minute's read of a VM does not dial a link that gave up", async () => 
     service.stop();
 });
 
-test("the page shows the VM's errands and savings with the checkouts from here", async () => {
+test("the page shows the VM's errands and savings with the checkouts and the CI run times from here", async () => {
     /* Given */
     const {service} = setup({record: handedOff(DEVBOX, null, NOW)});
     service.start();
@@ -351,5 +354,6 @@ test("the page shows the VM's errands and savings with the checkouts from here",
     /* Then */
     assert.deepEqual(facts.checkouts, {'movelab/connect': '/code/connect'});
     assert.deepEqual(facts.errands, []);
+    assert.ok(Object.values(facts.runMs).every((ms) => ms === 11 * 60_000));
     service.stop();
 });
