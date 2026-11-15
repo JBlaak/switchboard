@@ -2,7 +2,8 @@
  * The Merge manager (#434): its lanes, Land and Unland from the renderer, and
  * Try again on a fix errand that gave up (#437), and what its page shows
  * besides the lanes (#439), and moving merging to a VM and back (#442),
- * all through the Merging host. Setting a PR aside and
+ * all through the Merging host, and Not landed (your open PRs), read on this
+ * Mac. Setting a PR aside and
  * linking its errand are main's own, from the lane runner and the fix errands
  * (#435, #437).
  */
@@ -30,6 +31,8 @@ export function registerMergeManagerHandlers(ipc: IpcRegistrar, app: Container):
     ipc.handle(INVOKE.mergeManagerTakeBack, () => app.mergingHost.takeBackAnyway());
     ipc.handle(INVOKE.mergeManagerReconnect, () => app.mergingHost.reconnect());
     ipc.handle(INVOKE.mergeManagerDismissAway, () => app.mergingHost.dismissSummary());
+    // Not landed: always this Mac's own read, wherever merging runs.
+    ipc.handle(INVOKE.mergeManagerNotLanded, () => app.notLanded.read());
 }
 
 function asRepository(repository: unknown): string {

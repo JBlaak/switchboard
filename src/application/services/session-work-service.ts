@@ -86,6 +86,7 @@ export interface SessionWorkServiceDeps {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | 'openPullRequests'
         | LaneWrites
         | LaneMergeChecks
         | 'pullRequestForBranch'

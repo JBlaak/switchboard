@@ -6,11 +6,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    OPEN_SEARCH,
     QUEUED_SEARCH,
     httpStatus,
     laneQuery,
     toBranchUpdateFailure,
     toLaneRead,
+    toOpenPullRequests,
     toQueuedPullRequests,
     toTrunkRules,
     toWorkflowFiles,
@@ -421,4 +423,146 @@ test('gh is asked the lane query with the owner and name as variables', async ()
     assert.deepEqual(asked[0].slice(-4), ['-f', 'owner=MoveLab-Studio', '-f', 'name=Connect']);
     assert.match(asked[0][3], /pr2450: pullRequest/);
     assert.doesNotMatch(asked[0][3], /pr-1/);
+});
+
+test('the open search finds all my open PRs newest first, and maps each to what Not landed shows', () => {
+    /* Given */
+    const data = {
+        search: {
+            nodes: [
+                {
+                    number: 2450,
+                    title: 'Add equipment categories',
+                    url: 'https://github.com/MoveLab-Studio/Connect/pull/2450',
+                    isDraft: false,
+                    createdAt: '2026-11-14T09:30:00Z',
+                    headRefName: '2446-equipment',
+                    reviewDecision: 'CHANGES_REQUESTED',
+                    mergeable: 'CONFLICTING',
+                    repository: {nameWithOwner: 'MoveLab-Studio/Connect'},
+                    reviewRequests: {
+                        nodes: [
+                            {requestedReviewer: {login: 'ben'}},
+                            {requestedReviewer: {combinedSlug: 'movelab/web'}},
+                        ],
+                    },
+                    latestReviews: {
+                        nodes: [
+                            {state: 'CHANGES_REQUESTED', author: {login: 'mkolkman'}},
+                            {state: 'APPROVED', author: {login: 'peter'}},
+                            {state: 'COMMENTED', author: {login: 'x'}},
+                        ],
+                    },
+                    commits: {nodes: [{commit: {statusCheckRollup: {state: 'ERROR'}}}]},
+                },
+                {},
+                {
+                    number: 7,
+                    title: 'Draft idea',
+                    url: '',
+                    isDraft: true,
+                    createdAt: '2026-11-13T08:00:00Z',
+                    headRefName: 'idea',
+                    reviewDecision: null,
+                    mergeable: 'UNKNOWN',
+                    repository: {nameWithOwner: 'JBlaak/switchboard'},
+                    reviewRequests: {nodes: []},
+                    latestReviews: {nodes: []},
+                    commits: {nodes: [{commit: {statusCheckRollup: null}}]},
+                },
+            ],
+        },
+    };
+
+    /* When */
+    const found = toOpenPullRequests(data);
+
+    /* Then */
+    assert.equal(OPEN_SEARCH, 'is:pr is:open author:@me archived:false sort:created-desc');
+    assert.deepEqual(found, [
+        {
+            repository: 'MoveLab-Studio/Connect',
+            number: 2450,
+            title: 'Add equipment categories',
+            url: 'https://github.com/MoveLab-Studio/Connect/pull/2450',
+            isDraft: false,
+            createdAt: Date.parse('2026-11-14T09:30:00Z'),
+            headRef: '2446-equipment',
+            reviewDecision: 'CHANGES_REQUESTED',
+            mergeable: 'CONFLICTING',
+            checks: 'failure',
+            reviewRequested: ['ben', 'movelab/web'],
+            changesRequestedBy: ['mkolkman'],
+            approvedBy: ['peter'],
+        },
+        {
+            repository: 'JBlaak/switchboard',
+            number: 7,
+            title: 'Draft idea',
+            url: 'https://github.com/JBlaak/switchboard/pull/7',
+            isDraft: true,
+            createdAt: Date.parse('2026-11-13T08:00:00Z'),
+            headRef: 'idea',
+            reviewDecision: null,
+            mergeable: 'UNKNOWN',
+            checks: null,
+            reviewRequested: [],
+            changesRequestedBy: [],
+            approvedBy: [],
+        },
+    ]);
+    assert.equal(toOpenPullRequests({}), null);
+});
+
+test("an open PR's rolled-up checks read as green, red or still running", () => {
+    /* Given */
+    const withRollup = (state: string) => ({
+        search: {
+            nodes: [
+                {
+                    number: 1,
+                    repository: {nameWithOwner: 'JBlaak/switchboard'},
+                    commits: {nodes: [{commit: {statusCheckRollup: {state}}}]},
+                },
+            ],
+        },
+    });
+
+    /* When */
+    const checks = ['SUCCESS', 'FAILURE', 'ERROR', 'PENDING', 'EXPECTED'].map(
+        (state) => toOpenPullRequests(withRollup(state))?.[0]?.checks,
+    );
+
+    /* Then */
+    assert.deepEqual(checks, ['success', 'failure', 'failure', 'pending', 'pending']);
+});
+
+test('the open PRs are read with one search, and none when gh fails', async () => {
+    /* Given */
+    const asked: string[][] = [];
+    const answers: unknown[] = [
+        {data: {search: {nodes: [{number: 3, repository: {nameWithOwner: 'JBlaak/switchboard'}}]}}},
+    ];
+    const gh = new GhCli({
+        run: async (args) => {
+            asked.push([...args]);
+            const body = answers.shift();
+            return body
+                ? {missing: false, code: 0, stdout: JSON.stringify(body), stderr: ''}
+                : {missing: false, code: 1, stdout: '', stderr: 'gh: Bad credentials (HTTP 401)'};
+        },
+    });
+
+    /* When */
+    const read = await gh.openPullRequests();
+    const failed = await gh.openPullRequests();
+
+    /* Then */
+    assert.equal(asked.length, 2);
+    assert.ok(asked[0].includes(`search=${OPEN_SEARCH}`));
+    assert.deepEqual(
+        read?.map((pr) => `${pr.repository}#${pr.number}`),
+        ['JBlaak/switchboard#3'],
+    );
+    assert.equal(failed, null);
 });

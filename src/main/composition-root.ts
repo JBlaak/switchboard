@@ -136,6 +136,7 @@ import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
 import {SqliteLaneSavings} from '../infrastructure/sqlite/lane-savings';
 import {MergeManagerPageService} from '../application/services/merge-manager-page-service';
+import {NotLandedService} from '../application/services/not-landed-service';
 import {GitTestRebase} from '../infrastructure/git/git-test-rebase';
 import {LocalGitRunner} from '../infrastructure/git/git-runner';
 import {LaneRunner} from '../application/services/lane-runner';
@@ -274,6 +275,8 @@ export interface Container {
     readonly fixErrands: FixErrandService;
     /** What the Merge manager's page shows besides the lanes (#439). */
     readonly mergeManagerPage: MergeManagerPageService;
+    /** The Merge manager's Not landed: your open PRs in the local projects' repositories, always read on this Mac. */
+    readonly notLanded: NotLandedService;
     /** Where merging runs, this Mac or a VM (#442): what the renderer's Merge manager calls go through. */
     readonly mergingHost: MergingHostService;
     readonly askRoute: AskRouteService<AskPatchResult>;
@@ -1320,6 +1323,23 @@ export function buildContainer(): Container {
         ciRunDurations: (repository) => github.ciRunDurations(repository),
         clock,
     });
+    // Not landed: your open PRs in the repositories the local projects check
+    // out, by origin like `checkoutOf`. Read here even when merging is on a VM.
+    const notLanded = new NotLandedService({
+        github,
+        knownRepositories: async () => {
+            const known = new Map<string, string>();
+            for (const project of projects.list(false)) {
+                if (project.remote || isRemoteProjectPath(project.projectPath)) continue;
+                const root = await workspace.mainCheckout(project.projectPath);
+                const origin = root ? await git.originUrl(root) : null;
+                const repository = origin ? gitHubRepository(origin) : '';
+                if (repository) known.set(repository.toLowerCase(), repository);
+            }
+            return [...known.values()];
+        },
+        clock,
+    });
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
         fixErrands.turnEnded(sessionIds, archiving, currentId),
     );
@@ -1741,6 +1761,7 @@ export function buildContainer(): Container {
         mergeManager,
         fixErrands,
         mergeManagerPage,
+        notLanded,
         mergingHost,
         askRoute,
         quickAskHotkey,
