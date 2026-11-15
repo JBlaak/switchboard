@@ -111,6 +111,10 @@ fun SessionScreen(
     onArchive: (from: Offset) -> Unit,
     onBack: () -> Unit,
     view: SessionView,
+    /** Land it, Unland, and a tap on a draft's faded Land it with why it doesn't land. */
+    onLand: () -> Unit = {},
+    onUnland: () -> Unit = {},
+    onDraftTapped: (hint: String) -> Unit = {},
     onToggleView: () -> Unit,
     terminal: @Composable (Modifier) -> Unit,
     chat: @Composable (Modifier) -> Unit,
@@ -119,6 +123,7 @@ fun SessionScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
             SessionTopBar(state, view, onToggleView, onArchive, onBack)
+            state.land?.let { land -> LandBar(land, state.landing, onLand, onUnland, onDraftTapped) }
             Box(Modifier.weight(1f)) {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {

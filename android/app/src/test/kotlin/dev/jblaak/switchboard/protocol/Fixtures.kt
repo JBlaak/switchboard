@@ -67,6 +67,9 @@ internal val clientFixtures: List<Pair<String, ClientMessage>> = listOf(
     "grill-cancel-queue" to ClientMessage.GrillCancelQueue(sessionId = "s-1", roundId = "b-41"),
     "chat-subscribe" to ClientMessage.ChatSubscribe(sessionId = "s-1"),
     "chat-unsubscribe" to ClientMessage.ChatUnsubscribe(sessionId = "s-1"),
+    "land-check" to ClientMessage.LandCheck(sessionId = "s-1"),
+    "land" to ClientMessage.Land(sessionId = "s-1"),
+    "unland" to ClientMessage.Unland(sessionId = "s-1"),
 )
 
 private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
@@ -229,6 +232,34 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     "archive-result" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = true, error = null),
     "archive-result-error" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = false, error = "Could not stop the session"),
     "archived" to ServerMessage.Archived(sessionId = "s-1"),
+    "land-result" to ServerMessage.LandResult(
+        sessionId = "s-1",
+        action = LandAction.Land,
+        ok = true,
+        text = "Landed #432 · 2nd in switchboard's lane",
+    ),
+    "land-result-error" to ServerMessage.LandResult(
+        sessionId = "s-1",
+        action = LandAction.Unland,
+        ok = false,
+        error = "Could not unland #432: it is not landed",
+    ),
+    "sessions-land" to ServerMessage.Sessions(
+        sessions = listOf(
+            PhoneSession(
+                id = "s-1",
+                name = "Phone landing",
+                project = "switchboard",
+                projectPath = SWITCHBOARD_PATH,
+                remote = null,
+                state = SessionState.Idle,
+                waiting = null,
+                owner = TerminalOwner.Mac,
+                changedAt = 1792756980000,
+                land = PhoneLand(repository = "jblaak/switchboard", number = 432, offer = LandOffer.Landed, label = "Landed · 2nd in switchboard", dot = PrDot.Green),
+            ),
+        ),
+    ),
     "voice-status-ready" to ServerMessage.VoiceStatusChanged(VoiceStatus.Ready),
     "voice-status-no-whisper" to ServerMessage.VoiceStatusChanged(VoiceStatus.NoWhisper),
     "voice-status-preparing" to ServerMessage.VoiceStatusChanged(VoiceStatus.Preparing(progress = 0.43)),

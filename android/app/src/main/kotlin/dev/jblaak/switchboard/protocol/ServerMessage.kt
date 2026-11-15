@@ -113,6 +113,20 @@ sealed interface ServerMessage {
         val error: String? = null,
     ) : ServerMessage
 
+    /**
+     * What came of this phone's [ClientMessage.Land] or [ClientMessage.Unland], in the Mac's toast words: [text] on a
+     * land ("Landed #432 · 2nd in switchboard's lane"), none on an unland; [error] when either failed.
+     */
+    @Serializable
+    @SerialName("land-result")
+    data class LandResult(
+        val sessionId: String,
+        val action: LandAction,
+        val ok: Boolean,
+        val text: String? = null,
+        val error: String? = null,
+    ) : ServerMessage
+
     /** Archived on the Mac or from another phone: an open screen of it closes. */
     @Serializable
     @SerialName("archived")
@@ -177,4 +191,13 @@ sealed interface ServerMessage {
     @Serializable
     @SerialName("revoked")
     data object Revoked : ServerMessage
+}
+
+@Serializable
+enum class LandAction {
+    @SerialName("land")
+    Land,
+
+    @SerialName("unland")
+    Unland,
 }

@@ -67,7 +67,10 @@ export function parseClientMessage(text: string): ClientMessage | null {
         case 'use-here':
         case 'archive':
         case 'chat-subscribe':
-        case 'chat-unsubscribe': {
+        case 'chat-unsubscribe':
+        case 'land-check':
+        case 'land':
+        case 'unland': {
             if (!isText(raw.sessionId, MAX_ID)) return null;
             return {type: raw.type, sessionId: raw.sessionId};
         }

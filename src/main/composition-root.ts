@@ -204,6 +204,7 @@ import type {AgentHosts} from '../application/services/agent-hosts';
 import type {ProjectHandoff} from '../application/services/project-handoff';
 import type {SessionHandoff} from '../application/services/session-handoff';
 import type {SessionBringBack} from '../application/services/session-bring-back';
+import type {LinkedPr} from '../domain/session/links';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -1633,6 +1634,20 @@ export function buildContainer(): Container {
         settings,
         // Which sessions are errands, so the phones keep them apart (#432).
         errands: {mergeManager: () => mergeManager.state(), queue: () => queueErrands.errands()},
+        // Land it from a phone (#436): the session's PRs as the tray reads them, through the Merging host.
+        landing: {
+            pullRequests: async (sessionId) =>
+                (await sessionLinks.links(sessionId)).filter((link): link is LinkedPr => link.kind === 'pr'),
+            state: () => mergingHost?.state() ?? mergeManager.state(),
+            land: (repository, number) =>
+                mergingHost
+                    ? mergingHost.land(repository, number)
+                    : Promise.resolve({ok: false, reason: 'the Merge manager is not running yet'}),
+            unland: (repository, number) =>
+                mergingHost
+                    ? mergingHost.unland(repository, number)
+                    : Promise.resolve({ok: false, reason: 'the Merge manager is not running yet'}),
+        },
         renderer,
         // Hold-to-talk: Whisper's model is fetched into user data on first use.
         voice: {

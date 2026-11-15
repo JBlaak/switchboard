@@ -160,4 +160,22 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("chat-unsubscribe")
     data class ChatUnsubscribe(val sessionId: String) : ClientMessage
+
+    /**
+     * Read the session's pull requests from GitHub now, so its [PhoneSession.land] knows a draft from a ready PR; the
+     * next `sessions` carries it. Sent when the session's screen opens. Only to a Mac that named [MacFeatures.LAND].
+     */
+    @Serializable
+    @SerialName("land-check")
+    data class LandCheck(val sessionId: String) : ClientMessage
+
+    /** Land it: hand the session's PR to the Merge manager, which merges it once approved and green. */
+    @Serializable
+    @SerialName("land")
+    data class Land(val sessionId: String) : ClientMessage
+
+    /** Take the session's landed PR back out of its lane. */
+    @Serializable
+    @SerialName("unland")
+    data class Unland(val sessionId: String) : ClientMessage
 }

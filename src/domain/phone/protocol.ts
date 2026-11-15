@@ -35,6 +35,8 @@ export const PROTOCOL_VERSION = 1;
 export const FEATURES = {
     /** `chat-subscribe` and `chat-unsubscribe`, answered with `chat` and `chat-append`. */
     chat: 'chat',
+    /** `land-check`, `land` and `unland`, answered with a session's `land` and `land-result`. */
+    land: 'land',
 } as const;
 
 /** The Bonjour service type the Mac advertises. */
@@ -86,6 +88,33 @@ export interface PhoneSession {
      * and lists the errand as any other session.
      */
     errand?: PhoneErrand;
+    /**
+     * What Land it shows for the session's pull request, as the Mac's session
+     * header does (#436): left out when there is nothing to show (no PR, or a
+     * teammate's that is not landed). Only from a Mac that names FEATURES.land.
+     */
+    land?: PhoneLand;
+}
+
+/**
+ * A session's pull request as Land it offers it: `land` on your own open PR,
+ * `draft` (disabled, `label` is why) on a draft, `landed` once it is in its
+ * lane (`label` is its stage: "Landed · 2nd in switchboard", "Merged").
+ * Until a `land-check` has read the PR from GitHub, the session's newest PR
+ * from its transcript is offered, and the Mac judges it when it is pressed.
+ */
+export interface PhoneLand {
+    /** `owner/repo`. */
+    repository: string;
+    number: number;
+    offer: 'land' | 'draft' | 'landed';
+    /** "Land it", the draft's hint, or the landed stage. */
+    label: string;
+    /**
+     * How the PR is doing, as the sidebar's `#1309` chip shows it: its checks
+     * (green, amber, red) or merged. Left out until GitHub has said.
+     */
+    dot?: 'merged' | 'green' | 'amber' | 'red';
 }
 
 /**
@@ -242,7 +271,17 @@ export type ClientMessage =
      * connection ends. Only to a Mac whose `welcome` named FEATURES.chat.
      */
     | {type: 'chat-subscribe'; sessionId: string}
-    | {type: 'chat-unsubscribe'; sessionId: string};
+    | {type: 'chat-unsubscribe'; sessionId: string}
+    /**
+     * Read the session's pull requests from GitHub now, so its `land` says
+     * whether the PR is a draft and yours; the next `sessions` carries it.
+     * Sent when the session's screen opens. Only to a Mac that named FEATURES.land.
+     */
+    | {type: 'land-check'; sessionId: string}
+    /** Land it: hand the session's PR, as its `land` names it, to the Merge manager. Answered with `land-result`. */
+    | {type: 'land'; sessionId: string}
+    /** Take the session's landed PR back out of its lane. Answered with `land-result`. */
+    | {type: 'unland'; sessionId: string};
 
 // ── Mac → Phone ──
 
@@ -324,6 +363,20 @@ export type ServerMessage =
     | {type: 'chat'; sessionId: string; available: boolean; messages: ChatMessage[]}
     /** Messages the transcript gained since the last `chat` or `chat-append`, to add at the end. */
     | {type: 'chat-append'; sessionId: string; messages: ChatMessage[]}
+    /**
+     * What came of this phone's `land` or `unland`, as the Mac's toast says
+     * it: `text` on a land ("Landed #432 · 2nd in switchboard's lane"), none
+     * on an unland; `error` when either failed ("Could not land #432: …").
+     * The session's `land` follows in the next `sessions`.
+     */
+    | {
+          type: 'land-result';
+          sessionId: string;
+          action: 'land' | 'unland';
+          ok: boolean;
+          text?: string;
+          error?: string;
+      }
     /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
     | {type: 'revoked'};
 

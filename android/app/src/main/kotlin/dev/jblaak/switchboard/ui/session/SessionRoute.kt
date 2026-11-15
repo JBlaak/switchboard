@@ -60,6 +60,11 @@ fun SessionRoute(
     LaunchedEffect(state.archivedElsewhere) {
         if (state.archivedElsewhere) onBack()
     }
+    LaunchedEffect(model) {
+        model.landResults.collect { note ->
+            Toast.makeText(context, note.text, if (note.failed) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        }
+    }
     LaunchedEffect(view) {
         if (view == SessionView.Chat) chat.show() else chat.hide()
     }
@@ -87,6 +92,13 @@ fun SessionRoute(
         },
         onBack = onBack,
         view = view,
+        onLand = {
+            if (!model.land()) Toast.makeText(context, R.string.session_archive_offline, Toast.LENGTH_SHORT).show()
+        },
+        onUnland = {
+            if (!model.unland()) Toast.makeText(context, R.string.session_archive_offline, Toast.LENGTH_SHORT).show()
+        },
+        onDraftTapped = { hint -> Toast.makeText(context, hint, Toast.LENGTH_SHORT).show() },
         onToggleView = viewChoice::toggle,
         terminal = { modifier ->
             TerminalView(
