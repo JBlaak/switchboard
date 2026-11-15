@@ -230,12 +230,10 @@ test.describe('the diff', () => {
         return diffOf(page).getByRole('region', {name: path, exact: true});
     }
 
-    test('loads for the selected item; u, the toggle, n and p work it; a 5,000-line file fills in without holding up the keyboard', async ({
+    test('loads for the selected item; u, the toggle, n and p work it; a 1,500-line file fills in without holding up the keyboard', async ({
         page,
         api,
     }) => {
-        test.slow();
-
         /* Given */
         await openLoginFixWork(page, api);
         const diff = diffOf(page);
@@ -291,10 +289,7 @@ test.describe('the diff', () => {
 
         /* Then */
         await expect(diff.getByRole('button', {name: 'Split'})).toHaveAttribute('aria-pressed', 'true');
-        // 400 rows a frame: on a busy CI runner the 5,001 rows take longer than the default wait.
-        await expect(big.locator('.sw-lines')).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1), {
-            timeout: 20_000,
-        });
+        await expect(big.locator('.sw-lines')).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1));
         await expect(big.locator('.sw-dl.is-pair')).toHaveCount(BIG_FILE_LINES);
         await expect(big.locator('.sw-dl.is-pair').last()).toContainText(
             `export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`,

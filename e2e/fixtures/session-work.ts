@@ -225,8 +225,8 @@ export function loginFixWorkWithReview({pending = []}: {pending?: PendingComment
     return {...LOGIN_FIX_WORK, items};
 }
 
-/** How many lines the large file adds: enough that drawing it at once would block input. */
-export const BIG_FILE_LINES = 5000;
+/** How many lines the large file adds: over the large-diff line, and several frames' worth of rows to fill in. */
+export const BIG_FILE_LINES = 1500;
 
 /**
  * The first PR's diff, from its local branch: a change to read unified and

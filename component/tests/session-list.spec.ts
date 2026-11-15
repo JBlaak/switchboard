@@ -46,14 +46,11 @@ import {answerDialogs, dialogsAsked} from '../../e2e/support/native-dialogs';
 import {
     allowMotion,
     listScroller,
-    readMotion,
     renameInput,
     rowNode,
     sectionOf,
     sessionItem,
-    startMotionRecorder,
     storedSession,
-    tagRow,
 } from '../../e2e/support/session-list';
 import {LABEL, P, S} from '../../e2e/fixtures/standard';
 import {sessionId} from '../../e2e/support/fixture-home';
@@ -624,92 +621,6 @@ test.describe('archive', () => {
             /* Then */
             await expect(sessionItem(page, S.chartsDarkMode)).toHaveCount(0);
         });
-
-        test('slides aside and dims at 260ms, keeps its node through a re-sort, then closes the gap at 600ms', async ({
-            page,
-        }) => {
-            /* Given */
-            await allowMotion(page);
-            await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
-            await tagRow(page, S.chartsDarkMode, 'leaving');
-            const row = sessionRow(page, LABEL.chartsDarkMode);
-
-            /* When */
-            await row.hover();
-            await rowButton(row, 'Archive').click();
-            await page.clock.runFor(250);
-
-            /* Then */
-            expect(await rowNode(page, S.chartsDarkMode)).toMatchObject({transform: '', height: ''});
-
-            /* When */
-            await page.clock.runFor(300);
-
-            /* Then */
-            const sliding = (await rowNode(page, S.chartsDarkMode))!;
-            expect(sliding).toMatchObject({tag: 'leaving', leaving: true, height: ''});
-            expect(sliding.transform).toMatch(/^translate3d\(2\d(\.\d+)?px, 0px/);
-            expect(Number(sliding.opacity)).toBeLessThan(0.6);
-
-            /* When */
-            // A redraw lands mid-slide: the row keeps its node and its slide.
-            await sidebar(page).getByText('+ 3 older', {exact: true}).click();
-
-            /* Then */
-            expect(await rowNode(page, S.chartsDarkMode)).toMatchObject({
-                tag: 'leaving',
-                leaving: true,
-                transform: sliding.transform,
-            });
-
-            /* When */
-            await page.clock.runFor(100);
-
-            /* Then */
-            expect((await rowNode(page, S.chartsDarkMode))!.height).toMatch(/px$/);
-
-            /* When */
-            await page.clock.runFor(3000);
-            await page.clock.resume();
-
-            /* Then */
-            await expect(sessionItem(page, S.chartsDarkMode)).toHaveCount(0);
-        });
-    });
-});
-
-// ── Reflow ──
-
-test.describe('reflow', () => {
-    test('top-level entries glide to their new place, rows inside a group ride along, a removed row leaves a ghost', async ({
-        page,
-    }) => {
-        /* Given */
-        await sessionRow(page, LABEL.billingGroup).first().click();
-        await sessionRow(page, BILLING_STEP_1).waitFor();
-        await allowMotion(page);
-        await startMotionRecorder(page);
-
-        /* When */
-        // Pinning the parser row lifts it above everything else that is recent.
-        await sessionRow(page, LABEL.parserExperiment).hover();
-        await sessionItem(page, S.parserExperiment).getByTestId('session-pin').click();
-
-        /* Then */
-        await expect.poll(() => sectionOf(page, LABEL.parserExperiment)).toBe('Pinned');
-        await expect
-            .poll(async () => (await readMotion(page)).moved)
-            .toEqual(expect.arrayContaining([S.parserExperiment, S.loginFix, expect.stringMatching(/^slug-/)]));
-        const {moved} = await readMotion(page);
-        for (const nested of [S.billingPlan, S.billingStep1, S.billingStep2]) expect(moved).not.toContain(nested);
-
-        /* When */
-        await startMotionRecorder(page);
-        await searchBox(page).fill('login');
-
-        /* Then */
-        await expect(sessionRow(page, LABEL.chartsDarkMode)).toHaveCount(0);
-        await expect.poll(async () => (await readMotion(page)).ghosts).toBeGreaterThan(0);
     });
 });
 

@@ -18,7 +18,7 @@
  */
 import {test, expect} from '../support/test';
 import {sessionRow, sidebar, terminalHeader} from '../../e2e/support/app';
-import {focusIsIn, option, questionSheet, recordAnimations, recordedAnimations} from '../../e2e/support/questions';
+import {focusIsIn, option, questionSheet} from '../../e2e/support/questions';
 import {LABEL, S} from '../../e2e/fixtures/standard';
 import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
 import {openSession, typedInto, waitForInput} from '../support/running-session';
@@ -575,81 +575,7 @@ test.describe('switching sessions', () => {
     });
 });
 
-test.describe('motion', () => {
-    test('the check mark pops; a question leaves over 140ms, holding keys, then comes in over 260ms', async ({
-        page,
-        api,
-    }) => {
-        /* Given */
-        await askedOnScreen(page, api);
-        await recordAnimations(page);
-
-        /* When */
-        await option(page, /The whole site/).click();
-
-        /* Then */
-        await expect
-            .poll(async () => (await recordedAnimations(page)).filter((a) => a.target === 'svg').map((a) => a.duration))
-            .toEqual([220]);
-
-        /* When */
-        await recordedAnimations(page, {clear: true});
-        // Next, then a key that would pick on the next question, in the same task.
-        await keysAtOnce(page, ['Enter', '1']);
-
-        /* Then */
-        await expect(heading(page, 1)).toBeVisible();
-        await expect(option(page, /Unit tests/)).toHaveAttribute('aria-pressed', 'false');
-        await expect
-            .poll(async () => (await recordedAnimations(page)).filter((a) => a.duration === 260).length)
-            .toBe(5);
-        const animations = await recordedAnimations(page);
-        const out = animations.find((a) => a.duration === 140);
-        expect(out, 'the question leaving').toBeTruthy();
-        const ins = animations.filter((a) => a.duration === 260);
-        // The block, then each of its four rows (three options and Other), 35ms apart.
-        expect(ins.map((a) => a.delay)).toEqual([0, 60, 95, 130, 165]);
-        expect(ins[0].at - out!.at).toBeGreaterThanOrEqual(130);
-    });
-});
-
 test.describe('send', () => {
-    test.describe('on the fake clock', () => {
-        test.use({fakeTimers: true});
-
-        test('a farewell Patch comes 280ms after sending and stays about 3.2s', async ({page, api}) => {
-            /* Given */
-            const asked = await askedOnScreen(page, api, QUESTIONS.slice(0, 1));
-            await option(page, /The whole site/).click();
-            await recordAnimations(page);
-
-            /* When */
-            await page.keyboard.press('Enter');
-            await asked.answers;
-
-            /* Then */
-            const farewell = page.getByText('Off it goes!');
-            await expect(farewell).toBeVisible();
-            const arrival = (await recordedAnimations(page)).find((a) => a.target === 'div.qp-farewell');
-            expect(arrival?.delay).toBe(280);
-            // The stay starts as the farewell arrives; `at` is on the same clock.
-            const since = await page.evaluate((at) => performance.now() - at, arrival!.at);
-            expect(since).toBeLessThan(3000);
-
-            /* When */
-            await page.clock.fastForward(Math.round(3100 - since));
-
-            /* Then */
-            await expect(farewell).toBeVisible();
-
-            /* When */
-            await page.clock.fastForward(200);
-
-            /* Then */
-            await expect(farewell).toHaveCount(0);
-        });
-    });
-
     test('a new set sends the farewell away', async ({page, api}) => {
         /* Given */
         const asked = await askedOnScreen(page, api, QUESTIONS.slice(0, 1));

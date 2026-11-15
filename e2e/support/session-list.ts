@@ -98,96 +98,20 @@ export async function allowMotion(page: Page): Promise<void> {
     await expect.poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(false);
 }
 
-/** What the recorder saw since `startMotionRecorder`. */
-export interface MotionRecord {
-    /** Session ids or element ids whose inline transform was set to a translation. */
-    moved: string[];
-    /** Session ids or element ids whose inline opacity was set below 1. */
-    faded: string[];
-    /** How many ghosts of removed entries were put up. */
-    ghosts: number;
-    /** Particles per confetti burst, in order. */
-    confetti: number[];
-}
-
-/**
- * Start watching the list's motion. Idempotent per page load; call
- * `readMotion` to see what happened, `resetMotion` to start over.
- */
-export async function startMotionRecorder(page: Page): Promise<void> {
-    await page.evaluate(() => {
-        type Rec = {moved: Set<string>; faded: Set<string>; ghosts: number; confetti: number[]};
-        const w = window as unknown as {__motion?: Rec; __motionObserver?: MutationObserver};
-        w.__motion = {moved: new Set(), faded: new Set(), ghosts: 0, confetti: []};
-        if (w.__motionObserver) return;
-        const name = (el: HTMLElement): string => el.dataset.sessionId ?? el.id;
-        const observer = new MutationObserver((mutations) => {
-            const rec = w.__motion!;
-            for (const m of mutations) {
-                if (m.type === 'attributes' && m.target instanceof HTMLElement) {
-                    const el = m.target;
-                    if (el.classList.contains('motion-ghost') || !el.closest('#sidebar-content')) continue;
-                    const shift = /translate3d\(([-\d.]+)px, ([-\d.]+)px/.exec(el.style.transform);
-                    if (shift && Math.abs(Number(shift[1])) + Math.abs(Number(shift[2])) > 0.01)
-                        rec.moved.add(name(el));
-                    if (el.style.opacity !== '' && Number(el.style.opacity) < 1) rec.faded.add(name(el));
-                }
-                if (m.type === 'childList') {
-                    for (const node of m.addedNodes) {
-                        if (!(node instanceof HTMLElement)) continue;
-                        if (node.classList.contains('motion-ghost')) rec.ghosts++;
-                        if (node.classList.contains('confetti')) rec.confetti.push(node.children.length);
-                    }
-                }
-            }
-        });
-        observer.observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['style']});
-        w.__motionObserver = observer;
-    });
-}
-
-export async function readMotion(page: Page): Promise<MotionRecord> {
-    return await page.evaluate(() => {
-        const rec = (
-            window as unknown as {
-                __motion: {moved: Set<string>; faded: Set<string>; ghosts: number; confetti: number[]};
-            }
-        ).__motion;
-        return {moved: [...rec.moved], faded: [...rec.faded], ghosts: rec.ghosts, confetti: [...rec.confetti]};
-    });
-}
-
-/**
- * Tag the DOM node of a row, so "the same row" later means the same node and
- * not one that merely looks alike after a remove and re-add.
- */
-export async function tagRow(page: Page, sessionId: string, tag: string): Promise<void> {
-    await page.evaluate(
-        ({id, tag}) => {
-            const row = document.querySelector(`[data-session-id="${id}"]`) as (HTMLElement & {e2eTag?: string}) | null;
-            if (!row) throw new Error(`no row for ${id}`);
-            row.e2eTag = tag;
-        },
-        {id: sessionId, tag},
-    );
-}
-
-/** The tag on the node now holding the row, and that node's inline motion. */
+/** A row's inline motion, and whether it is on its way out. */
 export async function rowNode(
     page: Page,
     sessionId: string,
 ): Promise<{
-    tag?: string;
     transform: string;
     opacity: string;
     height: string;
     leaving: boolean;
 } | null> {
     return await page.evaluate((id) => {
-        const row = document.querySelector(`[data-session-id="${id}"]`) as (HTMLElement & {e2eTag?: string}) | null;
+        const row = document.querySelector<HTMLElement>(`[data-session-id="${id}"]`);
         if (!row) return null;
         return {
-            tag: row.e2eTag,
             transform: row.style.transform,
             opacity: row.style.opacity,
             height: row.style.height,
