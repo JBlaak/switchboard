@@ -92,12 +92,14 @@
         transform-origin: 0 50%;
     }
 
+    /* The paper tail (below), curving back and down to Patch on its left. */
     #placeholder:not(:has(.placeholder-managers)) .placeholder-family + .placeholder-patch .patch-bubble::after {
-        left: -5px;
-        top: 13px;
-        bottom: auto;
+        left: -15px;
+        top: 12px;
+        width: 18px;
+        height: 18px;
         margin: 0;
-        box-shadow: -1px 1px 0 0 var(--patch-bubble-edge);
+        clip-path: path('M18 0 V13 C12 12 6 13 1 17 C6 11 9 5 18 0 Z');
     }
 }
 
@@ -152,8 +154,8 @@
     left: calc(50% + 250px);
 }
 
-/* What merged lately (#440), over the Merge manager's cap, in Patch's
-   bubble's colours. */
+/* What merged lately (#440), over the Merge manager's cap, on the same paper
+   as Patch's bubble (below). */
 .placeholder-manager-bubble {
     position: absolute;
     left: 50%;
@@ -161,11 +163,13 @@
     z-index: 1;
     transform: translate(-50%, -100%);
     padding: 6px 11px;
-    border-radius: 14px;
-    background: var(--sb-bg-raised);
-    box-shadow: var(--sb-edge), var(--sb-lift);
-    font: 600 12.5px/1.3 var(--sb-font-head);
-    color: var(--sb-text-strong);
+    border-radius: 14px 15px 13px 14px;
+    background: var(--sb-paper);
+    box-shadow: inset 0 0 0 1px var(--sb-paper-edge);
+    filter: drop-shadow(0 2px 0 var(--sb-paper-drop));
+    rotate: 1deg;
+    font: 700 12.5px/1.3 var(--sb-font-head);
+    color: var(--sb-paper-ink);
     white-space: nowrap;
     pointer-events: none;
 }
@@ -252,10 +256,56 @@
     }
 }
 
+/* Patch talks on paper: the warm off-white of the Issue manager's note, with
+   ink text, a hand-drawn curved tail and a slight tilt, so the line reads as
+   part of the drawing rather than as the app's own chrome. The paper keeps its
+   colour in both themes; in the light theme an edge keeps it off the white.
+   The Merge manager's bubble (above) is the same paper. */
+#placeholder {
+    --sb-paper: #f3eee4;
+    --sb-paper-ink: #23201c;
+    --sb-paper-edge: transparent;
+    --sb-paper-drop: rgba(0, 0, 0, 0.35);
+}
+
 #placeholder .patch {
-    --patch-bubble-bg: var(--sb-bg-raised);
-    --patch-bubble-text: var(--sb-text-strong);
+    --patch-bubble-bg: var(--sb-paper);
+    --patch-bubble-text: var(--sb-paper-ink);
     --patch-font: var(--sb-font-head);
+}
+
+#placeholder .patch-bubble {
+    z-index: 1;
+    padding: 9px 16px 10px;
+    border-radius: 20px 22px 18px 21px;
+    box-shadow: inset 0 0 0 1px var(--sb-paper-edge);
+    /* A filter, not a box-shadow, so the tail drops its shadow too. */
+    filter: drop-shadow(0 3px 0 var(--sb-paper-drop));
+    rotate: -1.2deg;
+    font-weight: 700;
+    /* The art keeps room above Patch's head for the sky and the tallest hat;
+       the bubble reaches down into it, so the tail lands just above a cap or
+       a beanie and not out in the air. The held room below keeps Patch where
+       it was. */
+    margin-bottom: -38px;
+}
+
+/* The tall hats reach about 30px higher than a cap; the bubble stays above them. */
+#placeholder .patch-scene:is(.patch-has-witch-hat, .patch-has-mitre, .patch-has-flower) .patch-bubble {
+    margin-bottom: -8px;
+}
+
+/* The tail curves down and to the left onto Patch's head. */
+#placeholder .patch-bubble::after {
+    left: 50%;
+    top: calc(100% - 1px);
+    bottom: auto;
+    width: 22px;
+    height: 18px;
+    margin-left: -4px;
+    transform: none;
+    box-shadow: none;
+    clip-path: path('M0 0 H16 C14 6 9 12 2 17 C5 10 4 5 0 0 Z');
 }
 
 @media (prefers-color-scheme: light) {
@@ -273,6 +323,11 @@
         --patch-bubble-edge: rgba(20, 30, 50, 0.08);
         --patch-bubble-shadow: rgba(20, 30, 50, 0.22);
         --patch-shadow: rgba(20, 30, 50, 0.12);
+    }
+
+    #placeholder {
+        --sb-paper-edge: rgba(60, 45, 25, 0.14);
+        --sb-paper-drop: rgba(60, 45, 25, 0.16);
     }
 }
 
