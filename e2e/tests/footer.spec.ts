@@ -8,7 +8,7 @@
  * notice's labels, what installing asks) is decided in
  * src/renderer/ui/footer/footer-view.ts and tested in test/footer-view.test.ts.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, sidebarFooter} from '../support/app';
 import {hostStubCalls, openedExternally, pushEvent, setHostStub} from '../support/main-process';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
@@ -345,7 +345,7 @@ forEachAppearance(() => {
     test.describe('busy', () => {
         test.use({stubs: {update: UPDATE, usage: usageAt(63, 86)}});
 
-        test('footer with an update, activity and low quota', async ({page, app}) => {
+        screenTest('footer with an update, activity and low quota', async ({page, app}) => {
             /* When */
             await statusUpdate(app, 'Indexing 4 of 9…', 'progress');
 

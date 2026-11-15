@@ -15,7 +15,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {
     expectScreen,
     openSession,
@@ -655,7 +655,7 @@ test.describe('session tray, shell profile', () => {
 });
 
 forEachAppearance(() => {
-    test('terminal search bar, open', async ({page, home}) => {
+    screenTest('terminal search bar, open', async ({page, home}) => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
         await claude.println('first needle here', 'second needle here');

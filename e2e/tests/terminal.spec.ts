@@ -4,7 +4,7 @@
  * title, a fork. Typing and the exit are covered with the terminal host, in
  * terminal-host.spec.ts.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {dialog, expectScreen, openSession, sessionRow, sidebar, sidebarFilter, terminalHeader} from '../support/app';
 import type {Page} from '@playwright/test';
 import {launchedKeys, waitForNewLaunch} from '../support/fake-cli';
@@ -178,7 +178,7 @@ test.describe('smoke', () => {
 });
 
 forEachAppearance(() => {
-    test('terminal with header, running', async ({page, home}) => {
+    screenTest('terminal with header, running', async ({page, home}) => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
 

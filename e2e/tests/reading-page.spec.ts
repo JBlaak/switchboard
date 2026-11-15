@@ -7,7 +7,7 @@
  * the round-trip from the MCP server to the window, the sandboxed frame,
  * where the keyboard goes, and how it looks.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, terminalHeader} from '../support/app';
 import {showPage} from '../support/pages';
 import {LABEL, S} from '../fixtures/standard';
@@ -99,7 +99,7 @@ test.describe('smoke', () => {
 });
 
 forEachAppearance(() => {
-    test('reading page', async ({page, home}) => {
+    screenTest('reading page', async ({page, home}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
 

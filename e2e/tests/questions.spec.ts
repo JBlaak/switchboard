@@ -10,7 +10,7 @@
  * only the running app can show: the hook round-trip, where the keyboard
  * goes, the motion, and how it looks.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {
     askQuestions,
@@ -150,7 +150,7 @@ test.describe('smoke', () => {
 });
 
 forEachAppearance(() => {
-    test('question panel, then peeking at the terminal', async ({page, home}) => {
+    screenTest('question panel, then peeking at the terminal', async ({page, home}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
 
@@ -683,7 +683,7 @@ test.describe('doze', () => {
 });
 
 forEachAppearance(() => {
-    test('question panel, multiple choice', async ({page, home}) => {
+    screenTest('question panel, multiple choice', async ({page, home}) => {
         /* Given */
         await askedOnScreen(page, home, QUESTIONS, {reducedMotion: true});
         await option(page, /The whole site/).click();
@@ -699,7 +699,7 @@ forEachAppearance(() => {
         await expectScreen(page, 'question-panel-multi');
     });
 
-    test('question header pill', async ({page, home}) => {
+    screenTest('question header pill', async ({page, home}) => {
         /* Given */
         await askedOnScreen(page, home, QUESTIONS, {reducedMotion: true});
 

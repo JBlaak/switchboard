@@ -11,7 +11,7 @@
  * asks main for comes back.
  */
 import fs from 'node:fs';
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {
     chooseProjectAction,
     dialog,
@@ -97,7 +97,7 @@ function litRows(page: Page) {
 }
 
 forEachAppearance(() => {
-    test('dialog screens', async ({page}) => {
+    screenTest('dialog screens', async ({page}) => {
         /* When */
         await openProjects(page);
         await expect(projectsModal(page).getByText('Development/acme-api', {exact: true})).toBeVisible();

@@ -13,7 +13,7 @@
  * in `sidebar.spec.ts`; the ones here add the row states and an open slug
  * group.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {
     dialog,
     expectScreen,
@@ -905,7 +905,7 @@ test.describe('rename', () => {
 // ── Screenshots ──
 
 forEachAppearance(() => {
-    test('session list, every row state', async ({page, app, home}) => {
+    screenTest('session list, every row state', async ({page, app, home}) => {
         /* Given */
         await sessionRow(page, LABEL.billingGroup).first().click();
         const login = await openSession(page, home, LABEL.loginFix, S.loginFix);

@@ -96,3 +96,22 @@ export function forEachAppearance(define: (appearance: 'light' | 'dark') => void
         });
     }
 }
+
+/** A test's body, as `test(title, details, body)` takes it. */
+type TestBody = Parameters<typeof test>[2];
+
+/**
+ * A test that is there for its screenshots: what it asserts besides them only
+ * waits for the screen to settle, and is proven by another test.
+ *
+ * With screenshots skipped (as on CI) it is registered as skipped, so it never
+ * launches the app for a comparison that would not run. A test with assertions
+ * of its own stays a plain `test`, with `expectScreen` skipping just the pixels.
+ */
+export function screenTest(title: string, body: TestBody): void {
+    test.describe(() => {
+        // A describe-level skip is decided before any fixture, so no launch.
+        test.skip(SCREENSHOTS_SKIPPED, 'screenshots only, and screenshots are skipped');
+        test(title, {}, body);
+    });
+}

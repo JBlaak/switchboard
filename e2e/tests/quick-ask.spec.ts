@@ -16,8 +16,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {test, expect, forEachAppearance} from '../support/test';
-import {SCREENSHOTS_SKIPPED, dialog, sessionRow} from '../support/app';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
+import {dialog, sessionRow} from '../support/app';
 import {fakeRoute, launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {
     closeMainWindow,
@@ -547,11 +547,11 @@ test('a task is added to BlaakTasks, and ⌘Z takes it back and puts the text ba
 });
 
 forEachAppearance(() => {
-    test('a capture saving, and saved', async ({app, home}) => {
+    screenTest('a capture saving, and saved', async ({app, home}) => {
         /* Given */
         await setUpServers(app, home);
         // The delay only holds the saving state still for its screenshot.
-        answerTask(fakeRoute(home), SCREENSHOTS_SKIPPED ? 0 : 1_500);
+        answerTask(fakeRoute(home), 1_500);
         const popUp = await open(app);
         await box(popUp).fill(TASK);
 
@@ -559,14 +559,10 @@ forEachAppearance(() => {
         await box(popUp).press('Enter');
 
         /* Then */
-        if (!SCREENSHOTS_SKIPPED) await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
+        await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
         await expectPopUp(popUp, 'quick-ask-saving');
         await expect(line(popUp)).toHaveText('Task added · Call Peter · due Thu');
         await expectPopUp(popUp, 'quick-ask-saved');
-        // Without the screenshots the rest is only a wait; the saved line is
-        // proven by "a task is added to BlaakTasks…".
-        if (SCREENSHOTS_SKIPPED) return;
-
         // It holds 3 s, then closes, and the draft is gone.
         await expect.poll(() => quickAskShowing(app), {timeout: 6_000}).toBe(false);
         await open(app);
@@ -575,10 +571,10 @@ forEachAppearance(() => {
 });
 
 forEachAppearance(() => {
-    test('each state of the pop-up', async ({app, home}) => {
+    screenTest('each state of the pop-up', async ({app, home}) => {
         /* Given */
         // The delay only holds the waiting state still for its screenshot.
-        answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', SCREENSHOTS_SKIPPED ? 0 : 1_500);
+        answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', 1_500);
         const popUp = await open(app);
         await box(popUp).fill(TEXT);
 
@@ -589,7 +585,7 @@ forEachAppearance(() => {
         await box(popUp).press('Enter');
 
         /* Then */
-        if (!SCREENSHOTS_SKIPPED) await expect(line(popUp)).toHaveText('Thinking…');
+        await expect(line(popUp)).toHaveText('Thinking…');
         await expectPopUp(popUp, 'quick-ask-waiting');
         await expect(choices(popUp).getByRole('option')).toHaveCount(3);
         await expectPopUp(popUp, 'quick-ask-choosing');

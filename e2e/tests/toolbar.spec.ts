@@ -13,7 +13,7 @@
  * The list itself is sidebar.spec.ts's; these only look at it to see what the
  * controls did to it.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, searchBox, sessionRow, sidebar, sidebarFilter} from '../support/app';
 import {breakSearch, setHostStub} from '../support/main-process';
 import {LABEL, S, standardFixture} from '../fixtures/standard';
@@ -400,7 +400,7 @@ forEachAppearance(() => {
         await expect(sidebar(page).locator(':focus')).toHaveCount(0);
     });
 
-    test('settings menu, open', async ({page}) => {
+    screenTest('settings menu, open', async ({page}) => {
         /* When */
         await gearButton(page).click();
 

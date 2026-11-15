@@ -21,7 +21,7 @@
  * states in test/project-page-prs-worktrees.test.ts; the route in
  * test/main-area-slice.test.ts.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, rowButton, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
 import {clipboardWrites, mergeQueueRequests, openedExternally, setHostStub} from '../support/main-process';
@@ -498,7 +498,7 @@ test.describe('plans and issues', () => {
     });
 
     forEachAppearance(() => {
-        test('the project page with its plans and issues', async ({page, home}) => {
+        screenTest('the project page with its plans and issues', async ({page, home}) => {
             /* Given */
             await rowProjectLink(page, S.loginFix).click();
             await expect(issueTitles(page)).toHaveCount(3);
@@ -519,7 +519,7 @@ test.describe('plans and issues', () => {
 });
 
 forEachAppearance(() => {
-    test('the project page, with its header and its sessions', async ({page, home}) => {
+    screenTest('the project page, with its header and its sessions', async ({page, home}) => {
         /* When */
         await rowProjectLink(page, S.loginFix).click();
 
@@ -657,7 +657,7 @@ test.describe('merge queue', () => {
     });
 
     forEachAppearance(() => {
-        test('the merge queue section', async ({page, home}) => {
+        screenTest('the merge queue section', async ({page, home}) => {
             /* When */
             await rowProjectLink(page, S.loginFix).click();
 

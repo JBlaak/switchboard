@@ -6,7 +6,7 @@
  * (test/session-list-layout.test.ts, test/session-list-slice.test.ts); this
  * walks the list the real index drew, and what its clicks ask main for.
  */
-import {test, expect, forEachAppearance} from '../support/test';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {
     expectScreen,
     openSession,
@@ -106,7 +106,7 @@ test('Undo on the toast brings an archived row back', async ({page}) => {
 });
 
 forEachAppearance(() => {
-    test('sidebar screens', async ({page, home}) => {
+    screenTest('sidebar screens', async ({page, home}) => {
         /* Then */
         await expectScreen(page, 'sidebar-default', {soft: true});
 
