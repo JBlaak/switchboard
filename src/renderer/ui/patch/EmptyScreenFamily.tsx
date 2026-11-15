@@ -14,7 +14,8 @@
  * handle mounted from an effect.
  *
  * Under the scene the card has a floor for Patch to stand on, so Patch, in
- * front of the card, never covers a member of the outing.
+ * front of the card, never covers a member of the outing. Behind the card,
+ * its Ambilight spills the scene's and the figures' colours onto the app.
  */
 import {useEffect, useRef} from 'react';
 import {mountFamily} from '@jblaak/patch';
@@ -26,6 +27,7 @@ import {getState, onEvent, store} from '../../state/app-store';
 import {familyMembersIn} from '../../state/family-members';
 import {sessionMap} from '../../state/session-store';
 import {openRow} from '../session-list/actions';
+import {FamilyAmbilight} from './FamilyAmbilight';
 import type {JSX} from 'react';
 import type {FamilyHandle} from '@jblaak/patch';
 import type {Adventure, SunTimes} from '../../../domain/companion/adventure';
@@ -71,6 +73,7 @@ export function EmptyScreenFamily(): JSX.Element {
             if (!arriving && signature === shown) return;
             shown = signature;
             card.dataset.place = adventure.place;
+            card.dataset.time = adventure.time;
             family.show({
                 place: adventure.place,
                 time: adventure.time,
@@ -135,6 +138,7 @@ export function EmptyScreenFamily(): JSX.Element {
 
     return (
         <div ref={frame} className="placeholder-family" data-testid="patch-family">
+            <FamilyAmbilight />
             <div ref={stage} className="placeholder-family-scene" />
             <div className="placeholder-family-floor" />
         </div>

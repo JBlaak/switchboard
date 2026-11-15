@@ -118,8 +118,6 @@ test.describe('projects modal', () => {
 
         /* Then */
         await expect(modal).toHaveCount(0);
-        // On the empty screen the focus goes back to Ask Patch's box (#135).
-        await expect(page.getByTestId('ask-box')).toBeFocused();
 
         /* When */
         await openProjects(page);

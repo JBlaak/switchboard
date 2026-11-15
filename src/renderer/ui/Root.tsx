@@ -21,7 +21,6 @@ import {BugManagerPage} from './bug-manager/BugManagerPage';
 import {EmptyScreenFamily} from './patch/EmptyScreenFamily';
 import {EmptyScreenPatch} from './patch/EmptyScreenPatch';
 import {EmptyScreenManagers} from './patch/EmptyScreenManagers';
-import {AskBox} from './ask/AskBox';
 import {Questions} from './questions/Questions';
 import {ReadingPage} from './reading-page/ReadingPage';
 import {QuestionsHeaderButton} from './questions/QuestionsHeaderButton';
@@ -102,7 +101,6 @@ export function Root(): JSX.Element | null {
                 <EmptyScreenFamily />
                 <EmptyScreenPatch />
                 <EmptyScreenManagers />
-                <AskBox />
             </Portal>
             <Portal target="sidebar-content">
                 <SessionList />

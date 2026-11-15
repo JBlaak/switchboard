@@ -14,7 +14,6 @@
  * project and landing on its page is walked in e2e/tests/dialogs.spec.ts.
  */
 import {test, expect} from '../support/test';
-import {fixtureProjectPath} from '../fixtures/captured';
 import {openSession, PROJECT_PAGE_ANSWERS, runSessions, stubOverviews, stubPlans} from '../support/project-page';
 import {dialog, rowButton, sidebar} from '../../e2e/support/app';
 import {sessionItem} from '../../e2e/support/session-list';
@@ -233,37 +232,4 @@ test('clicking a sidebar row while a plan is open shows that session and closes 
     await expect(page.getByTestId('project-page')).toBeHidden();
     await expect(sessionItem(page, S.chartsDarkMode)).toHaveClass(/\bactive\b/);
     await expect(litRows(page)).toHaveCount(1);
-});
-
-test('with a prompt waiting, → does nothing and shows greyed, and ↵ still starts on the prompt', async ({
-    page,
-    api,
-}) => {
-    /* Given: ⌘↵ starts a session instead of asking, so the prompt waits in the picker */
-    const ask = page.getByTestId('ask-box');
-    await ask.fill('jot down an idea');
-    await ask.press('Meta+Enter');
-    const waiting = dialog(page, 'Start this in…');
-    await expect(waiting).toContainText('jot down an idea');
-    await waiting.getByLabel('Filter projects').fill('acme-api');
-    await expect(footer(waiting).locator('.is-off')).toHaveText('→open project');
-    await expect(rowButton(waiting.getByText(P.acmeApi, {exact: true}), 'Open')).toHaveCount(0);
-
-    /* When */
-    await page.keyboard.press('ArrowRight');
-
-    /* Then */
-    await page.waitForTimeout(500);
-    await expect(waiting).toBeVisible();
-    await expect(page.getByTestId('project-page')).toBeHidden();
-
-    /* When */
-    await page.keyboard.press('Enter');
-
-    /* Then */
-    await expect.poll(() => api.callsTo('openTerminal')).toHaveLength(1);
-    const [, cwd, isNew, options] = api.callsTo('openTerminal')[0];
-    expect(cwd).toBe(fixtureProjectPath(P.acmeApi));
-    expect(isNew).toBe(true);
-    expect(options?.initialPrompt).toBe('jot down an idea');
 });
