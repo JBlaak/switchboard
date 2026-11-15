@@ -13,12 +13,15 @@
  *   runner (#435).
  * - **The workflows**: the files in `.github/workflows` on the default
  *   branch, for the lane kind; read rarely, so their text is no burden.
+ * - **Your open PRs**: one search across GitHub for all your open PRs, with
+ *   what Not landed shows of each. One request, like the queued search.
  *
  * Kept apart from `gh-cli.ts`, like `gh-overview.ts`, so the mapping can be
  * tested from recorded responses.
  */
 import {AUTOMERGE_CONTEXT, QUEUE_LABELS} from '../../domain/project/merge-queue';
 import {unresolvedThreadCount, type ReviewThreadFacts} from '../../domain/project/pull-request-wait';
+import type {OpenPullRequest} from '../../domain/merge-manager/not-landed';
 import type {
     LaneCheck,
     LaneRun,
@@ -43,6 +46,30 @@ export const QUEUED_SEARCH = `is:pr is:open author:@me archived:false label:${LA
 export const QUEUED_PULL_REQUESTS_QUERY = `query($search: String!) {
   search(type: ISSUE, query: $search, first: ${QUEUED_PULL_REQUESTS}) {
     nodes { ... on PullRequest { number repository { nameWithOwner } } }
+  }
+}`;
+
+/** Your open PRs read per search: one page, newest first. More than this many open at once is not a real case. */
+export const OPEN_PULL_REQUESTS = 100;
+
+/**
+ * The search for your open PRs, for Not landed: open, yours, in a repository
+ * that is not archived, newest first. No `repo:` qualifiers, as GitHub caps a
+ * search at 256 characters; the service keeps the ones in known projects.
+ */
+export const OPEN_SEARCH = 'is:pr is:open author:@me archived:false sort:created-desc';
+
+export const OPEN_PULL_REQUESTS_QUERY = `query($search: String!) {
+  search(type: ISSUE, query: $search, first: ${OPEN_PULL_REQUESTS}) {
+    nodes {
+      ... on PullRequest {
+        number title url isDraft createdAt headRefName reviewDecision mergeable
+        repository { nameWithOwner }
+        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { combinedSlug } } } }
+        latestReviews(first: 20) { nodes { state author { login } } }
+        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      }
+    }
   }
 }`;
 
@@ -158,6 +185,65 @@ export function toQueuedPullRequests(data: any): {repository: string; number: nu
     return nodes
         .filter((node: any) => typeof node?.number === 'number' && typeof node?.repository?.nameWithOwner === 'string')
         .map((node: any) => ({repository: node.repository.nameWithOwner, number: node.number}));
+}
+
+/** Each PR the open search found, as Not landed reads it; null when the answer holds no search. Anything but a PR is left out. */
+export function toOpenPullRequests(data: any): OpenPullRequest[] | null {
+    const nodes = data?.search?.nodes;
+    if (!Array.isArray(nodes)) return null;
+    return nodes
+        .filter((node: any) => typeof node?.number === 'number' && typeof node?.repository?.nameWithOwner === 'string')
+        .map((node: any): OpenPullRequest => {
+            const repository: string = node.repository.nameWithOwner;
+            const reviews = Array.isArray(node.latestReviews?.nodes) ? node.latestReviews.nodes : [];
+            const created = typeof node.createdAt === 'string' ? Date.parse(node.createdAt) : NaN;
+            return {
+                repository,
+                number: node.number,
+                title: text(node.title),
+                url: text(node.url) || `https://github.com/${repository}/pull/${node.number}`,
+                isDraft: node.isDraft === true,
+                createdAt: Number.isFinite(created) ? created : 0,
+                headRef: text(node.headRefName),
+                reviewDecision:
+                    node.reviewDecision === 'APPROVED' ||
+                    node.reviewDecision === 'CHANGES_REQUESTED' ||
+                    node.reviewDecision === 'REVIEW_REQUIRED'
+                        ? node.reviewDecision
+                        : null,
+                mergeable:
+                    node.mergeable === 'MERGEABLE' || node.mergeable === 'CONFLICTING' ? node.mergeable : 'UNKNOWN',
+                checks: toRollup(node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state),
+                reviewRequested: names(
+                    node.reviewRequests?.nodes,
+                    (request) => request?.requestedReviewer?.login ?? request?.requestedReviewer?.combinedSlug,
+                ),
+                changesRequestedBy: names(
+                    reviews.filter((review: any) => review?.state === 'CHANGES_REQUESTED'),
+                    (review) => review?.author?.login,
+                ),
+                approvedBy: names(
+                    reviews.filter((review: any) => review?.state === 'APPROVED'),
+                    (review) => review?.author?.login,
+                ),
+            };
+        });
+}
+
+/** A head commit's rolled-up checks: green, red, still running; null when it has none. */
+function toRollup(state: unknown): OpenPullRequest['checks'] {
+    switch (state) {
+        case 'SUCCESS':
+            return 'success';
+        case 'FAILURE':
+        case 'ERROR':
+            return 'failure';
+        case 'PENDING':
+        case 'EXPECTED':
+            return 'pending';
+        default:
+            return null;
+    }
 }
 
 /** The lane read in `laneQuery`'s data; null when it holds no repository or trunk. */

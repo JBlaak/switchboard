@@ -277,6 +277,7 @@ function setup(overrides: Partial<World> = {}) {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | 'openPullRequests'
         | LaneWrites
         | LaneMergeChecks
         | 'pullRequestForBranch'

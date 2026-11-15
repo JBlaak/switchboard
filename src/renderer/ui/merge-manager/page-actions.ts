@@ -12,11 +12,12 @@ import {dispatch, getState} from '../../state/app-store';
 import {sessionMap} from '../../state/session-store';
 import {queueActionKey} from '../../state/project-page-slice';
 import {isSamePullRequest} from '../../../domain/merge-manager/archive-on-merge';
-import {pageLanes, rowActions, rowKeys, selectedRow, type PageRow} from '../../../domain/merge-manager/page';
+import {rowActions, type PageRow} from '../../../domain/merge-manager/page';
 import {jumpToSession} from '../session-work/plan/actions';
 import {nudgeReviewer} from '../project-page/merge-queue-actions';
 import {unlandPullRequest} from './land-actions';
 import {failureReason} from './failure-reason';
+import {nextRowKey, pageSelection, visibleRowKeys, visibleRows} from './not-landed-rows';
 
 // ── The page ──
 
@@ -67,20 +68,17 @@ export function closeMergeDetail(): void {
     dispatch({type: 'mergeManagerDetailClosed'});
 }
 
-/** J/K: the next or previous row, top to bottom across the lanes; while no side view is open, the selected one's. */
+/**
+ * J/K: the next or previous row on screen, top to bottom across the lanes and
+ * then Not landed (only Not landed on its own page); while no side view is
+ * open, the selected one's.
+ */
 export function stepMergeRow(step: 1 | -1): void {
-    const lanes = pageLanes(getState().mergeManager.state);
-    const keys = rowKeys(lanes);
-    if (keys.length === 0) return;
-    const page = getState().mergeManager.page;
-    const current = selectedRow(lanes, page.selected)?.key ?? '';
-    if (!page.detailOpen && current) {
-        selectMergeRow(current);
-        return;
-    }
-    const at = keys.indexOf(current);
-    const next = at === -1 ? (step === 1 ? 0 : keys.length - 1) : Math.min(keys.length - 1, Math.max(0, at + step));
-    selectMergeRow(keys[next]!);
+    const state = getState().mergeManager;
+    const rows = visibleRows(state);
+    const current = pageSelection(rows, state.page.selected)?.key ?? null;
+    const next = nextRowKey(visibleRowKeys(rows), current, state.page.detailOpen, step);
+    if (next) selectMergeRow(next);
 }
 
 // ── A row's actions ──

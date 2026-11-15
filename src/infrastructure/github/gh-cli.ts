@@ -56,6 +56,8 @@ import {BRANCH_PULL_REQUEST_QUERY, toBranchPullRequest} from './gh-branch-pr';
 import {INBOX_ISSUES_QUERY, ISSUE_THREAD_QUERY, toInboxIssues, toIssueThread} from './gh-inbox';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
 import {
+    OPEN_PULL_REQUESTS_QUERY,
+    OPEN_SEARCH,
     QUEUED_PULL_REQUESTS_QUERY,
     QUEUED_SEARCH,
     UPDATE_BRANCH_MUTATION,
@@ -65,10 +67,12 @@ import {
     laneQuery,
     toLaneRead,
     toBranchUpdateFailure,
+    toOpenPullRequests,
     toQueuedPullRequests,
     toWorkflowFiles,
 } from './gh-lanes';
 import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {OpenPullRequest} from '../../domain/merge-manager/not-landed';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
@@ -376,6 +380,11 @@ export class GhCli implements GitHubCli {
     public async queuedPullRequests(): Promise<{repository: string; number: number}[] | null> {
         const data = await this.graphql(QUEUED_PULL_REQUESTS_QUERY, {search: QUEUED_SEARCH});
         return data ? toQueuedPullRequests(data) : null;
+    }
+
+    public async openPullRequests(): Promise<OpenPullRequest[] | null> {
+        const data = await this.graphql(OPEN_PULL_REQUESTS_QUERY, {search: OPEN_SEARCH});
+        return data ? toOpenPullRequests(data) : null;
     }
 
     public async laneRead(repo: string, numbers: readonly number[]): Promise<LaneRead | null> {

@@ -19,6 +19,7 @@ import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
 import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {OpenPullRequest} from '../../domain/merge-manager/not-landed';
 import type {BranchPullRequest} from '../../domain/inbox/stage';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
@@ -170,6 +171,13 @@ export interface GitHubCli {
      * repository and number. Null when unavailable.
      */
     queuedPullRequests(): Promise<{repository: string; number: number}[] | null>;
+
+    /**
+     * Your open PRs, across GitHub and newest first, with what Not landed
+     * shows of each: its review, checks and whether it conflicts. Null when
+     * unavailable.
+     */
+    openPullRequests(): Promise<OpenPullRequest[] | null>;
 
     /**
      * The lane read of these PRs in `repo`: the trunk, its oid and its rules,

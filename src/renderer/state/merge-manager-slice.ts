@@ -26,6 +26,7 @@ import {findLanded} from '../../domain/merge-manager/stage-words';
 import {movedEntry, withEntry, withoutEntry, type IdRecord} from './records';
 import type {LandedView, MergeManagerState} from '../../domain/merge-manager/model';
 import type {MergeManagerPageFacts} from '../../domain/merge-manager/page';
+import type {OpenPullRequest} from '../../domain/merge-manager/not-landed';
 import type {LinkedPr} from '../../domain/session/links';
 import type {RendererEvent} from './events';
 
@@ -64,7 +65,16 @@ export type MergeManagerEvent =
     | {type: 'mergeManagerTryAgainAsked'; key: string}
     | {type: 'mergeManagerTryAgainAnswered'; key: string; result: {ok: true} | {ok: false; reason: string}}
     /** What came of an action on the page, said once under its header; null puts it away. */
-    | {type: 'mergeManagerPageNoticed'; notice: string | null};
+    | {type: 'mergeManagerPageNoticed'; notice: string | null}
+    /** Your open PRs as main read them for Not landed; null when `gh` could not say (the last good read is kept). */
+    | {type: 'mergeManagerNotLandedLoaded'; pullRequests: readonly OpenPullRequest[] | null}
+    /** View all (the Not landed page), or back to the lanes (Esc, its back button). */
+    | {type: 'mergeManagerViewChanged'; view: MergeManagerView}
+    /** A project chip on the Not landed page; null is All. */
+    | {type: 'mergeManagerNotLandedFiltered'; repository: string | null};
+
+/** What the Merge manager's page shows: its lanes and Not landed's newest five, or the Not landed page. */
+export type MergeManagerView = 'lanes' | 'notLanded';
 
 /** How a Try again from the page went. */
 export type TryAgainPhase = {readonly phase: 'busy'} | {readonly phase: 'failed'; readonly reason: string};
@@ -81,6 +91,10 @@ export interface MergeManagerPageState {
     /** `landedKey` → a Try again under way, or why the last one failed. */
     readonly tryAgain: IdRecord<TryAgainPhase>;
     readonly notice: string | null;
+    /** The lanes, or the Not landed page; the lanes each time the page is asked for. */
+    readonly view: MergeManagerView;
+    /** The Not landed page's project chip (`owner/repo`); null for All. */
+    readonly repository: string | null;
 }
 
 /** The toast a Land it brings. */
@@ -104,6 +118,8 @@ export interface MergeManagerSliceState {
     /** The id the next toast takes, so a timer left over from an older one closes nothing. */
     readonly nextToastId: number;
     readonly page: MergeManagerPageState;
+    /** Your open PRs, lanes or not, as main last read them (Not landed); null until the first good read. */
+    readonly notLanded: readonly OpenPullRequest[] | null;
 }
 
 export const initialMergeManagerState: MergeManagerSliceState = {
@@ -112,7 +128,17 @@ export const initialMergeManagerState: MergeManagerSliceState = {
     busy: {},
     toast: null,
     nextToastId: 1,
-    page: {selected: null, detailOpen: false, facts: null, notes: {}, tryAgain: {}, notice: null},
+    page: {
+        selected: null,
+        detailOpen: false,
+        facts: null,
+        notes: {},
+        tryAgain: {},
+        notice: null,
+        view: 'lanes',
+        repository: null,
+    },
+    notLanded: null,
 };
 
 export function mergeManagerReducer(state: MergeManagerSliceState, event: RendererEvent): MergeManagerSliceState {
@@ -134,6 +160,8 @@ export function mergeManagerReducer(state: MergeManagerSliceState, event: Render
         }
         case 'landToastClosed':
             return state.toast?.id === event.id ? {...state, toast: null} : state;
+        case 'mergeManagerNotLandedLoaded':
+            return event.pullRequests === null ? state : {...state, notLanded: event.pullRequests};
         default: {
             const page = pageReducer(state.page, event);
             return page === state.page ? state : {...state, page};
@@ -147,9 +175,12 @@ function pageReducer(page: MergeManagerPageState, event: RendererEvent): MergeMa
             // Open in Merge manager shows that PR's side view; ⌘⇧L keeps the page as it was.
             const selected = event.key ?? page.selected;
             const detailOpen = event.key ? true : page.detailOpen;
-            return page.notice === null && selected === page.selected && detailOpen === page.detailOpen
+            return page.notice === null &&
+                selected === page.selected &&
+                detailOpen === page.detailOpen &&
+                page.view === 'lanes'
                 ? page
-                : {...page, notice: null, selected, detailOpen};
+                : {...page, notice: null, selected, detailOpen, view: 'lanes'};
         }
         case 'mergeManagerPageClosed':
             return page.detailOpen ? {...page, detailOpen: false} : page;
@@ -182,6 +213,11 @@ function pageReducer(page: MergeManagerPageState, event: RendererEvent): MergeMa
                     reason: event.result.reason,
                 } as TryAgainPhase),
             };
+        case 'mergeManagerViewChanged':
+            // Each view starts with its side view closed.
+            return page.view === event.view ? page : {...page, view: event.view, detailOpen: false};
+        case 'mergeManagerNotLandedFiltered':
+            return page.repository === event.repository ? page : {...page, repository: event.repository};
         case 'mergeManagerPageNoticed':
             return page.notice === event.notice ? page : {...page, notice: event.notice};
         default:

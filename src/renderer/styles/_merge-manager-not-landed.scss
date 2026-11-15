@@ -1,0 +1,166 @@
+/* ========== NOT LANDED, ON THE MERGE MANAGER PAGE ==========
+   Your open PRs that are not in a lane: a card after the lanes (the newest
+   five, then View all) and the Not landed page (all of them, a chip per
+   project). The cards, rows and side view are the lanes' (.mm-card, .mm-row,
+   .mm-detail); its own: the hollow place, the status pill's tones, Land it
+   in the row, View all, the empty page's compact line, the chips and the
+   side view's checklist. */
+
+/* ---- A row: the place is hollow, Land it where a lane row has its time ---- */
+.mm-place.is-open {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--sb-border-strong);
+}
+
+.mm-nl-row.is-draft .mm-row-title {
+    color: var(--sb-text-faint);
+
+    .mm-row-number {
+        color: var(--sb-text-faint);
+    }
+}
+
+.mm-nl-act {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.mm-nl-land {
+    &.is-ready {
+        background: var(--sb-action);
+        border-color: var(--sb-action);
+        color: var(--sb-action-text);
+
+        &:hover {
+            background: var(--sb-action);
+            border-color: var(--sb-action);
+            color: var(--sb-action-text);
+            filter: brightness(1.08);
+        }
+    }
+    &:disabled {
+        opacity: 0.6;
+        cursor: progress;
+    }
+}
+
+/* ---- The status pill: ready, waiting on someone, running, yours to fix, a draft ---- */
+.pp-stage.mm-nl-pill {
+    &.is-nl-ready {
+        background: var(--sb-mint);
+        color: var(--sb-accent);
+    }
+    &.is-nl-waiting {
+        background: var(--sb-blue-tint);
+        color: var(--sb-blue);
+    }
+    &.is-nl-running {
+        background: var(--sb-sun);
+        color: var(--sb-yellow);
+    }
+    &.is-nl-warn {
+        background: var(--sb-peach);
+        color: var(--sb-orange);
+    }
+    &.is-nl-error {
+        background: rgba(var(--sb-red-rgb), 0.12);
+        color: var(--sb-red);
+    }
+    &.is-nl-draft {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+        color: var(--sb-text-faint);
+
+        i {
+            background: transparent;
+            box-shadow: inset 0 0 0 1.5px currentColor;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pp-stage.mm-nl-pill.is-nl-running i {
+        animation: im-pulse 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
+    }
+}
+
+/* ---- View all, under the section's rows ---- */
+.mm-nl-more {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px 8px;
+    border-top: 1px solid var(--sb-line);
+
+    > span {
+        font-size: 12.5px;
+        color: var(--sb-text-faint);
+    }
+}
+
+/* ---- Nothing landed, but Not landed has rows: one compact line ---- */
+.mm-empty-line {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 4px 0;
+    font-size: 13.5px;
+    color: var(--sb-text-dim);
+}
+
+/* ---- The Not landed page ---- */
+.mm-nl-crumb {
+    font: 700 11.5px var(--sb-font-head);
+    color: var(--sb-text-faint);
+}
+
+.im-filters.mm-nl-chips {
+    flex-shrink: 0;
+    margin-left: 0;
+    padding: 14px 32px 6px;
+}
+
+.mm-nl-count {
+    font-weight: 600;
+    color: var(--sb-text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+.mm-nl-none {
+    margin: 24px 0 0;
+    font-size: 13.5px;
+    color: var(--sb-text-faint);
+    text-align: center;
+}
+
+/* ---- The side view's "Before it can merge" ---- */
+.mm-checks.mm-nl-checklist {
+    .is-done {
+        color: var(--sb-green);
+    }
+    .is-running {
+        color: var(--sb-yellow);
+    }
+    .is-waiting {
+        color: var(--sb-blue);
+    }
+    .is-failing {
+        color: var(--sb-red);
+    }
+    .is-warn {
+        color: var(--sb-orange);
+    }
+    .is-none {
+        color: var(--sb-text-faint);
+    }
+}
+
+/* ---- A narrow list, beside the side view: Land it goes beside the pill ---- */
+@container (max-width: 620px) {
+    .mm-nl-row .mm-nl-act {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+    }
+}
