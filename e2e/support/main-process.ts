@@ -23,7 +23,6 @@ import type {ElectronApplication} from '@playwright/test';
 import {EVENT, INVOKE, SEND} from '../../src/ipc/channels';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../../src/domain/session-work/model';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
-import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {UpdateNotice} from '../../src/domain/update/release';
 import type {InstallResult, UpdateOutcome} from '../../src/domain/update/progress';
 import type {ErrandResult, FixResult, NudgeResult, QueueErrandView} from '../../src/domain/project/queue-errands';
@@ -1268,18 +1267,6 @@ export async function clipboardWrites(app: ElectronApplication): Promise<string[
     });
 }
 
-/** Resize the main window's content, as dragging its edge would. */
-export async function setContentSize(app: ElectronApplication, width: number, height: number): Promise<void> {
-    await app.evaluate(
-        ({BrowserWindow}, size) => {
-            BrowserWindow.getAllWindows()
-                .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
-                .setContentSize(size.width, size.height);
-        },
-        {width, height},
-    );
-}
-
 /** Send the renderer an event, as main would. */
 export async function pushEvent(app: ElectronApplication, channel: string, ...args: unknown[]): Promise<void> {
     await app.evaluate(
@@ -1290,23 +1277,6 @@ export async function pushEvent(app: ElectronApplication, channel: string, ...ar
         },
         {channel, args},
     );
-}
-
-/**
- * Tell the renderer a remote session's connection is in some phase.
- *
- * The connection card lives in the session's terminal container, so the
- * session has to be open (clicked) first; opening it is also what starts the
- * fake `ssh`. Real transitions can be driven through `fakeSsh` instead — this
- * is for the phases that would need a real network to reach, or a precise
- * backoff delay.
- */
-export async function pushRemoteStatus(
-    app: ElectronApplication,
-    sessionId: string,
-    status: RemoteStatusPayload,
-): Promise<void> {
-    await pushEvent(app, EVENT.remoteStatus, sessionId, status);
 }
 
 /**

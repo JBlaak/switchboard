@@ -26,7 +26,7 @@ jobs:
     # The Playwright suite in e2e/: the built app, launched through Electron
     # against a fixture home, with fake `claude` and `ssh` on the session PATH.
     # macOS because the app is macOS-only (vibrancy, pmset, the zsh login shell
-    # the fakes are put on PATH through) and the baselines are Mac pixels.
+    # the fakes are put on PATH through).
     # Pinned like build.yml: macos-latest stopped being assigned a runner.
     #
     # One job: the suite is only what needs the wired-up app (about 40 tests);
@@ -59,14 +59,8 @@ jobs:
             - name: Build
               run: npm run build
 
-            # Screenshot comparisons are skipped here: the baselines are rendered on
-            # a developer's Mac, and a runner's macOS version and GPU antialias text
-            # differently enough to fail them without anything having changed. Every
-            # functional assertion still runs. See "End-to-end tests" in CONTRIBUTING.md.
             - name: End-to-end tests
               run: npx playwright test --config e2e/playwright.config.ts
-              env:
-                  SB_E2E_SKIP_SCREENSHOTS: '1'
 
             - name: Upload the report and traces
               if: failure()

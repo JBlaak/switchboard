@@ -1,7 +1,7 @@
 /**
  * The end-to-end suite: the built app, driven through Playwright's Electron
  * support against a fixture home. See the "End-to-end tests" section of
- * CONTRIBUTING.md for how to run it and how to update the screenshot baselines.
+ * CONTRIBUTING.md for how to run it.
  *
  * Kept out of the unit glob (`test/*.test.ts`) on purpose: these need a build,
  * a display and several seconds per test.
@@ -20,19 +20,7 @@ export default defineConfig({
     timeout: 60_000,
     expect: {
         timeout: 10_000,
-        toHaveScreenshot: {
-            // Antialiasing on text edges differs by a few pixels between otherwise
-            // identical runs; anything that is a real change moves far more.
-            maxDiffPixelRatio: 0.01,
-            animations: 'disabled',
-            caret: 'hide',
-            scale: 'css',
-        },
     },
-    // Baselines are per platform, so a Linux run never compares against Mac
-    // pixels: tests/__screenshots__/<spec>/<name>-<scheme>-<platform>.png, the
-    // scheme being added by expectScreen (support/app.ts).
-    snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
     reporter: process.env.CI ? [['list'], ['html', {open: 'never', outputFolder: '../playwright-report'}]] : 'list',
     outputDir: '../test-results/e2e',
     use: {

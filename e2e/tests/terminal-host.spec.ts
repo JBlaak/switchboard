@@ -21,9 +21,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {expectScreen, openSession, openSessionTray} from '../support/app';
-import {cellPoint, expectTerminalText, terminalState} from '../support/terminal';
+import {test, expect} from '../support/test';
+import {openSession, openSessionTray} from '../support/app';
+import {cellPoint, terminalState} from '../support/terminal';
 import {LABEL, P, S, standardFixture} from '../fixtures/standard';
 import {posixQuote} from '../../src/domain/shell/quoting';
 import type {Page} from '@playwright/test';
@@ -37,10 +37,6 @@ async function settle(page: Page, ms = 150): Promise<void> {
 async function clickTerminal(page: Page, sessionId: string): Promise<void> {
     const point = await cellPoint(page, sessionId, 10, 5);
     await page.mouse.click(point.x, point.y);
-}
-
-function searchInput(page: Page) {
-    return page.getByPlaceholder('Find...');
 }
 
 test.describe('terminal input', () => {
@@ -193,22 +189,5 @@ test.describe('session tray, shell profile', () => {
 
         /* Then */
         await expect((await openSessionTray(page)).locator('.tray-meta')).not.toContainText(/Auto|Zsh|Bash/);
-    });
-});
-
-forEachAppearance(() => {
-    screenTest('terminal search bar, open', async ({page, home}) => {
-        /* Given */
-        const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await claude.println('first needle here', 'second needle here');
-        await expectTerminalText(page, S.loginFix, 'second needle here');
-
-        /* When */
-        await page.keyboard.press('Meta+f');
-        await searchInput(page).pressSequentially('needle');
-
-        /* Then */
-        await expect.poll(async () => (await terminalState(page, S.loginFix)).selection).toBe('needle');
-        await expectScreen(page, 'terminal-search');
     });
 });

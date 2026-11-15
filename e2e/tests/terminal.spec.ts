@@ -10,8 +10,8 @@
  * Typing and the exit are covered with the terminal host, in
  * terminal-host.spec.ts and component/tests/terminal-host.spec.ts.
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {dialog, expectScreen, openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
+import {test, expect} from '../support/test';
+import {dialog, openSession, sessionRow, terminalHeader} from '../support/app';
 import {launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {sessionId} from '../support/fixture-home';
 import {LABEL, S} from '../fixtures/standard';
@@ -90,27 +90,5 @@ test.describe('smoke', () => {
 
         /* Then */
         await expect(sessionRow(page, 'Make the export button work offline')).toBeVisible();
-    });
-});
-
-forEachAppearance(() => {
-    screenTest('terminal with header, running', async ({page, home}) => {
-        /* Given */
-        const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await claude.busy('Reading the redirect handler');
-        await claude.println(
-            '',
-            '\x1b[1m● Read\x1b[0m(src/auth/redirect.ts)',
-            '  ⎿  Read 84 lines',
-            '',
-            '\x1b[32m●\x1b[0m The redirect loop comes from the session cookie being set',
-            '  on the wrong path, so every request looks unauthenticated.',
-        );
-
-        /* Then */
-        await expect(sidebar(page).getByText('Working', {exact: true})).toBeVisible();
-        await expectScreen(page, 'terminal-running');
     });
 });

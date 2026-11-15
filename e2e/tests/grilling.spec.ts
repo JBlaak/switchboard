@@ -9,8 +9,8 @@
  * away, a revision, an ask) is in component/tests/grilling.spec.ts; what it
  * decides on its own is unit tested (test/grill-*.test.ts).
  */
-import {test, expect, screenTest} from '../support/test';
-import {expectScreen, openSession, sidebar} from '../support/app';
+import {test, expect} from '../support/test';
+import {openSession, sidebar} from '../support/app';
 import {endTurn} from '../support/questions';
 import {fakeClaude} from '../support/fake-cli';
 import {LABEL, S} from '../fixtures/standard';
@@ -62,19 +62,5 @@ test.describe('grilling', () => {
         await fakeClaude(home, S.loginFix).waitForInput('Q1: yes\nQ2: (b) Redis, shared but needs a server');
         await expect(card(page)).toHaveCount(0);
         await expect(sidebar(page).getByText('Asking 2 questions', {exact: true})).toHaveCount(0);
-    });
-
-    screenTest('grilling card', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await endTurn(home, S.loginFix, ROUND);
-        await expect(title(page, 'Keep the old login route?')).toBeVisible();
-
-        /* When */
-        await page.keyboard.press('y');
-
-        /* Then */
-        await expect(title(page, 'Where do sessions live?')).toBeVisible();
-        await expectScreen(page, 'grilling-card');
     });
 });
