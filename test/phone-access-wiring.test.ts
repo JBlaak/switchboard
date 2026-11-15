@@ -249,6 +249,12 @@ async function mac() {
             effective: () => ({permissionMode: 'auto', worktree: false}),
         },
         errands: {mergeManager: () => EMPTY_MERGE_MANAGER_STATE, queue: () => []},
+        landing: {
+            pullRequests: async () => [],
+            state: () => EMPTY_MERGE_MANAGER_STATE,
+            land: async () => ({ok: false, reason: 'not in these tests'}),
+            unland: async () => ({ok: false, reason: 'not in these tests'}),
+        },
         renderer,
         voice: {
             transcriber: {available: async () => true, transcribe: async () => ' um, fix the login\n'},
@@ -442,7 +448,7 @@ test('a phone pairs with the code on the Mac, is confirmed, and reconnects enrol
         macName: 'Joris’s MacBook Pro',
         deviceId: accepted.deviceId,
         addresses: ['127.0.0.1'],
-        features: ['chat'],
+        features: ['chat', 'land'],
     });
     assert.deepEqual(
         list.sessions.map((session) => [session.id, session.owner]),

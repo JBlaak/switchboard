@@ -31,12 +31,15 @@ import {turnHolds, type BackgroundTask, type TurnHolds} from '../../domain/sessi
 import {cleanDisplayName, resolveSessionName} from '../../domain/session/title';
 import {errandsBySession, type ErrandEntry} from '../../domain/session/errand-shelf';
 import {ENTER_ALT_SCREEN, HIDE_CURSOR} from '../../domain/terminal/ansi';
+import {phoneLand, phoneLandCandidate, phoneLandedText, phoneLandFailedText} from '../../domain/phone/land';
+import {findLanded} from '../../domain/merge-manager/stage-words';
 import type {RouteCandidate, RouteRequest, RouteResult} from '../../domain/ask/model';
 import type {Device, OwnershipEvent, OwnershipState, TerminalSize} from '../../domain/phone/ownership';
 import type {
     ClientMessage,
     PhoneAskResult,
     PhoneErrand,
+    PhoneLand,
     PhoneProject,
     PhoneSession,
     ServerMessage,
@@ -48,6 +51,9 @@ import type {QueueErrandView} from '../../domain/project/queue-errands';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged, GrillResult} from '../../domain/grill/model';
 import type {SessionRow} from '../../domain/session/session';
+import type {LinkedPr} from '../../domain/session/links';
+import type {GitHubWrite} from '../ports/github-cli';
+import type {LandResult} from './merge-manager-service';
 import type {EffectiveSettings} from '../../domain/settings/settings';
 import type {ActiveSession} from '../model/active-session';
 import type {SessionRegistry} from '../model/session-registry';
@@ -109,6 +115,18 @@ export interface PhoneSessionsServiceDeps {
      * them to the renderer. Read on every list; `errandsChanged` sends it again.
      */
     errands: {mergeManager(): MergeManagerState; queue(): readonly QueueErrandView[]};
+    /**
+     * Land it from a phone (#436), as the Mac's session header does it: a
+     * session's PRs as `gh` reads them (the session tray's links), and the
+     * Merging host, whose lanes say what is landed and which lands and unlands
+     * here or on the VM that merges. Its changes reach `errandsChanged`.
+     */
+    landing: {
+        pullRequests(sessionId: string): Promise<readonly LinkedPr[]>;
+        state(): MergeManagerState;
+        land(repository: string, number: number): Promise<LandResult>;
+        unland(repository: string, number: number): Promise<GitHubWrite>;
+    };
     renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
     /** Hold-to-talk, which keeps its own state per connection. */
     voice: Pick<VoiceService, 'connected' | 'message' | 'disconnected'>;
@@ -138,6 +156,8 @@ export class PhoneSessionsService {
     private readonly phones = new Map<string, Phone>();
     /** What each device called itself, kept past its disconnect: it may still own sessions. */
     private readonly names = new Map<string, string>();
+    /** Each session's PRs as `gh` last read them for a phone's `land-check`, by current id. */
+    private readonly checkedPullRequests = new Map<string, readonly LinkedPr[]>();
     private ownership: OwnershipState = NO_OWNERSHIP;
     /** Sessions whose CLI is mid-turn. */
     private readonly busy = new Set<string>();
@@ -253,6 +273,13 @@ export class PhoneSessionsService {
             case 'chat-subscribe':
             case 'chat-unsubscribe':
                 return this.deps.chat.message(connection, message);
+            case 'land-check':
+                void this.landCheck(message.sessionId);
+                return;
+            case 'land':
+            case 'unland':
+                void this.landAction(phone, message.type, message.sessionId);
+                return;
             case 'hello':
             case 'pair':
                 // The access service's; one after welcome is noise.
@@ -347,6 +374,7 @@ export class PhoneSessionsService {
         this.attention.delete(sessionId);
         this.holds.delete(sessionId);
         this.changedAt.delete(sessionId);
+        this.checkedPullRequests.delete(sessionId);
         this.apply({type: 'ended', sessionId});
         if (known) this.broadcast({type: 'exited', sessionId, exitCode});
         this.schedulePush();
@@ -365,6 +393,9 @@ export class PhoneSessionsService {
         const changedAt = this.changedAt.get(oldId);
         this.changedAt.delete(oldId);
         if (changedAt !== undefined) this.changedAt.set(newId, changedAt);
+        const checked = this.checkedPullRequests.get(oldId);
+        this.checkedPullRequests.delete(oldId);
+        if (checked) this.checkedPullRequests.set(newId, checked);
         if (this.listed.delete(oldId)) this.listed.add(newId);
         this.broadcast({type: 'session-rekeyed', from: oldId, to: newId});
         this.deps.chat.sessionForked(oldId, newId);
@@ -532,6 +563,83 @@ export class PhoneSessionsService {
         }
         this.deps.log.info(`[phone] archive ${sessionId}: ${result.ok ? 'done' : result.error}`);
         phone.connection.send({type: 'archive-result', sessionId: requested, ...result});
+    }
+
+    // ── Land it ──
+
+    /** Read the session's PRs from GitHub, so its `land` knows a draft and a teammate's PR; the list goes out again. */
+    private async landCheck(requested: string): Promise<void> {
+        const sessionId = this.currentId(requested) ?? requested;
+        let pullRequests: readonly LinkedPr[];
+        try {
+            pullRequests = await this.deps.landing.pullRequests(sessionId);
+        } catch (err) {
+            this.deps.log.warn(`[phone] land check ${sessionId}: ${(err as Error).message}`);
+            return;
+        }
+        this.checkedPullRequests.set(this.currentId(sessionId) ?? sessionId, pullRequests);
+        this.schedulePush();
+    }
+
+    /**
+     * Land it or Unland, for the PR the session's `land` names: the Merging
+     * host judges a land as it does the Mac's button, and the phone hears what
+     * the Mac's toast would say. A draft, a session without a PR, or an unland
+     * of a PR that is not landed is answered without asking it.
+     */
+    private async landAction(phone: Phone, action: 'land' | 'unland', requested: string): Promise<void> {
+        const sessionId = this.currentId(requested) ?? requested;
+        const {landing, log} = this.deps;
+        const answer = (result: {ok: true; text?: string} | {ok: false; error: string}): void => {
+            log.info(`[phone] ${action} ${sessionId}: ${result.ok ? 'done' : result.error}`);
+            if (phone.open) phone.connection.send({type: 'land-result', sessionId: requested, action, ...result});
+        };
+        const land = this.landOf(sessionId, landing.state());
+        if (!land) return answer({ok: false, error: phoneLandFailedText(action, 0, 'this session has no pull request')});
+        const {repository, number} = land;
+        if (action === 'unland' && land.offer !== 'landed') {
+            return answer({ok: false, error: phoneLandFailedText(action, number, 'it is not landed')});
+        }
+        if (action === 'land' && land.offer === 'draft') {
+            return answer({ok: false, error: phoneLandFailedText(action, number, land.label)});
+        }
+        if (action === 'land' && land.offer === 'landed') {
+            // Already landed: say where it stands, as the Mac's L does.
+            const landed = findLanded(landing.state(), repository, number)?.pullRequest ?? null;
+            return answer({ok: true, text: phoneLandedText(landed, number, landing.state())});
+        }
+        try {
+            if (action === 'land') {
+                const result = await landing.land(repository, number);
+                answer(
+                    result.ok
+                        ? {ok: true, text: phoneLandedText(result.landed, number, landing.state())}
+                        : {ok: false, error: phoneLandFailedText(action, number, result.reason)},
+                );
+            } else {
+                const result = await landing.unland(repository, number);
+                answer(result.ok ? {ok: true} : {ok: false, error: phoneLandFailedText(action, number, result.reason)});
+            }
+        } catch (err) {
+            answer({ok: false, error: phoneLandFailedText(action, number, (err as Error).message)});
+        }
+        this.schedulePush();
+    }
+
+    /** What Land it shows for a running session, from what `gh` read for it, else its transcript's PRs. */
+    private landOf(sessionId: string, state: MergeManagerState, row?: SessionRow | null): PhoneLand | null {
+        const transcript = (row !== undefined ? row : this.rowOf(sessionId))?.pullRequests ?? [];
+        return phoneLand(phoneLandCandidate(this.checkedPullRequests.get(sessionId), transcript), state);
+    }
+
+    private rowOf(sessionId: string): SessionRow | null {
+        const session = this.deps.registry.get(sessionId);
+        if (!session) return null;
+        const rows = new Map<string, SessionRow>();
+        for (const project of this.deps.projects.list(true)) {
+            for (const row of project.sessions) rows.set(row.sessionId, row);
+        }
+        return findRow(rows, session, sessionId);
     }
 
     /** Feed an event to the ownership rules, and do what they say. */
@@ -740,6 +848,7 @@ export class PhoneSessionsService {
         }
         const asking = new Set(questions.pending().map((set) => set.sessionId));
         const errands = this.errands();
+        const lanes = this.deps.landing.state();
 
         const listed: {session: PhoneSession; tier: number; sortTime: number}[] = [];
         for (const sessionId of running.runningSessionIds()) {
@@ -774,6 +883,7 @@ export class PhoneSessionsService {
                     owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
                     changedAt: this.changedAt.get(sessionId) ?? session.openedAt,
                     ...errandField(errands.get(sessionId)),
+                    ...landField(this.landOf(sessionId, lanes, row)),
                 },
             });
         }
@@ -812,6 +922,11 @@ export class PhoneSessionsService {
         if (device === MAC) return {kind: 'mac'};
         return {kind: 'device', deviceId: device, name: this.names.get(device) ?? 'Phone'};
     }
+}
+
+/** The wire's `land`, spread into a session: nothing when there is nothing to show, so older fields stay as they were. */
+function landField(land: PhoneLand | null): {land?: PhoneLand} {
+    return land ? {land} : {};
 }
 
 /** The wire's `errand`, spread into a session: nothing for the user's own sessions, so older fields stay as they were. */

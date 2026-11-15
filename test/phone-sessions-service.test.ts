@@ -22,6 +22,9 @@ import type {LaneStage, MergeManagerState} from '../src/domain/merge-manager/mod
 import type {QueueErrandView} from '../src/domain/project/queue-errands';
 import {landedPr, REPO} from './support/merge-manager-fixtures';
 import {errand} from './support/merge-queue-fixtures';
+import type {LinkedPr} from '../src/domain/session/links';
+import type {GitHubWrite} from '../src/application/ports/github-cli';
+import type {LandResult} from '../src/application/services/merge-manager-service';
 
 /**
  * What a phone sees and does once it is in: the running list, a terminal's
@@ -98,6 +101,12 @@ function harness() {
     /** What main holds of the errands: the Merge manager's state and the queue's errands. */
     let mergeManager: MergeManagerState = EMPTY_MERGE_MANAGER_STATE;
     let queueErrands: QueueErrandView[] = [];
+    /** Land it: the PRs `gh` reads per session, the lanes, and what landing answers. */
+    let lanes: MergeManagerState = EMPTY_MERGE_MANAGER_STATE;
+    const ghPullRequests = new Map<string, LinkedPr[]>();
+    const landCalls: string[] = [];
+    let landResult: LandResult = {ok: false, reason: 'not set'};
+    let unlandResult: GitHubWrite = {ok: true};
 
     const addSession = (id: string, fields: {projectPath?: string; openedAt?: number; plain?: boolean} = {}): Pty => {
         const pty = resizingPty();
@@ -184,6 +193,12 @@ function harness() {
         },
         settings: {effective: () => ({permissionMode: 'auto', worktree: true})},
         errands: {mergeManager: () => mergeManager, queue: () => queueErrands},
+        landing: {
+            pullRequests: async (sessionId) => ghPullRequests.get(sessionId) ?? [],
+            state: () => lanes,
+            land: async (repository, number) => (landCalls.push(`land ${repository}#${number}`), landResult),
+            unland: async (repository, number) => (landCalls.push(`unland ${repository}#${number}`), unlandResult),
+        },
         renderer,
         voice: {
             connected(connection) {
@@ -270,6 +285,19 @@ function harness() {
         },
         setQueueErrands: (next: QueueErrandView[]) => {
             queueErrands = next;
+        },
+        landCalls,
+        setLanes: (next: MergeManagerState) => {
+            lanes = next;
+        },
+        setGhPullRequests: (sessionId: string, prs: LinkedPr[]) => {
+            ghPullRequests.set(sessionId, prs);
+        },
+        setLandResult: (next: LandResult) => {
+            landResult = next;
+        },
+        setUnlandResult: (next: GitHubWrite) => {
+            unlandResult = next;
         },
     };
 }
@@ -1353,4 +1381,226 @@ test('chat subscriptions go to the chat service, which hears of re-keys and of t
         ['message', phone.id, 'chat-unsubscribe', 'new'],
         ['disconnected', phone.id],
     ]);
+});
+
+// ── Land it ──
+
+const PR_URL = `https://github.com/${REPO}/pull/431`;
+
+/** A session whose transcript opened #431 in REPO. */
+function withPullRequest(h: ReturnType<typeof harness>, id = 's1'): void {
+    h.addSession(id);
+    h.setProjects([
+        {
+            projectPath: APP,
+            folder: '-code-app',
+            sessions: [row(id, {pullRequests: [{number: 431, url: PR_URL, repository: REPO}]})],
+        },
+    ]);
+}
+
+/** #431 as `gh` read it. */
+function linkedPr(state: 'open' | 'draft', mine = true): LinkedPr {
+    return {
+        kind: 'pr',
+        key: `pr:${PR_URL}`,
+        title: 'PR 431',
+        url: PR_URL,
+        repository: REPO,
+        number: 431,
+        status: {state, checks: 'passing', dot: 'green', mine} as LinkedPr['status'],
+    };
+}
+
+/** The Merge manager with #431 landed, 2nd in its lane. */
+function landedLanes(): MergeManagerState {
+    const pr = {...landedPr(431, 5, 'switchboard'), place: 2};
+    return {
+        lanes: [{repository: REPO, kind: 'switchboard', approvalLostOnPush: false, pullRequests: [pr]}],
+        needsYou: 0,
+    } as MergeManagerState;
+}
+
+function lastList(phone: FakeDeviceConnection) {
+    const lists = phone.of('sessions');
+    return lists[lists.length - 1]!.sessions;
+}
+
+test('a session with a pull request in its transcript is listed with Land it for it', () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.deepEqual(lastList(phone)[0]!.land, {repository: REPO, number: 431, offer: 'land', label: 'Land it'});
+});
+
+test('a session without a pull request is listed without land', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1')]}]);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.equal('land' in lastList(phone)[0]!, false);
+});
+
+test('a land check that finds a draft lists Land it disabled with the reason', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setGhPullRequests('s1', [linkedPr('draft')]);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land-check', sessionId: 's1'});
+    await settle();
+    h.timers.tick();
+
+    /* Then */
+    assert.deepEqual(lastList(phone)[0]!.land, {
+        repository: REPO,
+        number: 431,
+        offer: 'draft',
+        label: 'Mark it ready for review first',
+    });
+});
+
+test('a land check that finds a teammate’s pull request lists no Land it', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setGhPullRequests('s1', [linkedPr('open', false)]);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land-check', sessionId: 's1'});
+    await settle();
+    h.timers.tick();
+
+    /* Then */
+    assert.equal('land' in lastList(phone)[0]!, false);
+});
+
+test('a landed pull request is listed with its stage', () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setLanes(landedLanes());
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.deepEqual(lastList(phone)[0]!.land, {
+        repository: REPO,
+        number: 431,
+        offer: 'landed',
+        label: 'Landed · 2nd in connect',
+    });
+});
+
+test('land hands the session’s pull request to the Merge manager and answers with the Mac’s toast', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setLandResult({ok: true, landed: {...landedPr(431, 0, 'switchboard'), place: 2}} as LandResult);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(h.landCalls, [`land ${REPO}#431`]);
+    assert.deepEqual(phone.of('land-result'), [
+        {type: 'land-result', sessionId: 's1', action: 'land', ok: true, text: "Landed #431 · 2nd in connect's lane"},
+    ]);
+});
+
+test('a land the Merge manager refuses tells the phone why', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setLandResult({ok: false, reason: 'it is closed'});
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(phone.of('land-result'), [
+        {type: 'land-result', sessionId: 's1', action: 'land', ok: false, error: 'Could not land #431: it is closed'},
+    ]);
+});
+
+test('land on a draft is refused without asking the Merge manager', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setGhPullRequests('s1', [linkedPr('draft')]);
+    const phone = h.connect();
+    h.send(phone, {type: 'land-check', sessionId: 's1'});
+    await settle();
+
+    /* When */
+    h.send(phone, {type: 'land', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(h.landCalls, []);
+    assert.equal(phone.of('land-result')[0]!.error, 'Could not land #431: Mark it ready for review first');
+});
+
+test('land on a session without a pull request says so', async () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(h.landCalls, []);
+    assert.equal(phone.of('land-result')[0]!.error, 'Could not land: this session has no pull request');
+});
+
+test('unland takes a landed pull request back out of its lane, with no toast', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setLanes(landedLanes());
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'unland', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(h.landCalls, [`unland ${REPO}#431`]);
+    assert.deepEqual(phone.of('land-result'), [{type: 'land-result', sessionId: 's1', action: 'unland', ok: true}]);
+});
+
+test('unland on a pull request that is not landed is refused', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'unland', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.deepEqual(h.landCalls, []);
+    assert.equal(phone.of('land-result')[0]!.error, 'Could not unland #431: it is not landed');
 });

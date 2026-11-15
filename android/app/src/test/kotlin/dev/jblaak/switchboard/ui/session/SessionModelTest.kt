@@ -2,6 +2,10 @@ package dev.jblaak.switchboard.ui.session
 
 import dev.jblaak.switchboard.link.LinkState
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.LandAction
+import dev.jblaak.switchboard.protocol.LandOffer
+import dev.jblaak.switchboard.protocol.MacFeatures
+import dev.jblaak.switchboard.protocol.PhoneLand
 import dev.jblaak.switchboard.protocol.ServerMessage
 import dev.jblaak.switchboard.protocol.SessionState
 import dev.jblaak.switchboard.protocol.TerminalOwner
@@ -25,6 +29,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -440,5 +445,145 @@ class SessionModelTest {
 
         /* Then */
         assertTrue(model.state.value.archivedElsewhere)
+    }
+
+    // ── Land it ──
+
+    private val landIt = PhoneLand("jblaak/switchboard", 432, LandOffer.Land, "Land it")
+
+    private fun macThatLands() {
+        link.state.value = LinkState.Connected(DEVICE_ID, "joris-mbp.local", features = setOf(MacFeatures.LAND))
+    }
+
+    private fun TestScope.landNotesOf(model: SessionModel): List<LandNote> {
+        val notes = mutableListOf<LandNote>()
+        backgroundScope.launch { model.landResults.toList(notes) }
+        runCurrent()
+        return notes
+    }
+
+    @Test
+    fun `opening a session asks a Mac that lands to read its pull request`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        macThatLands()
+
+        /* When */
+        newModel()
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.LandCheck("s-1")), link.sent)
+    }
+
+    @Test
+    fun `an older Mac is not asked to read the pull request`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.terminalOpened(size)
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.Attach("s-1", 48, 30)), link.sent)
+    }
+
+    @Test
+    fun `the session's Land it comes from the list`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("s-1").copy(land = landIt))))
+
+        /* Then */
+        assertEquals(landIt, model.state.value.land)
+    }
+
+    @Test
+    fun `land asks the Mac and shows Landing until it answers`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        macThatLands()
+        val model = newModel()
+        link.sent.clear()
+
+        /* When */
+        val sent = model.land()
+
+        /* Then */
+        assertTrue(sent)
+        assertEquals(listOf(ClientMessage.Land("s-1")), link.sent)
+        assertEquals(LandAction.Land, model.state.value.landing)
+    }
+
+    @Test
+    fun `a land the Mac took says where it landed`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        val notes = landNotesOf(model)
+        model.land()
+
+        /* When */
+        link.macSays(ServerMessage.LandResult("s-1", LandAction.Land, ok = true, text = "Landed #432 · 2nd in switchboard's lane"))
+
+        /* Then */
+        assertNull(model.state.value.landing)
+        assertEquals(listOf(LandNote("Landed #432 · 2nd in switchboard's lane", failed = false)), notes)
+    }
+
+    @Test
+    fun `a land the Mac refused says why`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        val notes = landNotesOf(model)
+        model.land()
+
+        /* When */
+        link.macSays(ServerMessage.LandResult("s-1", LandAction.Land, ok = false, error = "Could not land #432: it is closed"))
+
+        /* Then */
+        assertEquals(listOf(LandNote("Could not land #432: it is closed", failed = true)), notes)
+    }
+
+    @Test
+    fun `an unland that worked brings no note`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        val notes = landNotesOf(model)
+        model.unland()
+
+        /* When */
+        link.macSays(ServerMessage.LandResult("s-1", LandAction.Unland, ok = true))
+
+        /* Then */
+        assertNull(model.state.value.landing)
+        assertEquals(emptyList<LandNote>(), notes)
+    }
+
+    @Test
+    fun `land while not connected says so`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.state.value = LinkState.Reconnecting
+
+        /* When */
+        val sent = model.land()
+
+        /* Then */
+        assertFalse(sent)
+        assertNull(model.state.value.landing)
+    }
+
+    @Test
+    fun `a reconnect asks a Mac that lands to read the pull request again`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        macThatLands()
+        newModel()
+        link.state.value = LinkState.Reconnecting
+        link.sent.clear()
+
+        /* When */
+        macThatLands()
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.LandCheck("s-1")), link.sent)
     }
 }

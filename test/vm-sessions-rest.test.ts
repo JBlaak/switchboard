@@ -465,6 +465,12 @@ test("the phone's row of a VM session is labelled with its host", async () => {
         questions: {pending: () => [], answer: () => ({ok: true})},
         grill: {views: () => []},
         errands: {mergeManager: () => EMPTY_MERGE_MANAGER_STATE, queue: () => []},
+        landing: {
+            pullRequests: async () => [],
+            state: () => EMPTY_MERGE_MANAGER_STATE,
+            land: async () => ({ok: false, reason: 'not in these tests'}),
+            unland: async () => ({ok: false, reason: 'not in these tests'}),
+        },
         voice: {connected() {}, message() {}, disconnected() {}},
         battery: {connected() {}, disconnected() {}},
         clock: h.clock,

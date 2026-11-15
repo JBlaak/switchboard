@@ -42,7 +42,36 @@ data class PhoneSession(
     val changedAt: Long,
     /** Set when Switchboard started the session itself for a pull request; absent for the user's own and from older Macs. */
     val errand: PhoneErrand? = null,
+    /** What Land it shows for the session's pull request; absent when there is nothing to show, and from older Macs. */
+    val land: PhoneLand? = null,
 )
+
+/**
+ * A session's pull request as Land it offers it, by the Mac's rules: [LandOffer.Land] on your own open PR,
+ * [LandOffer.Draft] (disabled, [label] says why) on a draft, [LandOffer.Landed] once it is in its lane ([label] is
+ * its stage, "Landed · 2nd in switchboard").
+ */
+@Serializable
+data class PhoneLand(
+    /** `owner/repo`. */
+    val repository: String,
+    val number: Int,
+    val offer: LandOffer,
+    /** "Land it", the draft's hint, or the landed stage. */
+    val label: String,
+)
+
+@Serializable
+enum class LandOffer {
+    @SerialName("land")
+    Land,
+
+    @SerialName("draft")
+    Draft,
+
+    @SerialName("landed")
+    Landed,
+}
 
 /**
  * What an errand session is doing for which pull request: the Merge manager's fix errands and the merge queue's
@@ -253,4 +282,7 @@ enum class ChatRole {
 object MacFeatures {
     /** [ClientMessage.ChatSubscribe], answered with [ServerMessage.Chat] and [ServerMessage.ChatAppend]. */
     const val CHAT = "chat"
+
+    /** [ClientMessage.LandCheck], [ClientMessage.Land] and [ClientMessage.Unland], with [PhoneSession.land]. */
+    const val LAND = "land"
 }
