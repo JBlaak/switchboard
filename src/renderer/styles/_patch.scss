@@ -21,9 +21,13 @@
 .placeholder-family {
     flex: none;
     display: grid;
+    position: relative;
+    /* The Ambilight sits behind the card (z-index -1) but in front of the
+       page; the scene and the floor round their own corners, so the light
+       is not clipped to the card. */
+    isolation: isolate;
     width: min(820px, calc(100% - 64px));
     border-radius: var(--sb-r-panel);
-    overflow: hidden;
     background: #0d0e11;
     box-shadow: var(--sb-edge), var(--sb-lift);
     font-family: var(--sb-font-head);
@@ -34,6 +38,8 @@
 .placeholder-family-scene {
     position: relative;
     aspect-ratio: 12 / 5;
+    overflow: hidden;
+    border-radius: var(--sb-r-panel) var(--sb-r-panel) 0 0;
 }
 
 .placeholder-family-scene::after {
@@ -48,6 +54,126 @@
 .placeholder-family-floor {
     height: 112px;
     background: #16171a;
+    border-radius: 0 0 var(--sb-r-panel) var(--sb-r-panel);
+}
+
+/* The card's Ambilight (ui/patch/FamilyAmbilight): the card is the TV and
+   the app around it the wall. The light reaches 64px past every edge; the
+   card covers the rest, so it only shows around the card, and each light is
+   centred on the card's edge, so its brightest part shows. Along the top the
+   sky throws its haze and the sun or moon's light from its side of the
+   scene, by the scene's hour; along the bottom each figure on the floor
+   throws its body colour from under where it stands. The colours are the
+   Patch package's. Plain gradients rather than blurs, so it costs no more
+   to draw than the card's shadow. */
+.placeholder-family-glow {
+    --glow-sky: transparent;
+    --glow-sun: transparent;
+    position: absolute;
+    inset: -64px;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.placeholder-family[data-time='morning'] .placeholder-family-glow {
+    --glow-sky: rgba(125, 104, 98, 0.55);
+    --glow-sun: rgba(246, 201, 162, 0.5);
+    --glow-sun-x: 20%;
+}
+
+.placeholder-family[data-time='day'] .placeholder-family-glow {
+    --glow-sky: rgba(125, 143, 140, 0.55);
+    --glow-sun: rgba(246, 239, 214, 0.45);
+    --glow-sun-x: 25%;
+}
+
+.placeholder-family[data-time='evening'] .placeholder-family-glow {
+    --glow-sky: rgba(106, 73, 68, 0.6);
+    --glow-sun: rgba(243, 154, 60, 0.55);
+    --glow-sun-x: 85%;
+}
+
+.placeholder-family[data-time='night'] .placeholder-family-glow {
+    --glow-sky: rgba(60, 66, 84, 0.45);
+    --glow-sun: rgba(233, 229, 216, 0.22);
+    --glow-sun-x: 85%;
+}
+
+.placeholder-family-glow > * {
+    position: absolute;
+    border-radius: 50%;
+}
+
+.placeholder-family-glow-sky {
+    left: 4%;
+    right: 4%;
+    top: -46px;
+    height: 220px;
+    background: radial-gradient(closest-side, var(--glow-sky), transparent);
+}
+
+.placeholder-family-glow-sun {
+    left: var(--glow-sun-x, 50%);
+    top: -56px;
+    width: 420px;
+    height: 240px;
+    translate: -50% 0;
+    background: radial-gradient(closest-side, var(--glow-sun), transparent);
+}
+
+.placeholder-family-glow-figure {
+    --glow-figure: rgba(143, 216, 191, 0.7);
+    left: calc(50% + var(--glow-x));
+    bottom: -66px;
+    width: 340px;
+    height: 260px;
+    translate: -50% 0;
+    background: radial-gradient(
+        closest-side,
+        var(--glow-figure),
+        color-mix(in srgb, var(--glow-figure) 40%, transparent) 55%,
+        transparent
+    );
+
+    &.is-bug {
+        --glow-figure: rgba(200, 184, 232, 0.7);
+    }
+
+    &.is-issue {
+        --glow-figure: rgba(240, 207, 126, 0.6);
+    }
+
+    &.is-merge {
+        --glow-figure: rgba(156, 197, 232, 0.7);
+    }
+}
+
+/* It breathes, each light out of step with the next, and holds still while
+   the window is out of focus, like every loop. */
+@media (prefers-reduced-motion: no-preference) {
+    .placeholder-family-glow > * {
+        animation: family-glow-breathe 6s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
+    }
+
+    .placeholder-family-glow > :nth-child(2n) {
+        animation-delay: -2s;
+    }
+
+    .placeholder-family-glow > :nth-child(3n) {
+        animation-delay: -4s;
+    }
+}
+
+@keyframes family-glow-breathe {
+    0%,
+    100% {
+        opacity: 0.8;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 /* Patch's head stays below the scene: 290px held, 232px tucked into the card,
@@ -67,7 +193,7 @@
 /* With the family above, Patch's bubble would sit on the outing. It talks
    from beside Patch instead: to its right, under the card's lower edge, the
    tail pointing back at Patch. The bubble hangs off the scene, so Patch stays
-   centred over the box, and it is held to the card's right half. Its top sits
+   centred, and it is held to the card's right half. Its top sits
    on the floor, below the scene (the scene's foot is 58px below the card's
    edge: 290px held, 232px tucked under), so a longer line grows down, not into
    the outing. With the managers out (below), the bubble stays above Patch,
@@ -103,7 +229,7 @@
     }
 }
 
-/* A short window keeps Patch and the box, and leaves the outing out. */
+/* A short window keeps Patch and the managers, and leaves the outing out. */
 @media (max-height: 720px) {
     .placeholder-family {
         display: none;
@@ -116,14 +242,13 @@
 
 /* The managers (ui/patch/EmptyScreenManagers, #416, #440): the Bug manager
    to Patch's left, the Issue manager to its right and the Merge manager
-   after it, four in a row, hung off a row between Patch and the box. The
+   after it, four in a row, hung off a row under Patch. The
    Merge manager always stands there, so the row is always out; without the
    Issue manager it takes the Issue manager's place. With the family card, all three stand on the card's
    floor with their feet on Patch's: the floor grows to hold them and Patch's
    bubble above them, Patch steps up inside the card, and the row is the
-   strip their names sit in. A short window has no card, so the row takes no
-   room and the managers stand smaller beside the box, feet on its foot. Each
-   manager's name is 17px under its feet (4px gap, 13px line). */
+   strip their names sit in. A short window has no card, so the row stands
+   on the app's background under Patch. Each manager's name is 17px under its feet (4px gap, 13px line). */
 .placeholder-managers {
     position: relative;
     align-self: stretch;
@@ -185,29 +310,31 @@
     white-space: nowrap;
 }
 
+/* The row is the strip the names sit in, the managers' feet on Patch's. */
+.placeholder-patch + .placeholder-managers {
+    height: 30px;
+}
+
+.placeholder-patch + .placeholder-managers .placeholder-manager {
+    top: 0;
+    transform: translateY(calc(-100% + 17px));
+}
+
+.placeholder-patch + .placeholder-managers .placeholder-patch-label {
+    top: 4px;
+}
+
 @media (min-height: 721px) {
     #placeholder:has(.placeholder-managers) .placeholder-family-floor {
         height: 242px;
     }
 
     /* Patch's feet 30px up inside the card, on the managers' line; the row
-       gives those 30px back, so the box keeps its gap under the card. */
+       gives those 30px back. */
     #placeholder:has(.placeholder-managers) .placeholder-family + .placeholder-patch {
         margin-top: -320px;
     }
 
-    .placeholder-family + .placeholder-patch + .placeholder-managers {
-        height: 30px;
-    }
-
-    .placeholder-family + .placeholder-patch + .placeholder-managers .placeholder-manager {
-        top: 0;
-        transform: translateY(calc(-100% + 17px));
-    }
-
-    .placeholder-family + .placeholder-patch + .placeholder-managers .placeholder-patch-label {
-        top: 4px;
-    }
     /* The Merge manager stands at the right end, so the row steps left half
        a figure to stay centred on the card: Patch just left of centre. Only
        the Bug manager and the Merge manager flank Patch evenly. */
@@ -219,40 +346,6 @@
         + .placeholder-patch
         + .placeholder-managers {
         translate: -79px 0;
-    }
-}
-
-@media (max-height: 720px) {
-    .placeholder-patch-label {
-        display: none;
-    }
-
-    .placeholder-manager .patch-manager {
-        --patch-manager-width: 110px;
-    }
-
-    /* The box is 12px under the row and 46px tall. */
-    .placeholder-manager {
-        top: 12px;
-        transform: translateY(calc(-100% + 46px + 17px));
-    }
-
-    .placeholder-manager.is-bug {
-        right: calc(50% + 278px);
-    }
-
-    .placeholder-manager.is-issue {
-        left: calc(50% + 278px);
-    }
-
-    /* Beside the box there is room for one manager a side, so the Merge
-       manager stands on the box's top edge at Patch's right, its name just
-       clear of the box. */
-    .placeholder-manager.is-merge,
-    .placeholder-manager.is-issue ~ .placeholder-manager.is-merge {
-        left: calc(50% + 84px);
-        top: 0;
-        transform: translateY(calc(-100% + 12px));
     }
 }
 

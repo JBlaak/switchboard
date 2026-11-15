@@ -92,7 +92,7 @@ test.describe('managers', () => {
         });
     });
 
-    screenTest('stand beside the box in a window too short for the family card', async ({page, app}) => {
+    screenTest('stand in a row under Patch in a window too short for the family card', async ({page, app}) => {
         /* Given */
         await expect(says(page, FIRST_LINE)).toBeVisible();
         await pushEvent(app, 'inbox:changed', summary([1, 0], 4));

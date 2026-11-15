@@ -262,7 +262,7 @@ test.describe('managers', () => {
         await expect(pose(page, 'issue')).toHaveClass(/patch-mgr-s-calm/);
     });
 
-    test('stand beside the box in a window too short for the family card', async ({page, api}) => {
+    test('stand in a row under Patch in a window too short for the family card', async ({page, api}) => {
         /* Given */
         await expect(says(page, FIRST_LINE)).toBeVisible();
         await api.emit('onInboxChanged', summary([1, 0], 4));
