@@ -97,6 +97,7 @@ export const INVOKE = {
     mergeManagerUnland: 'merge-manager:unland',
     mergeManagerTryAgain: 'merge-manager:try-again',
     mergeManagerPage: 'merge-manager:page',
+    mergeManagerNotLanded: 'merge-manager:not-landed',
     mergeManagerHandOff: 'merge-manager:hand-off',
     mergeManagerBringBack: 'merge-manager:bring-back',
     mergeManagerTakeBack: 'merge-manager:take-back',
