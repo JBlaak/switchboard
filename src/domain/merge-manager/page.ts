@@ -14,7 +14,10 @@
  *
  * Pure, so the tests hold it still. Times are epoch ms, days and weeks local.
  */
+import {MIN_ESTIMATE_MS, QUEUE_STEP_MS} from '../project/merge-queue';
 import {stageWords, type StageWords} from './stage-words';
+import {checksSince} from './times';
+import type {BarTiming} from './progress';
 import type {FixingCause, LandedView, LaneKind, LaneSaving, LaneStage, LaneView, MergeManagerState} from './model';
 
 // ── What main answers for the page ──
@@ -273,18 +276,41 @@ export function rowStageLabel(row: PageRow): string {
     return row.words.label;
 }
 
-/** The head card's three steps, with "Checks n of m" once the checks are known. */
-export function headSteps(row: PageRow): {label: string; state: 'done' | 'active' | 'todo'; progress: number}[] {
+/** One of the head card's steps; `timing` is what its bar fills by (a number for a bar that stays put). */
+export interface HeadStepView {
+    readonly label: string;
+    readonly state: 'done' | 'active' | 'todo';
+    readonly progress: number;
+    readonly timing: BarTiming | number;
+}
+
+/**
+ * The head card's three steps, with "Checks n of m" once the checks are known.
+ * The active step's bar is timed: the update and the merge by a queue step
+ * from when it was first seen there (`stepSince`), the checks by one CI run
+ * (`runMs`) from when the first of them started.
+ */
+export function headSteps(row: PageRow, runMs: number | null = null, stepSince: number | null = null): HeadStepView[] {
     if (row.stage.kind !== 'head') return [];
     const at = row.stage.step === 'updating' ? 0 : row.stage.step === 'checks' ? 1 : 2;
     const checks = row.landed.facts?.checks ?? [];
     const passed = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
     const checkLabel = checks.length > 0 ? `Checks ${passed} of ${checks.length}` : 'Checks';
     const checkProgress = at > 1 ? 1 : at === 1 && checks.length > 0 ? passed / checks.length : 0;
+    const active: BarTiming[] = [
+        {actual: null, startedAt: stepSince, expectedMs: QUEUE_STEP_MS},
+        {
+            actual: checks.length > 0 ? passed / checks.length : null,
+            startedAt: checksSince(row.landed) ?? stepSince,
+            expectedMs: runMs,
+        },
+        {actual: null, startedAt: stepSince, expectedMs: MIN_ESTIMATE_MS},
+    ];
     return ['Updated on the trunk', checkLabel, 'Merge'].map((label, index) => ({
         label,
         state: index < at ? 'done' : index === at ? 'active' : 'todo',
         progress: index === 1 ? checkProgress : index < at ? 1 : 0,
+        timing: index === at ? active[index]! : index < at ? 1 : 0,
     }));
 }
 

@@ -73,6 +73,7 @@ import {
     type PageSelection,
     type VisibleRows,
 } from './not-landed-rows';
+import {TimedBar} from './TimedBar';
 import {AwaySummaryBox, MergingHostPill} from './MergingHost';
 import {
     closeMergeDetail,
@@ -469,7 +470,7 @@ function Lane({
                             onSelect={onSelect}
                         />
                         <ol className="mm-steps" aria-label="Where the head is">
-                            {headSteps(row).map((step, index) => (
+                            {headSteps(row, times.runMs).map((step, index) => (
                                 <li key={step.label} className={'mm-step is-' + step.state}>
                                     <span className="mm-step-label">
                                         <span>
@@ -480,9 +481,11 @@ function Lane({
                                             {stepTime(index, step.state, row, times, now)}
                                         </span>
                                     </span>
-                                    <span className="mm-bar">
-                                        <span style={{width: Math.round(step.progress * 100) + '%'}} />
-                                    </span>
+                                    <TimedBar
+                                        className="mm-bar"
+                                        timing={step.timing}
+                                        seenKey={`${row.key}|${row.stage.kind === 'head' ? row.stage.step : ''}`}
+                                    />
                                 </li>
                             ))}
                         </ol>

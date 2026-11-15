@@ -19,7 +19,8 @@ import {
 import {stageTone, stageWords} from '../src/domain/merge-manager/stage-words';
 import {landedKey, type LandedPullRequest, type LaneStage} from '../src/domain/merge-manager/model';
 import {initialSessionListState, sessionListReducer} from '../src/renderer/state/session-list-slice';
-import {HEAD, MIN, NOW, NO_RULES, landedPr} from './support/merge-manager-fixtures';
+import {HEAD, MIN, NOW, NO_RULES, landedPr, prRead} from './support/merge-manager-fixtures';
+import {landedFacts} from '../src/domain/merge-manager/stages';
 
 const WAITING: LaneStage = {kind: 'waiting', willConflict: false, position: null};
 const HELD: LaneStage = {kind: 'held', reason: {kind: 'review', reviewer: 'ana', team: false}};
@@ -288,4 +289,34 @@ test('clicking the line unfolds the shelf, and again folds it', () => {
     assert.equal(initialSessionListState.landingShelfOpen, false);
     assert.equal(open.landingShelfOpen, true);
     assert.equal(folded.landingShelfOpen, false);
+});
+
+// ── The head's bar ──
+
+test("the head's bar fills over the checks' share of the lane's cycle while they run", () => {
+    /* Given */
+    const read = prRead(1, {checks: [{name: 'Unit tests', state: 'running', startedAt: NOW - 2 * MIN}]});
+    const landed = mergeManagerState([landedPr(1, 10, 'switchboard', {kind: 'head', step: 'checks'})], new Map(), {
+        facts: new Map([[landedKey('movelab/connect', 1), landedFacts(read, NO_RULES)]]),
+    });
+
+    /* When */
+    const row = landingStrip(landed, NOW).lanes[0]!.rows[0]!;
+
+    /* Then */
+    assert.deepEqual(row.timing, {actual: 0, startedAt: NOW - 2 * MIN, expectedMs: DEFAULT_CYCLE_MS * 0.75});
+});
+
+test('once the head merges, its bar stays at what its checks said', () => {
+    /* Given */
+    const read = prRead(1, {checks: [{name: 'Unit tests', state: 'passed', startedAt: NOW - 9 * MIN}]});
+    const landed = mergeManagerState([landedPr(1, 10, 'switchboard', HEAD)], new Map(), {
+        facts: new Map([[landedKey('movelab/connect', 1), landedFacts(read, NO_RULES)]]),
+    });
+
+    /* When */
+    const row = landingStrip(landed, NOW).lanes[0]!.rows[0]!;
+
+    /* Then */
+    assert.equal(row.timing, 1);
 });

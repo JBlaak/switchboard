@@ -23,6 +23,7 @@ import {shallowEqual} from '../../state/store';
 import {useStore} from '../use-store';
 import {openMergeManager, openRowSession} from '../merge-manager/page-actions';
 import {toggleLandingShelf} from './actions';
+import {TimedBar} from '../merge-manager/TimedBar';
 import type {JSX} from 'react';
 import type {LandingLane, LandingPip, LandingRow, LandingStrip} from '../../../domain/merge-manager/landing';
 import type {LandedView, MergeManagerState} from '../../../domain/merge-manager/model';
@@ -200,10 +201,12 @@ function Lanes({strip, onRow}: {strip: LandingStrip; onRow: (row: LandingRow) =>
                                         {row.title} <span className="landing-row-number">#{row.number}</span>
                                     </span>
                                     <span className="landing-row-stage">{row.label}</span>
-                                    {row.progress !== null && (
-                                        <span className="landing-bar" aria-hidden="true">
-                                            <span style={{width: `${Math.round(row.progress * 100)}%`}} />
-                                        </span>
+                                    {row.timing !== null && (
+                                        <TimedBar
+                                            className="landing-bar"
+                                            timing={row.timing}
+                                            seenKey={`${row.key}|${row.row.stage.kind === 'head' ? row.row.stage.step : ''}`}
+                                        />
                                     )}
                                 </span>
                                 <span className="landing-row-eta">{row.eta ? etaText(row.eta) : '—'}</span>
