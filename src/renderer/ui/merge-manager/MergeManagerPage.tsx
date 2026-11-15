@@ -10,9 +10,13 @@
  * bottom, with how long each took; and, once a row is chosen, its side view
  * beside them, per stage, with its actions and its expected time.
  *
+ * Between the lanes and Merged today, Not landed: your newest open PRs not in
+ * a lane yet, each with Land it (L), and View all for the Not landed page,
+ * which the same panel shows instead of the lanes (`NotLandedPage`).
+ *
  * What it shows is `domain/merge-manager/page` and `times`; its keys, while
- * it has the focus and never in a field, are `page-keys`; Esc closes the side
- * view, and then the page.
+ * it has the focus and never in a field, are `page-keys` (J/K go through the
+ * lanes, then Not landed); Esc closes the side view, and then the page.
  *
  * Rendered into `#merge-manager-page`, which `ui/main-area/install-main-area`
  * shows and hides with the route.
@@ -37,7 +41,6 @@ import {
     rowActions,
     rowStageLabel,
     savedText,
-    selectedRow,
     type MergeManagerPageFacts,
     type PageLane,
     type PageRow,
@@ -56,7 +59,20 @@ import {
 import {QUEUE_STEP_MS} from '../../../domain/project/merge-queue';
 import type {LandedView} from '../../../domain/merge-manager/model';
 import type {MergeManagerPageState} from '../../state/merge-manager-slice';
-import {mergeKeyAction} from './page-keys';
+import {mergeKeyAction, notLandedKeyAction} from './page-keys';
+import {CloseIcon} from './CloseIcon';
+import {NotLandedPage} from './NotLandedPage';
+import {NotLandedDetail} from './NotLandedDetail';
+import {NotLandedSection} from './NotLandedSection';
+import {carryOutNotLandedKey} from './not-landed-actions';
+import {
+    notLandedSection,
+    notLandedSubline,
+    pageSelection,
+    visibleRows,
+    type PageSelection,
+    type VisibleRows,
+} from './not-landed-rows';
 import {AwaySummaryBox, MergingHostPill} from './MergingHost';
 import {
     closeMergeDetail,
@@ -65,6 +81,7 @@ import {
     openRowOnGitHub,
     openRowSession,
     selectMergeRow,
+    sessionOf,
     stepMergeRow,
     toggleMergeRow,
     tryAgainFromPage,
@@ -73,34 +90,41 @@ import {
 } from './page-actions';
 
 /** The letters the page's keys use (`page-keys`). */
-const PAGE_LETTERS = new Set(['j', 'k', 't', 'n', 'u', 'o']);
+const PAGE_LETTERS = new Set(['j', 'k', 't', 'n', 'u', 'o', 'l']);
 
 const NO_TIMES: LaneTimes = {runMs: null, rows: new Map(), clearsAt: null};
 
 export function MergeManagerPage(): JSX.Element | null {
     const open = useStore((state) => state.mainArea.route.kind === 'mergeManager');
-    return open ? <MergeManagerView /> : null;
+    const view = useStore((state) => state.mergeManager.page.view);
+    if (!open) return null;
+    return view === 'notLanded' ? <NotLandedPage /> : <MergeManagerView />;
 }
 
 function sameFigure(a: MergeFigure, b: MergeFigure): boolean {
     return a.pose === b.pose && a.count === b.count;
 }
 
-/** The selected row while its side view is open; null while it is closed. */
-function openRow(lanes: readonly PageLane[], page: MergeManagerPageState): PageRow | null {
-    return page.detailOpen ? selectedRow(lanes, page.selected) : null;
+/** The selected row (a lane's or a Not landed one) while its side view is open; null while it is closed. */
+function openRow(rows: VisibleRows, page: MergeManagerPageState): PageSelection | null {
+    return page.detailOpen ? pageSelection(rows, page.selected) : null;
 }
 
 function MergeManagerView(): JSX.Element {
     const root = useRef<HTMLDivElement>(null);
     const merge = useStore((state) => state.mergeManager.state);
     const page = useStore((state) => state.mergeManager.page);
+    const open = useStore((state) => state.mergeManager.notLanded);
+    const busy = useStore((state) => state.mergeManager.busy);
     const figure = useStore((state) => mergeFigureOf(state.mergeManager.state), sameFigure);
     const now = useStore((state) => state.sessionList.now) || Date.now();
     const today = dayStart(now);
     const lanes = pageLanes(merge);
     const merged = mergedToday(merge, today);
-    const selected = openRow(lanes, page);
+    const section = notLandedSection(open, merge);
+    const selection = openRow({lanes, notLanded: section.rows}, page);
+    const selected = selection?.kind === 'lane' ? selection.row : null;
+    const selectedKey = selection?.key ?? null;
     const runMs = page.facts?.runMs ?? {};
     const times = new Map(
         lanes.map((lane) => [lane.repository, laneTimes(lane, runMs[lane.repository.toLowerCase()] ?? null, now)]),
@@ -115,11 +139,11 @@ function MergeManagerView(): JSX.Element {
 
     // The selected row stays in view.
     useEffect(() => {
-        if (!selected) return;
+        if (!selectedKey) return;
         root.current
-            ?.querySelector(`[data-merge-key="${CSS.escape(selected.key)}"]`)
+            ?.querySelector(`[data-merge-key="${CSS.escape(selectedKey)}"]`)
             ?.scrollIntoView({block: 'nearest'});
-    }, [selected?.key]);
+    }, [selectedKey]);
 
     const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -138,12 +162,21 @@ function MergeManagerView(): JSX.Element {
         if (e.key === 'Enter' && target !== root.current) return;
         if (e.shiftKey) return;
         const state = getState().mergeManager;
-        const action = mergeKeyAction(e.key, openRow(pageLanes(state.state), state.page));
+        const current = openRow(visibleRows(state), state.page);
         // The page's letters are its own even where a row does not offer them: N is Nudge, never a quick session.
         if (PAGE_LETTERS.has(e.key.toLowerCase())) {
             e.preventDefault();
             e.stopPropagation();
         }
+        if (current?.kind === 'notLanded') {
+            const offered = notLandedKeyAction(e.key, current.pr, sessionOf(current.pr) !== null);
+            if (!offered) return;
+            e.preventDefault();
+            e.stopPropagation();
+            carryOutNotLandedKey(offered, root.current);
+            return;
+        }
+        const action = mergeKeyAction(e.key, current?.row ?? null);
         if (!action) return;
         e.preventDefault();
         e.stopPropagation();
@@ -199,6 +232,7 @@ function MergeManagerView(): JSX.Element {
                         <div className="sw-subline pp-subline">
                             <span>
                                 {pageSubline(lanes)}
+                                {notLandedSubline(section.total)}
                                 {saved > 0 && (
                                     <span title={savedText(page.facts?.savedThisWeek) ?? undefined}>
                                         {` · ${saved} CI ${saved === 1 ? 'run' : 'runs'} saved this week`}
@@ -219,20 +253,32 @@ function MergeManagerView(): JSX.Element {
                 </div>
             )}
 
-            <div className={'mm-body' + (selected ? ' has-detail' : '')}>
+            <div className={'mm-body' + (selection ? ' has-detail' : '')}>
                 <div className="mm-list" role="listbox" aria-label="Lanes">
-                    {lanes.length === 0 && <EmptyLine figure={figure} />}
-                    {line && <TimelineCard line={line} selected={selected?.key ?? null} onSelect={selectMergeRow} />}
+                    {lanes.length === 0 &&
+                        (section.rows.length > 0 ? (
+                            <NotLandedEmptyLine figure={figure} />
+                        ) : (
+                            <EmptyLine figure={figure} />
+                        ))}
+                    {line && <TimelineCard line={line} selected={selectedKey} onSelect={selectMergeRow} />}
                     {lanes.map((lane) => (
                         <Lane
                             key={lane.repository}
                             lane={lane}
                             times={times.get(lane.repository) ?? NO_TIMES}
                             now={now}
-                            selected={selected?.key ?? null}
+                            selected={selectedKey}
                             onSelect={onSelect}
                         />
                     ))}
+                    <NotLandedSection
+                        section={section}
+                        now={now}
+                        selected={selectedKey}
+                        busy={busy}
+                        onSelect={onSelect}
+                    />
                     {merged.length > 0 && <MergedToday merged={merged} lanes={merge.lanes} />}
                 </div>
                 {selected && (
@@ -243,6 +289,9 @@ function MergeManagerView(): JSX.Element {
                         page={page}
                         now={now}
                     />
+                )}
+                {selection?.kind === 'notLanded' && (
+                    <NotLandedDetail pr={selection.pr} busy={busy[selection.key] === 'land'} />
                 )}
             </div>
 
@@ -265,25 +314,11 @@ function MergeManagerView(): JSX.Element {
                 <span>
                     <kbd className="sw-kbd">O</kbd> open on GitHub
                 </span>
+                <span>
+                    <kbd className="sw-kbd">L</kbd> land it
+                </span>
             </footer>
         </div>
-    );
-}
-
-function CloseIcon(): JSX.Element {
-    return (
-        <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
     );
 }
 
@@ -302,6 +337,18 @@ function EmptyLine({figure}: {figure: MergeFigure}): JSX.Element {
                 then on the Merge manager takes it to merged: it waits its turn in its repository&apos;s lane, is
                 updated and tested only as the head, and is fixed by an errand when it fails out.
             </p>
+        </div>
+    );
+}
+
+/** Nothing landed, but Not landed has rows: one compact line with the small figure, pointing below. */
+function NotLandedEmptyLine({figure}: {figure: MergeFigure}): JSX.Element {
+    return (
+        <div className="mm-empty-line">
+            <SceneFigure scene={{kind: 'merge', state: figure.pose, count: figure.count, label: ''}} />
+            <span>
+                Nothing to land yet. Pick one below and press <kbd className="sw-kbd">L</kbd>.
+            </span>
         </div>
     );
 }
