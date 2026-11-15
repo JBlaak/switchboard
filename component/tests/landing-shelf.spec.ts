@@ -7,8 +7,7 @@
  * (test/merge-manager-landing.test.ts).
  */
 import {test, expect} from '../support/test';
-import {pushEvent} from '../support/main-process';
-import {FIXTURE_NOW} from '../support/fixture-home';
+import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
 import {mergeManagerState} from '../../src/domain/merge-manager/landed';
 import {landedKey} from '../../src/domain/merge-manager/model';
 import type {LandedPullRequest, LaneStage} from '../../src/domain/merge-manager/model';
@@ -43,14 +42,14 @@ const EARLIER = landedPr(1290, 'Retry the cookie refresh', 80, {kind: 'merged', 
 
 test('the shelf shows how long until the next merge, each wait on hover, and the rows when unfolded', async ({
     page,
-    app,
+    api,
 }) => {
     /* Given */
     const shelf = page.getByTestId('landing-shelf');
     await expect(shelf).toHaveCount(0);
 
     /* When */
-    await pushEvent(app, 'merge-manager:changed', mergeManagerState([EARLIER, HEAD, WAITING, HELD], new Map()));
+    await api.emit('onMergeManagerChanged', mergeManagerState([EARLIER, HEAD, WAITING, HELD], new Map()));
 
     /* Then: three landed, the head merges in a minute */
     const line = shelf.getByRole('button', {name: /^Landing: 3 pull requests/});
@@ -76,14 +75,14 @@ test('the shelf shows how long until the next merge, each wait on hover, and the
     await expect(shelf.locator('#landing-shelf-body').getByRole('button', {name: /Paginate the export/})).toBeVisible();
 });
 
-test('when the head merges the line says so, and it tops Just merged', async ({page, app}) => {
+test('when the head merges the line says so, and it tops Just merged', async ({page, api}) => {
     /* Given */
-    await pushEvent(app, 'merge-manager:changed', mergeManagerState([EARLIER, HEAD, WAITING], new Map()));
+    await api.emit('onMergeManagerChanged', mergeManagerState([EARLIER, HEAD, WAITING], new Map()));
     await expect(page.getByTestId('landing-eta')).toHaveText('1m');
 
     /* When */
     const merged = {...HEAD, stage: {kind: 'merged' as const, at: FIXTURE_NOW}};
-    await pushEvent(app, 'merge-manager:changed', mergeManagerState([EARLIER, merged, WAITING], new Map()));
+    await api.emit('onMergeManagerChanged', mergeManagerState([EARLIER, merged, WAITING], new Map()));
 
     /* Then */
     await expect(page.getByTestId('landing-eta')).toHaveText('✓ #1300');

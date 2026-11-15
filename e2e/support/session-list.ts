@@ -13,7 +13,7 @@
  */
 import {expect} from '@playwright/test';
 import type {ElectronApplication, Locator, Page} from '@playwright/test';
-import {EVENT, INVOKE} from '../../src/ipc/channels';
+import {EVENT} from '../../src/ipc/channels';
 import {sidebar} from './app';
 import {pushEvent} from './main-process';
 
@@ -194,23 +194,6 @@ export async function rowNode(
             leaving: row.hasAttribute('data-leaving'),
         };
     }, sessionId);
-}
-
-/** Make one IPC handler fail with `message`, as a broken main process would. */
-export async function failInvoke(
-    app: ElectronApplication,
-    channel: keyof typeof INVOKE,
-    message: string,
-): Promise<void> {
-    await app.evaluate(
-        ({ipcMain}, {channel, message}) => {
-            ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, () => {
-                throw new Error(message);
-            });
-        },
-        {channel: INVOKE[channel], message},
-    );
 }
 
 /** What main has stored for one session (name, star, archive, snooze), read the way the renderer reads it. */

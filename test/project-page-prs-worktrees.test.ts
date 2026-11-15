@@ -4,8 +4,8 @@
  * PR and worktree rows are on screen and what they say, the cursor rows and
  * keys they add, and which state the page is in from the overview's answer.
  *
- * The page in the real app, with a stubbed overview, is in
- * e2e/tests/project-page.spec.ts.
+ * The page in the renderer, with a stubbed overview, is in
+ * component/tests/project-page.spec.ts.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

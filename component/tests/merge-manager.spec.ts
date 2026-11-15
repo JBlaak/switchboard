@@ -9,16 +9,26 @@
  * (test/merge-manager-page.test.ts, test/merge-manager-times.test.ts).
  */
 import {test, expect} from '../support/test';
-import {openSession, terminalHeader} from '../support/app';
-import {pushEvent, stubMergeManagerPage} from '../support/main-process';
-import {FIXTURE_NOW} from '../support/fixture-home';
-import {LABEL, S} from '../fixtures/standard';
+import {openSession} from '../support/running-session';
+import {terminalHeader} from '../../e2e/support/app';
+import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
+import {LABEL, S} from '../../e2e/fixtures/standard';
 import {mergeManagerState} from '../../src/domain/merge-manager/landed';
 import {landedKey} from '../../src/domain/merge-manager/model';
 import type {LandedPullRequest, LaneStage} from '../../src/domain/merge-manager/model';
+import type {MergeManagerPageFacts} from '../../src/domain/merge-manager/page';
 import type {Page} from '@playwright/test';
 
 const REPO = 'acme/api';
+
+/** What main's page facts are with nothing saved, no errands and no CI runs timed. */
+const NO_FACTS: MergeManagerPageFacts = {
+    savedThisWeek: {'update-not-pushed': 0, 'run-cancelled': 0, 'conflict-found': 0},
+    savedByRepository: {},
+    errands: [],
+    checkouts: {},
+    runMs: {},
+};
 
 function landedPr(number: number, title: string, minutesAgo: number, stage: LaneStage): LandedPullRequest {
     return {
@@ -40,22 +50,20 @@ function mergePage(page: Page) {
     return page.getByRole('region', {name: 'Merge manager'});
 }
 
+test.use({answers: {mergeManagerPage: NO_FACTS}});
+
 test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side view, and Esc closes it, then the page', async ({
     page,
-    app,
-    home,
+    api,
 }) => {
     /* Given: a Switchboard lane with its head, one waiting and one held for a review, and CI that takes 11 min */
-    await stubMergeManagerPage(app, {
+    api.answer('mergeManagerPage', {
+        ...NO_FACTS,
         savedThisWeek: {'update-not-pushed': 2, 'run-cancelled': 1, 'conflict-found': 0},
-        savedByRepository: {},
-        errands: [],
-        checkouts: {},
         runMs: {[REPO]: 11 * 60_000},
     });
-    await pushEvent(
-        app,
-        'merge-manager:changed',
+    await api.emit(
+        'onMergeManagerChanged',
         mergeManagerState(
             [
                 landedPr(1300, 'Stop the login redirect loop', 50, {kind: 'head', step: 'checks'}),
@@ -68,7 +76,7 @@ test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side v
             new Map(),
         ),
     );
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
 
     /* When */
     await page.keyboard.press('Meta+Shift+KeyL');
@@ -136,10 +144,10 @@ test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side v
 
 test('with nothing landed the page shows the Merge manager large and how to land a pull request', async ({
     page,
-    home,
+    api,
 }) => {
     /* Given */
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
 
     /* When */
     await page.keyboard.press('Meta+Shift+KeyL');

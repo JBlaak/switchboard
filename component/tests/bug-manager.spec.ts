@@ -1,21 +1,24 @@
 /**
- * The Bug manager page (#414) wired into the real app: ⌘B opens it on the
- * inbox seeded into the database, grouped by local project with "Not
- * linked" last, a filter narrows it, J moves the cursor and marks the row
- * seen, and F makes a worktree of the linked project on
- * `fix/bugsnag-<8 chars>` and starts Claude there with the Fix prompt, which
- * moves the bug to In progress.
+ * The Bug manager page (#414): ⌘B opens it on the inbox main holds, grouped
+ * by local project with "Not linked" last, a filter narrows it, J moves the
+ * cursor and marks the row seen, and F starts Claude in the Fix's worktree of
+ * the linked project with the Fix prompt, which moves the bug to In progress.
  *
  * The tabs, filters, groups, keys and stages are unit tested in
- * test/bug-page-slice.test.ts and test/bug-fix-service.test.ts; this proves
- * the IPC round-trip, the keyboard and the session start. No Bugsnag token
- * is saved, so the detail's reads answer nothing and nothing leaves the box.
+ * test/bug-page-slice.test.ts, and the Fix's worktree, branch and prompt in
+ * test/bug-fix-service.test.ts; this proves the page, the keyboard and the
+ * session start against what main answers. Main's inbox is played by
+ * component/support/inbox.ts; Settings → Bug manager's links are the stored
+ * settings the page reads, and no Bugsnag token is saved, so the detail's
+ * reads answer nothing.
  */
-import {execFileSync} from 'node:child_process';
-import fs from 'node:fs';
-import {test, expect} from '../support/test';
-import {standardFixture, P} from '../fixtures/standard';
-import {FakeCli} from '../support/fake-cli';
+import {test, expect} from '../support/inbox';
+import {runSessions} from '../support/running-session';
+import {HARNESS_SETTINGS} from '../../e2e/support/fixture-home';
+import {P} from '../../e2e/fixtures/standard';
+import {fixtureProjectPath} from '../fixtures/captured';
+import {fixBranch, fixPrompt} from '../../src/domain/inbox/fix';
+import {markRegressed, startWork, updateFix} from '../../src/domain/inbox/items';
 import type {Page} from '@playwright/test';
 import type {BugFacts, InboxItem} from '../../src/domain/inbox/model';
 
@@ -25,6 +28,8 @@ const TRENDING = '5f2a91c0deadbeef00000001';
 const QUIET = '5f2a91c0deadbeef00000002';
 const UNLINKED = '7b11aa00deadbeef00000003';
 const SEEN_AGAIN = '5f2a91c0deadbeef00000004';
+
+const PROJECT = fixtureProjectPath(P.acmeApi);
 
 function bugItem(projectId: string, errorId: string, facts: Partial<BugFacts>, trending = false): InboxItem {
     return {
@@ -91,24 +96,38 @@ function seenAgainItem(): InboxItem {
     };
 }
 
+const TRENDING_BUG = bugItem(
+    API,
+    TRENDING,
+    {
+        errorClass: 'ErrorException',
+        message: 'Undefined array key "workout_id"',
+        lastSeen: '2026-11-12T11:00:00Z',
+    },
+    true,
+);
+
 test.use({
-    fixture: {
-        ...standardFixture(),
-        inboxItems: [
-            bugItem(
-                API,
-                TRENDING,
-                {
-                    errorClass: 'ErrorException',
-                    message: 'Undefined array key "workout_id"',
-                    lastSeen: '2026-11-12T11:00:00Z',
-                },
-                true,
-            ),
+    inbox: {
+        items: [
+            TRENDING_BUG,
             bugItem(API, QUIET, {errorClass: 'QueryException', message: 'Deadlock found'}),
             bugItem(ANDROID, UNLINKED, {errorClass: 'IllegalStateException', message: 'Fragment not attached'}),
             seenAgainItem(),
         ],
+    },
+    // Settings → Bug manager as a user leaves it: Connect API linked to acme-api, Coach Android to nothing.
+    settings: {
+        global: {
+            ...(HARNESS_SETTINGS.global as Record<string, unknown> | undefined),
+            bugsnag: {
+                projects: [
+                    {id: API, name: 'Connect API', optedIn: true, localProject: PROJECT},
+                    {id: ANDROID, name: 'Coach Android', optedIn: true, localProject: null},
+                ],
+                trending: {multiplier: 3, minEvents: 20},
+            },
+        },
     },
 });
 
@@ -120,13 +139,7 @@ function row(page: Page, errorId: string, projectId = API) {
     return bugPage(page).locator(`[data-bug-key="bug:${projectId}:${errorId}"]`);
 }
 
-test('⌘B opens the Bug manager on its inbox; a filter narrows it and J marks the next row seen', async ({
-    page,
-    home,
-}) => {
-    /* Given */
-    await linkBugsnagProjects(page, home.projectPath(P.acmeApi));
-
+test('⌘B opens the Bug manager on its inbox; a filter narrows it and J marks the next row seen', async ({page}) => {
     /* When */
     await page.keyboard.press('Meta+b');
 
@@ -169,32 +182,44 @@ test('⌘B opens the Bug manager on its inbox; a filter narrows it and J marks t
 
 test('F fixes the bug under the cursor in a worktree of the linked project, and it moves to In progress', async ({
     page,
-    home,
+    api,
+    mainInbox,
 }) => {
     /* Given */
-    const project = home.projectPath(P.acmeApi);
-    gitRepositoryOnGitHub(project);
-    await linkBugsnagProjects(page, project);
+    runSessions(api);
+    // What main's Fix makes for the linked project: the worktree on the bug's branch, and the prompt.
+    const branch = fixBranch(TRENDING);
+    const worktreePath = `${PROJECT}/.claude/worktrees/${branch}`;
+    const prompt = fixPrompt({
+        facts: TRENDING_BUG.facts as BugFacts,
+        projectName: 'Connect API',
+        branch,
+        url: null,
+        frames: [],
+    });
+    api.answer('bugPrepareFix', {ok: true, projectPath: PROJECT, worktreePath, branch, prompt});
+    api.handle('bugFixStarted', (key, sessionId) =>
+        mainInbox.change(key, (item) => ({
+            ...startWork(item, 'working'),
+            work: {branch, sessionId, pullRequest: null},
+        })),
+    );
     await page.keyboard.press('Meta+b');
     await expect(row(page, TRENDING)).toHaveAttribute('aria-selected', 'true');
-    const before = fs.readdirSync(home.controlDir);
 
     /* When */
     await page.keyboard.press('f');
 
     /* Then */
-    const started = () => fs.readdirSync(home.controlDir).filter((key) => !before.includes(key));
-    await expect.poll(started).toHaveLength(1);
-    const launch = await new FakeCli(home.controlDir, started()[0]!).launched();
-    expect(launch.cwd).toBe(project + '/.claude/worktrees/fix/bugsnag-5f2a91c0');
-    const prompt = launch.argv[launch.argv.length - 1]!;
-    expect(prompt).toContain('Fix this Bugsnag error from Connect API.');
-    expect(prompt).toContain('failing test first');
-    expect(prompt).toContain(`Bugsnag-Error: ${API} ${TRENDING}`);
-    expect(prompt).toContain('link_issue');
-    expect(execFileSync('git', ['-C', launch.cwd, 'branch', '--show-current'], {encoding: 'utf8'}).trim()).toBe(
-        'fix/bugsnag-5f2a91c0',
-    );
+    await expect.poll(() => api.callsTo('openTerminal')).toHaveLength(1);
+    const [sessionId, cwd, isNew, options] = api.callsTo('openTerminal')[0]!;
+    expect(api.callsTo('bugPrepareFix')).toEqual([[`bug:${API}:${TRENDING}`]]);
+    expect(cwd).toBe(PROJECT + '/.claude/worktrees/fix/bugsnag-5f2a91c0');
+    expect(isNew).toBe(true);
+    expect(options?.initialPrompt).toBe(prompt);
+    expect(options?.initialPrompt).toContain('Fix this Bugsnag error from Connect API.');
+    expect(options?.initialPrompt).toContain(`Bugsnag-Error: ${API} ${TRENDING}`);
+    await expect.poll(() => api.callsTo('bugFixStarted')).toEqual([[`bug:${API}:${TRENDING}`, sessionId]]);
 
     /* When */
     await page.keyboard.press('Meta+b');
@@ -205,14 +230,10 @@ test('F fixes the bug under the cursor in a worktree of the linked project, and 
         .getByRole('tab', {name: /^In progress/})
         .click();
     await expect(row(page, TRENDING)).toContainText('Working');
-    await bugPage(page)
-        .getByRole('tab', {name: /^Inbox/})
-        .click();
 });
 
-test('Fix is off for a Bugsnag project linked to no local project', async ({page, home}) => {
+test('Fix is off for a Bugsnag project linked to no local project', async ({page}) => {
     /* Given */
-    await linkBugsnagProjects(page, home.projectPath(P.acmeApi));
     await page.keyboard.press('Meta+b');
 
     /* When */
@@ -225,10 +246,13 @@ test('Fix is off for a Bugsnag project linked to no local project', async ({page
 
 test('a bug seen again after its merge from an older release asks, and Treat as regressed brings it back unread', async ({
     page,
-    home,
+    api,
+    mainInbox,
 }) => {
     /* Given */
-    await linkBugsnagProjects(page, home.projectPath(P.acmeApi));
+    api.handle('bugTreatAsRegressed', (key) =>
+        mainInbox.change(key, (item) => markRegressed(updateFix(item, (fix) => ({...fix, seenAgain: null})))),
+    );
     await page.keyboard.press('Meta+b');
     await bugPage(page).getByRole('tab', {name: /^Done/}).click();
 
@@ -247,47 +271,5 @@ test('a bug seen again after its merge from an older release asks, and Treat as 
         .click();
     await expect(row(page, SEEN_AGAIN)).toContainText('Regressed');
     await expect(row(page, SEEN_AGAIN)).toHaveClass(/is-unread/);
+    expect(api.callsTo('bugTreatAsRegressed')).toEqual([[`bug:${API}:${SEEN_AGAIN}`]]);
 });
-
-/** Settings → Bug manager as a user leaves it: Connect API linked to `projectPath`, Coach Android to nothing. */
-async function linkBugsnagProjects(page: Page, projectPath: string): Promise<void> {
-    await page.evaluate(
-        async ({api, android, projectPath}) => {
-            const global = (await window.api.getSetting<Record<string, unknown>>('global')) ?? {};
-            await window.api.setSetting('global', {
-                ...global,
-                bugsnag: {
-                    projects: [
-                        {id: api, name: 'Connect API', optedIn: true, localProject: projectPath},
-                        {id: android, name: 'Coach Android', optedIn: true, localProject: null},
-                    ],
-                    trending: {multiplier: 3, minEvents: 20},
-                },
-            });
-        },
-        {api: API, android: ANDROID, projectPath},
-    );
-}
-
-/**
- * The project as a git repository whose origin is on GitHub, as a Fix needs,
- * with fetching pointed at a closed port so it fails at once and the worktree
- * starts from the local main, as it does offline.
- */
-function gitRepositoryOnGitHub(project: string): void {
-    const git = (...args: string[]) => execFileSync('git', ['-C', project, ...args], {stdio: 'pipe'});
-    git('init', '--quiet', '--initial-branch=main');
-    git(
-        '-c',
-        'user.name=Fixture',
-        '-c',
-        'user.email=fixture@example.com',
-        'commit',
-        '--quiet',
-        '--allow-empty',
-        '-m',
-        'Start',
-    );
-    git('remote', 'add', 'origin', 'https://github.com/acme/api.git');
-    git('config', 'http.proxy', 'http://127.0.0.1:9');
-}

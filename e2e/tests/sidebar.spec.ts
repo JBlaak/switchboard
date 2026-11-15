@@ -4,7 +4,10 @@
  *
  * The order, the folding and the filters are decided by the list's layout
  * (test/session-list-layout.test.ts, test/session-list-slice.test.ts); this
- * walks the list the real index drew, and what its clicks ask main for.
+ * walks the list the real index drew, and what its clicks ask main for, as the
+ * one smoke test of the index behind the list. The list's behaviour against
+ * what main answers, and the archive toast's Undo, are component tests
+ * (component/tests/session-list.spec.ts, component/tests/sidebar.spec.ts).
  */
 import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {
@@ -85,24 +88,6 @@ test('lists, folds, searches, archives and filters what the index found', async 
     /* Then */
     await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
     await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-});
-
-test('Undo on the toast brings an archived row back', async ({page}) => {
-    /* Given */
-    const charts = sessionRow(page, LABEL.chartsDarkMode);
-    await charts.hover();
-    await rowButton(charts, 'Archive').click();
-    await expect(charts).toHaveCount(0);
-    const toast = page.getByTestId('archive-undo');
-    await expect(toast).toContainText(`Archived “${LABEL.chartsDarkMode}”`);
-
-    /* When */
-    await toast.getByRole('button', {name: /Undo/}).click();
-
-    /* Then */
-    await expect(toast).toHaveCount(0);
-    await expect(charts).toBeVisible();
-    await expect(charts).not.toHaveAttribute('data-leaving');
 });
 
 forEachAppearance(() => {

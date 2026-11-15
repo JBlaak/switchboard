@@ -4,8 +4,8 @@
  * (`merge-queue-view`), its cursor rows and keys, the session that owns the
  * head, and what its buttons do against a fake `window.api` and fake effects.
  *
- * The queue itself is the domain's (test/merge-queue.test.ts); the section in
- * the real app, with a stubbed overview, is in e2e/tests/project-page.spec.ts.
+ * The queue itself is the domain's (test/merge-queue.test.ts); the section in the
+ * renderer, with a stubbed overview, is in component/tests/project-page.spec.ts.
  */
 import {beforeEach, test} from 'node:test';
 import assert from 'node:assert/strict';

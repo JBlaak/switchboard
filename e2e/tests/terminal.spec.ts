@@ -1,27 +1,20 @@
 /**
- * A running session: the fake `claude` in the terminal, and everything the app
- * reads out of its output — busy and idle, notifications, program status, the
- * title, a fork. Typing and the exit are covered with the terminal host, in
- * terminal-host.spec.ts.
+ * A running session's real process: the fake `claude` launched in the
+ * terminal, resumed with the question hook or started fresh from the picker,
+ * and forked, which main detects from the new transcript (no unit test covers
+ * that detection, so the journey stays here).
+ *
+ * What the app reads out of a session's output (busy and idle, notifications,
+ * program status, the title) and the renderer's side of a fork are tested
+ * against what main sends in the component suite (component/tests/terminal.spec.ts).
+ * Typing and the exit are covered with the terminal host, in
+ * terminal-host.spec.ts and component/tests/terminal-host.spec.ts.
  */
 import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {dialog, expectScreen, openSession, sessionRow, sidebar, sidebarFilter, terminalHeader} from '../support/app';
-import type {Page} from '@playwright/test';
+import {dialog, expectScreen, openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {sessionId} from '../support/fixture-home';
 import {LABEL, S} from '../fixtures/standard';
-
-/**
- * Flagging a session for attention marks its row in place; it moves to the
- * "Blocked" section on the next redraw, which toggling a filter forces.
- */
-async function redrawSidebar(page: Page): Promise<void> {
-    await sidebarFilter(page, 'pinned').click();
-    await sidebarFilter(page, 'pinned').click();
-}
-
-/** The session's name in the bar; its tooltip is what the process last called itself. */
-const headerName = (page: Page) => page.locator('#terminal-header-name');
 
 test.describe('smoke', () => {
     test('resumes a session with the question hook and shows its header', async ({page, home}) => {
@@ -35,83 +28,6 @@ test.describe('smoke', () => {
         expect(launch.settings?.hooks?.PreToolUse?.[0].matcher).toBe('AskUserQuestion');
         expect(launch.cwd).toBe(home.projectPath('Development/acme-api'));
         await expect(terminalHeader(page).getByText(LABEL.loginFix, {exact: true})).toBeVisible();
-    });
-
-    test('OSC 0 titles set the header and drive working/ready, and a notification replaces the title', async ({
-        page,
-        home,
-    }) => {
-        /* Given */
-        const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await claude.busy('Reading the redirect handler');
-
-        /* Then */
-        await expect(sidebar(page).getByText('Working', {exact: true})).toBeVisible();
-        // The process title is the session name's tooltip (#343).
-        await expect(headerName(page)).toHaveAttribute('title', '⠋ Reading the redirect handler');
-
-        /* When */
-        await claude.idle('Claude Code');
-
-        /* Then */
-        await expect(sidebar(page).getByText('Your turn', {exact: true})).toBeVisible();
-        await expect(headerName(page)).toHaveAttribute('title', '✳ Claude Code');
-
-        /* When */
-        await claude.notify('Claude needs your permission to use Bash');
-
-        /* Then */
-        await expect(headerName(page)).toHaveAttribute('title', 'Claude needs your permission to use Bash');
-    });
-
-    test('OSC 7501 program status overrides titles, and it or an OSC 9 notification flags a session off screen', async ({
-        page,
-        home,
-    }) => {
-        /* Given */
-        const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await claude.status({state: 'working'});
-
-        /* Then */
-        await expect(sidebar(page).getByText('Working', {exact: true})).toBeVisible();
-
-        /* When */
-        // Once 7501 is spoken, an idle title no longer ends the turn.
-        await claude.idle();
-
-        /* Then */
-        await expect(sidebar(page).getByText('Working', {exact: true})).toBeVisible();
-
-        /* When */
-        // A session on screen is never flagged (the user is looking at it).
-        await sessionRow(page, LABEL.chartsDarkMode).click();
-        await claude.status({state: 'blocked', kind: 'permission', msg: 'Allow Bash(npm test)?'});
-        await redrawSidebar(page);
-
-        /* Then */
-        await expect(sidebar(page).getByText('Blocked', {exact: true})).toBeVisible();
-
-        /* When */
-        // Looking at it settles the flag; a notification raises it again.
-        await sessionRow(page, LABEL.loginFix).click();
-        await claude.status({state: 'working'});
-        await sessionRow(page, LABEL.chartsDarkMode).click();
-        await redrawSidebar(page);
-
-        /* Then */
-        await expect(sidebar(page).getByText('Blocked', {exact: true})).toHaveCount(0);
-
-        /* When */
-        await claude.notify('Claude needs your permission to use Bash');
-        await claude.notify777('Claude Code', 'Claude needs your permission to use Bash');
-        await redrawSidebar(page);
-
-        /* Then */
-        await expect(sidebar(page).getByText('Blocked', {exact: true})).toBeVisible();
     });
 
     test('a fork re-keys the running session, keeping the same row, highlighted, and the same terminal', async ({

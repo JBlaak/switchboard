@@ -50,9 +50,6 @@ import type {
 import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/application/services/session-handoff';
 import type {SessionBringBackPhase, SessionBringBackPreview} from '../../src/application/services/session-bring-back';
-import type {SessionLink} from '../../src/domain/session/links';
-import type {LandedView, MergeManagerState} from '../../src/domain/merge-manager/model';
-import type {MergeManagerPageFacts} from '../../src/domain/merge-manager/page';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -437,22 +434,6 @@ export const STUB_HANDOFF: HandoffStub = {
 export interface VmRegistryStub {
     /** The registered VMs, in order; Add a VM appends one with no agent yet. */
     hosts: VmHostView[];
-}
-
-/** A registered VM as `vm-registry:list` answers it: no name, no agent yet, no projects. */
-export function stubVmHost(user: string, host: string, port = 22, change: Partial<VmHostView> = {}): VmHostView {
-    return {
-        key: `${user}@${host}:${port}`,
-        user,
-        host,
-        port,
-        label: `${user}@${host}${port === 22 ? '' : ':' + port}`,
-        agent: null,
-        current: false,
-        connected: false,
-        projects: [],
-        ...change,
-    };
 }
 
 /** What the `agent:*` channels answer, for every host alike. */
@@ -1244,74 +1225,6 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
     );
 }
 
-/** What the renderer asked the VM hosts' stubs since the app launched. */
-export async function agentRequests(app: ElectronApplication): Promise<AgentRequests> {
-    return await app.evaluate(() => {
-        const requests = (globalThis as WithStubs).__switchboardE2E.agentRequests;
-        return {
-            install: [...requests.install],
-            setHostSettings: [...requests.setHostSettings],
-            openSetupTerminal: [...requests.openSetupTerminal],
-        };
-    });
-}
-
-/** What the renderer asked the hand-off stubs since the app launched. */
-export async function handoffRequests(app: ElectronApplication): Promise<HandoffRequests> {
-    return await app.evaluate(() => {
-        const requests = (globalThis as WithStubs).__switchboardE2E.handoffRequests;
-        return {
-            preview: [...requests.preview],
-            handOff: requests.handOff.map((request) => ({
-                ...request,
-                ticked: [...request.ticked],
-                choices: {...request.choices},
-            })),
-            copyStatus: [...requests.copyStatus],
-            bringBack: [...requests.bringBack],
-            removeCopy: [...requests.removeCopy],
-        };
-    });
-}
-
-/** What the renderer asked the session hand-off stubs since the app launched. */
-export async function sessionHandoffRequests(app: ElectronApplication): Promise<SessionHandoffRequests> {
-    return await app.evaluate(() => {
-        const requests = (globalThis as WithStubs).__switchboardE2E.sessionHandoffRequests;
-        return {
-            preview: [...requests.preview],
-            handOff: requests.handOff.map((request) => ({...request, ticked: [...request.ticked]})),
-            cancel: [...requests.cancel],
-        };
-    });
-}
-
-/** What the renderer asked the session Bring back stubs since the app launched. */
-export async function sessionBringBackRequests(app: ElectronApplication): Promise<SessionBringBackRequests> {
-    return await app.evaluate(() => {
-        const requests = (globalThis as WithStubs).__switchboardE2E.sessionBringBackRequests;
-        return {preview: [...requests.preview], bringBack: requests.bringBack.map((request) => ({...request}))};
-    });
-}
-
-/** What the renderer asked the schedules stubs since the app launched. */
-export async function vmSchedulesRequests(app: ElectronApplication): Promise<VmSchedulesRequests> {
-    return await app.evaluate(() => {
-        const requests = (globalThis as WithStubs).__switchboardE2E.vmSchedulesRequests;
-        return {where: [...requests.where], runOn: requests.runOn.map((request) => ({...request}))};
-    });
-}
-
-/** Every upload of dropped files the renderer asked for since the app launched. */
-export async function droppedFilesRequests(app: ElectronApplication): Promise<DroppedFilesRequest[]> {
-    return await app.evaluate(() =>
-        (globalThis as WithStubs).__switchboardE2E.droppedFilesRequests.map((request) => ({
-            ...request,
-            localPaths: [...request.localPaths],
-        })),
-    );
-}
-
 /** Everything the renderer typed into `sessionId`'s terminal since the app launched, joined. */
 export async function terminalInput(app: ElectronApplication, sessionId: string): Promise<string> {
     return await app.evaluate(
@@ -1322,32 +1235,6 @@ export async function terminalInput(app: ElectronApplication, sessionId: string)
                 .join(''),
         sessionId,
     );
-}
-
-/** The sessions whose Session work page the renderer told main it closed, in order. */
-export async function sessionWorkClosed(app: ElectronApplication): Promise<string[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
-    });
-}
-
-/** What each Start session on an issue with an existing branch asked to do with it (null: nothing yet), in order. */
-export async function existingBranchAsks(app: ElectronApplication): Promise<(string | null)[]> {
-    return await app.evaluate(() => [...((globalThis as {__existingAsked?: (string | null)[]}).__existingAsked ?? [])]);
-}
-
-/** Every call the renderer made on a `queue:*` channel, in order (#315). */
-export async function mergeQueueRequests(app: ElectronApplication): Promise<MergeQueueRequest[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.mergeQueueRequests];
-    });
-}
-
-/** Every write to your review the Session work page asked main for, in order. */
-export async function sessionWorkReviews(app: ElectronApplication): Promise<ReviewWrite[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkReviews];
-    });
 }
 
 /** Change a stub mid-test (takes effect on the renderer's next request). */
@@ -1374,37 +1261,10 @@ export async function openedExternally(app: ElectronApplication): Promise<string
     });
 }
 
-/**
- * Make every search fail in the main process, as an index that cannot parse a
- * query would if main did not already answer it with no results.
- */
-export async function breakSearch(app: ElectronApplication): Promise<void> {
-    await app.evaluate(({ipcMain}, channel) => {
-        ipcMain.removeHandler(channel);
-        ipcMain.handle(channel, () => {
-            throw new Error('fts5: syntax error');
-        });
-    }, INVOKE.search);
-}
-
-/** How often each counted stub has been called since the app launched. */
-export async function hostStubCalls(app: ElectronApplication): Promise<HostStubCalls> {
-    return await app.evaluate(() => {
-        return {...(globalThis as WithStubs).__switchboardE2E.calls};
-    });
-}
-
 /** Everything the app wrote to the clipboard (stubbed; the host's is never touched). */
 export async function clipboardWrites(app: ElectronApplication): Promise<string[]> {
     return await app.evaluate(() => {
         return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
-    });
-}
-
-/** Every image the app wrote to the clipboard, as base64 PNG (stubbed, like `clipboardWrites`). */
-export async function clipboardImages(app: ElectronApplication): Promise<string[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.clipboardImages];
     });
 }
 
@@ -1450,21 +1310,6 @@ export async function pushRemoteStatus(
 }
 
 /**
- * Make every "stop session" request fail with `error`, the way a PTY that
- * refuses to die would. For the paths that have to give up part-way — archiving
- * a whole project stops at the first session it cannot stop.
- */
-export async function failStopSession(app: ElectronApplication, error: string): Promise<void> {
-    await app.evaluate(
-        ({ipcMain}, {channel, error}) => {
-            ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, () => ({ok: false, error}));
-        },
-        {channel: INVOKE.stopSession, error},
-    );
-}
-
-/**
  * Answer every "reconnect now" request with `result` instead of acting on it,
  * and remember which sessions asked. For the card's Retry button: what the
  * click asks main for is the thing under test, and a real early redial would
@@ -1484,37 +1329,6 @@ export async function stubReconnectRemote(app: ElectronApplication, result: {ok:
         },
         {channel: INVOKE.reconnectRemote, result},
     );
-}
-
-/**
- * Answer every "open terminal" request as opened, without launching anything,
- * and remember which sessions asked. For a VM session (#276), whose real launch
- * waits on its host's agent over ssh: a test that only needs it on screen
- * (Session work's trigger puts it there first) must not dial a host.
- */
-export async function stubOpenTerminal(app: ElectronApplication): Promise<void> {
-    await app.evaluate(
-        ({ipcMain}, {channel}) => {
-            const state = (globalThis as typeof globalThis & {__switchboardE2E: {terminalsOpened?: string[]}})
-                .__switchboardE2E;
-            state.terminalsOpened = [];
-            ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, (_event, sessionId) => {
-                state.terminalsOpened!.push(String(sessionId));
-                return {ok: true, reattached: false};
-            });
-        },
-        {channel: INVOKE.openTerminal},
-    );
-}
-
-/** The sessions the renderer asked to open a terminal for since `stubOpenTerminal`. */
-export async function terminalsOpened(app: ElectronApplication): Promise<string[]> {
-    return await app.evaluate(() => {
-        const state = (globalThis as typeof globalThis & {__switchboardE2E: {terminalsOpened?: string[]}})
-            .__switchboardE2E;
-        return [...(state.terminalsOpened ?? [])];
-    });
 }
 
 /** The sessions the renderer asked to reconnect since `stubReconnectRemote`. */
@@ -1617,69 +1431,6 @@ export async function closeMainWindow(app: ElectronApplication): Promise<void> {
             .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
             .close();
     });
-}
-
-/**
- * Land it's back end (#436), standing in for `gh` and the Merge manager:
- * every session's links are `links`, and landing answers `landed` (the PR in
- * its lane) after pushing `lanes`, as the real service pushes the lanes it
- * just changed. Unland pushes the empty lanes back. Each Land it and Unland
- * is remembered (`landRequests`).
- */
-export async function stubLandIt(
-    app: ElectronApplication,
-    stub: {links: SessionLink[]; lanes: MergeManagerState; landed: LandedView},
-): Promise<void> {
-    await app.evaluate(
-        ({ipcMain, BrowserWindow}, {channels, stub}) => {
-            const state = (globalThis as typeof globalThis & {__switchboardE2E: {landRequests?: string[]}})
-                .__switchboardE2E;
-            state.landRequests = [];
-            const push = (lanes: unknown): void => {
-                BrowserWindow.getAllWindows()
-                    .find((w) => !w.webContents.getURL().includes('/quick-ask/'))
-                    ?.webContents.send(channels.changed, lanes);
-            };
-            ipcMain.removeHandler(channels.links);
-            ipcMain.handle(channels.links, () => stub.links);
-            ipcMain.removeHandler(channels.land);
-            ipcMain.handle(channels.land, (_event, repository, number) => {
-                state.landRequests!.push(`land ${repository}#${number}`);
-                push(stub.lanes);
-                return {ok: true, landed: stub.landed};
-            });
-            ipcMain.removeHandler(channels.unland);
-            ipcMain.handle(channels.unland, (_event, repository, number) => {
-                state.landRequests!.push(`unland ${repository}#${number}`);
-                push({lanes: [], needsYou: 0});
-                return {ok: true};
-            });
-        },
-        {
-            channels: {
-                links: INVOKE.sessionLinks,
-                land: INVOKE.mergeManagerLand,
-                unland: INVOKE.mergeManagerUnland,
-                changed: EVENT.mergeManagerChanged,
-            },
-            stub,
-        },
-    );
-}
-
-/**
- * What the Merge manager's page asks main for besides the lanes (#439),
- * standing in for the savings, the errands and `gh`'s CI run times: answers
- * `facts` from now on.
- */
-export async function stubMergeManagerPage(app: ElectronApplication, facts: MergeManagerPageFacts): Promise<void> {
-    await app.evaluate(
-        ({ipcMain}, {channel, facts}) => {
-            ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, () => facts);
-        },
-        {channel: INVOKE.mergeManagerPage, facts},
-    );
 }
 
 /** Every Land it and Unland since `stubLandIt`, as `land owner/repo#n`. */

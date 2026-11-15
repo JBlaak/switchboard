@@ -1,0 +1,692 @@
+/**
+ * The question panel: a pending AskUserQuestion shown over the session's
+ * terminal and answered from Switchboard.
+ *
+ * Main is played by `askQuestions` below: it pushes the set as main's
+ * QuestionService does (`onQuestionsAsked`), answers `getPendingQuestions`
+ * and `answerQuestions`, and settles the set (`onQuestionsSettled`) when it
+ * is answered or the hook request goes away. The hook round trip itself, and
+ * a set held by main across a reload, stay in e2e/tests/questions.spec.ts;
+ * the hook server's withdrawing on a closed request is unit tested in
+ * test/question-hook-server.test.ts.
+ *
+ * What the panel decides on its own is unit tested: the draft rules
+ * (test/answer-draft.test.ts), Patch's lines (test/question-beats.test.ts,
+ * test/answers-slice.test.ts), the copy (test/question-copy.test.ts) and what
+ * each key means (test/question-panel-keys.test.ts), and that a withdrawn
+ * set gets no farewell (test/question-actions.test.ts).
+ */
+import {test, expect} from '../support/test';
+import {sessionRow, sidebar, terminalHeader} from '../../e2e/support/app';
+import {focusIsIn, option, questionSheet, recordAnimations, recordedAnimations} from '../../e2e/support/questions';
+import {LABEL, S} from '../../e2e/fixtures/standard';
+import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
+import {openSession, typedInto, waitForInput} from '../support/running-session';
+import type {Page} from '@playwright/test';
+import type {AskedQuestion} from '../../e2e/support/questions';
+import type {FakeApi} from '../support/fake-api';
+import type {Answers, PendingQuestions} from '../../src/domain/questions/question';
+
+const QUESTIONS: AskedQuestion[] = [
+    {
+        question: 'Where should the session cookie be scoped?',
+        header: 'Cookie path',
+        options: [
+            {label: 'The whole site (Recommended)', description: 'Path=/ so every route sees the session.'},
+            {label: 'Only /app', description: 'Keeps the cookie off the marketing pages.'},
+        ],
+    },
+    {
+        question: 'Which checks should run before I open the PR?',
+        header: 'Checks',
+        multiSelect: true,
+        options: [
+            {label: 'Unit tests', description: ''},
+            {label: 'Type check', description: ''},
+            {label: 'Lint', description: ''},
+        ],
+    },
+];
+
+/** How long the CLI waits on the hook (QUESTION_HOOK_TIMEOUT_SECONDS). */
+const HOOK_TIMEOUT_MS = 600_000;
+
+function questionPanel(page: Page) {
+    return page.getByRole('region', {name: 'Questions from Claude'});
+}
+
+const heading = (page: Page, n: number) => questionPanel(page).getByRole('heading', {name: QUESTIONS[n].question});
+const tab = (page: Page, name: string) =>
+    questionPanel(page).getByRole('navigation', {name: 'Questions'}).getByRole('button', {name});
+const primary = (page: Page) => questionPanel(page).getByRole('button', {name: /^(Next|Send answers)/});
+const otherField = (page: Page) => questionPanel(page).getByRole('textbox', {name: 'Other answer'});
+const patchSays = (page: Page) => questionPanel(page).getByRole('status');
+const pokePatch = (page: Page) => questionPanel(page).getByRole('button', {name: 'Poke Patch'});
+const toTerminalButton = (page: Page) => terminalHeader(page).getByRole('button', {name: /Answer in terminal/});
+const waitingPill = (page: Page) => terminalHeader(page).getByRole('button', {name: /(waiting|Ready to send) · Show$/});
+
+/** A set main holds for a session, as the hook would have it. */
+interface PendingAsk {
+    /** The answers sent back to the hook. */
+    answers: Promise<Answers>;
+    /** The hook request went away: main withdraws the set. */
+    abandon(): Promise<void>;
+    toolUseId: string;
+}
+
+/** Main's pending sets, by session, for `getPendingQuestions` and `answerQuestions`. */
+const held = new WeakMap<FakeApi, Map<string, {pending: PendingQuestions; answer: (answers: Answers) => void}>>();
+
+function heldBy(api: FakeApi) {
+    let sets = held.get(api);
+    if (sets) return sets;
+    sets = new Map();
+    held.set(api, sets);
+    const pending = sets;
+    api.handle('getPendingQuestions', () => [...pending.values()].map((set) => set.pending));
+    api.handle('answerQuestions', async (sessionId, toolUseId, answers) => {
+        const set = pending.get(sessionId);
+        if (set?.pending.toolUseId !== toolUseId) return {ok: false, error: 'These questions are no longer waiting'};
+        pending.delete(sessionId);
+        // Main settles the set before it replies, so the event arrives first.
+        await api.emit('onQuestionsSettled', {sessionId, toolUseId, outcome: 'answered', answeredOn: 'mac'});
+        set.answer(answers);
+        return {ok: true};
+    });
+    return pending;
+}
+
+/**
+ * Ask `sessionId` these questions, as main does when the hook request comes
+ * in: whatever the session was still asking is withdrawn first. The clock is
+ * frozen at FIXTURE_NOW; `deadlineInMs` is measured from there.
+ */
+async function askQuestions(
+    api: FakeApi,
+    sessionId: string,
+    questions: AskedQuestion[],
+    {
+        toolUseId = 'toolu_c_' + Math.random().toString(36).slice(2, 10),
+        deadlineInMs = HOOK_TIMEOUT_MS,
+    }: {toolUseId?: string; deadlineInMs?: number} = {},
+): Promise<PendingAsk> {
+    const sets = heldBy(api);
+    const previous = sets.get(sessionId);
+    if (previous) {
+        sets.delete(sessionId);
+        await api.emit('onQuestionsSettled', {
+            sessionId,
+            toolUseId: previous.pending.toolUseId,
+            outcome: 'withdrawn',
+        });
+    }
+    const pending: PendingQuestions = {
+        sessionId,
+        toolUseId,
+        source: 'ask',
+        questions: questions.map((q) => ({
+            question: q.question,
+            header: q.header ?? '',
+            multiSelect: !!q.multiSelect,
+            options: q.options.map((o) => ({label: o.label, description: o.description ?? ''})),
+        })),
+        askedAt: FIXTURE_NOW,
+        deadline: FIXTURE_NOW + deadlineInMs,
+    };
+    let answer!: (answers: Answers) => void;
+    const answers = new Promise<Answers>((resolve) => (answer = resolve));
+    sets.set(sessionId, {pending, answer});
+    await api.emit('onQuestionsAsked', pending);
+    return {
+        answers,
+        toolUseId,
+        abandon: async () => {
+            if (sets.get(sessionId)?.pending !== pending) return;
+            sets.delete(sessionId);
+            await api.emit('onQuestionsSettled', {sessionId, toolUseId, outcome: 'withdrawn'});
+        },
+    };
+}
+
+/**
+ * Open the newest session and ask it `questions`; answers once the first is on
+ * screen.
+ *
+ * Without reduced motion: under it the sheet cannot take the keyboard as it
+ * comes up (the reduced-motion rule in _questions.scss keeps it
+ * `visibility: hidden` past the moment it asks for focus; see the e2e spec).
+ */
+async function askedOnScreen(page: Page, api: FakeApi, questions = QUESTIONS): Promise<PendingAsk> {
+    await page.emulateMedia({reducedMotion: 'no-preference'});
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    const asked = await askQuestions(api, S.loginFix, questions);
+    await expect(questionPanel(page).getByRole('heading', {name: questions[0].question})).toBeVisible();
+    return asked;
+}
+
+/** Fire keydowns at the element that has focus, all in one task, so nothing runs between them. */
+async function keysAtOnce(page: Page, keys: string[]): Promise<void> {
+    await page.evaluate((keys) => {
+        const target = document.activeElement ?? document.body;
+        for (const key of keys)
+            target.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true}));
+    }, keys);
+}
+
+// Answered for the session tray, which opens as the pointer crosses the header's pill.
+
+test.describe('smoke', () => {
+    test('withdraws the panel when the hook request goes away, and gives the keyboard back', async ({page, api}) => {
+        /* When */
+        const asked = await askedOnScreen(page, api, QUESTIONS.slice(0, 1));
+
+        /* Then */
+        expect(await focusIsIn(page)).toBe('panel');
+        await expect(sidebar(page).getByText('Asking 1 question', {exact: true})).toBeVisible();
+
+        /* When */
+        await asked.abandon();
+
+        /* Then */
+        await expect(questionPanel(page)).toHaveCount(0);
+        await expect(sidebar(page).getByText('Asking 1 question', {exact: true})).toHaveCount(0);
+        await expect(toTerminalButton(page)).toHaveCount(0);
+        await expect(waitingPill(page)).toHaveCount(0);
+        await expect.poll(() => focusIsIn(page)).toBe('terminal');
+    });
+});
+
+// Chromium left a question block it had animated before on the hidden
+// sheet's inherited style, so a later showing came up blank and took no
+// clicks (#120). A click that lands proves the block is drawn and hit.
+test.describe('showing again', () => {
+    const sheetGone = (page: Page) =>
+        expect.poll(() => questionSheet(page).evaluate((el) => getComputedStyle(el).visibility)).toBe('hidden');
+
+    test('a later set comes up whole and takes clicks, also when come back to from the terminal', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        const first = await askedOnScreen(page, api);
+        await option(page, /The whole site/).click();
+        await primary(page).click();
+        await option(page, /Unit tests/).click();
+        await primary(page).click();
+        await first.answers;
+        await sheetGone(page);
+
+        /* When */
+        const second = await askQuestions(api, S.loginFix, QUESTIONS);
+        await option(page, /Only \/app/).click({timeout: 3000});
+        await primary(page).click();
+        await expect(heading(page, 1)).toBeVisible();
+        await page.keyboard.press('Escape');
+        await sheetGone(page);
+        await waitingPill(page).click();
+        await option(page, /Lint/).click({timeout: 3000});
+
+        /* Then */
+        await expect(tab(page, 'Checks')).toHaveClass(/is-done/);
+
+        /* When */
+        await primary(page).click();
+
+        /* Then */
+        expect(await second.answers).toEqual({
+            [QUESTIONS[0].question]: 'Only /app',
+            [QUESTIONS[1].question]: 'Lint',
+        });
+    });
+});
+
+test.describe('placement', () => {
+    test('sits over the terminal of the session asking, following it on screen without transitions', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        await openSession(page, api, LABEL.loginFix, S.loginFix);
+        await openSession(page, api, LABEL.worktreeTry, S.worktreeTry);
+
+        /* When */
+        await askQuestions(api, S.loginFix, QUESTIONS);
+
+        /* Then */
+        await expect(sidebar(page).getByText('Asking 2 questions', {exact: true})).toBeVisible();
+        // Asked behind the session on screen: nothing comes up over it.
+        await expect(questionPanel(page)).toHaveCount(0);
+        await expect(page.locator('.terminal-container.qp-under')).toHaveCount(0);
+
+        /* When */
+        await page.evaluate(() => {
+            const terminals = document.getElementById('terminals')!;
+            const w = window as unknown as {__instant: number};
+            w.__instant = 0;
+            new MutationObserver(() => {
+                if (terminals.classList.contains('qp-instant')) w.__instant++;
+            }).observe(terminals, {attributes: true, attributeFilter: ['class']});
+        });
+        await sessionRow(page, LABEL.loginFix).first().click();
+
+        /* Then */
+        await expect(heading(page, 0)).toBeVisible();
+        expect(await questionPanel(page).evaluate((el) => el.parentElement?.id)).toBe('terminals');
+        // `qp-under` is the contract with the stylesheet, so it is asserted by name.
+        await expect(page.locator('.terminal-container.visible.qp-under')).toHaveCount(1);
+        expect(await page.evaluate(() => (window as unknown as {__instant: number}).__instant)).toBeGreaterThan(0);
+        // Cleared again two frames later.
+        await expect(page.locator('#terminals.qp-instant')).toHaveCount(0);
+
+        /* When */
+        await sessionRow(page, LABEL.worktreeTry).first().click();
+
+        /* Then */
+        await expect(questionPanel(page)).toHaveCount(0);
+        await expect(page.locator('.terminal-container.qp-under')).toHaveCount(0);
+    });
+});
+
+test.describe('keys', () => {
+    test('the keyboard answers the whole set; other keys stop at the panel, or at Patch', async ({page, api}) => {
+        /* Given */
+        const asked = await askedOnScreen(page, api);
+        await page.evaluate(() => {
+            const w = window as unknown as {__keys: string[]};
+            w.__keys = [];
+            window.addEventListener('keydown', (e) => w.__keys.push((e.metaKey ? 'Meta+' : '') + e.key));
+        });
+
+        /* When */
+        await page.keyboard.press('x');
+        await page.keyboard.press('n');
+        await page.keyboard.press('Meta+k');
+        // Dispatched rather than pressed, so it reaches the window without moving focus.
+        await keysAtOnce(page, ['Tab']);
+
+        /* Then */
+        // Unmodified keys stop at the panel; Tab and shortcuts go on.
+        const keys = await page.evaluate(() => (window as unknown as {__keys: string[]}).__keys);
+        expect(keys).not.toContain('x');
+        expect(keys).not.toContain('n');
+        expect(keys).toContain('Meta+k');
+        expect(keys).toContain('Tab');
+        expect(await focusIsIn(page)).toBe('panel');
+
+        /* When */
+        await page.keyboard.press('3');
+        await page.keyboard.type('1 2');
+        await page.keyboard.press('ArrowLeft');
+        await page.keyboard.press('ArrowRight');
+
+        /* Then */
+        // Typing in Other keeps numbers, space and left/right for the text.
+        await expect(otherField(page)).toBeFocused();
+        await expect(otherField(page)).toHaveValue('1 2');
+        await expect(heading(page, 0)).toBeVisible();
+        await expect(option(page, /The whole site/)).toHaveAttribute('aria-pressed', 'false');
+
+        /* When */
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('ArrowUp');
+
+        /* Then */
+        await expect(option(page, /The whole site/)).toHaveAttribute('aria-pressed', 'true');
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'false');
+
+        /* When */
+        await page.keyboard.press('2');
+
+        /* Then */
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'true');
+
+        /* When */
+        await page.keyboard.press('ArrowRight');
+        await expect(heading(page, 1)).toBeVisible();
+        await page.keyboard.press('1');
+        await page.keyboard.press('3');
+
+        /* Then */
+        await expect(option(page, /Unit tests/)).toHaveAttribute('aria-pressed', 'true');
+        await expect(option(page, /Lint/)).toHaveAttribute('aria-pressed', 'true');
+
+        /* When */
+        // The cursor is on Lint (the last row pressed); space toggles it off.
+        await page.keyboard.press(' ');
+
+        /* Then */
+        await expect(option(page, /Lint/)).toHaveAttribute('aria-pressed', 'false');
+
+        /* When */
+        await page.keyboard.press('ArrowLeft');
+
+        /* Then */
+        await expect(heading(page, 0)).toBeVisible();
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'true');
+
+        /* When */
+        await page.keyboard.press('Enter');
+        await expect(heading(page, 1)).toBeVisible();
+        await pokePatch(page).focus();
+        await page.keyboard.press('Enter');
+
+        /* Then */
+        // Enter and Space on Patch poke it, and go no further.
+        await expect(patchSays(page)).toHaveText('Hey! I’m counting.');
+
+        /* When */
+        await page.keyboard.press(' ');
+
+        /* Then */
+        await expect(patchSays(page)).toHaveText('Hehe. That tickles.');
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(option(page, /Type check/)).toHaveAttribute('aria-pressed', 'false');
+
+        /* When */
+        await page.keyboard.press('2');
+
+        /* Then */
+        // Other keys on Patch act on the panel, and Patch keeps the focus.
+        await expect(option(page, /Type check/)).toHaveAttribute('aria-pressed', 'true');
+        await expect(pokePatch(page)).toBeFocused();
+
+        /* When */
+        await page.keyboard.press('ArrowRight');
+
+        /* Then */
+        expect(await asked.answers).toEqual({
+            [QUESTIONS[0].question]: 'Only /app',
+            [QUESTIONS[1].question]: 'Unit tests, Type check',
+        });
+    });
+});
+
+test.describe('terminal', () => {
+    test('Esc, the header button and the pill move between the questions and the terminal', async ({page, api}) => {
+        /* When */
+        await askedOnScreen(page, api);
+
+        /* Then */
+        await expect(toTerminalButton(page)).toBeVisible();
+        await expect(toTerminalButton(page)).toContainText('esc');
+        await expect(questionSheet(page)).toHaveAttribute('aria-hidden', 'false');
+        expect(await questionSheet(page).evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+
+        /* When */
+        await page.keyboard.press('Escape');
+
+        /* Then */
+        await expect(questionPanel(page)).toHaveCount(0);
+        await expect(page.locator('.terminal-container.qp-under')).toHaveCount(0);
+        await expect(waitingPill(page)).toHaveText('2 questions waiting · Show');
+        expect(await focusIsIn(page)).toBe('terminal');
+        // Hidden, the sheet is out of the way of assistive tech and the keyboard.
+        await expect(questionSheet(page)).toHaveAttribute('aria-hidden', 'true');
+        expect(await questionSheet(page).evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+
+        /* When */
+        await page.keyboard.type('in the terminal');
+
+        /* Then */
+        await waitForInput(api, S.loginFix, 'in the terminal');
+
+        /* When */
+        await waitingPill(page).click();
+
+        /* Then */
+        await expect(heading(page, 0)).toBeVisible();
+        await expect(patchSays(page)).toHaveText('Welcome back. Right where you left off.');
+        await expect(toTerminalButton(page)).toBeVisible();
+
+        /* When */
+        await toTerminalButton(page).click();
+
+        /* Then */
+        await expect(questionPanel(page)).toHaveCount(0);
+        await expect.poll(() => focusIsIn(page)).toBe('terminal');
+    });
+});
+
+test.describe('peek', () => {
+    test('T shows the terminal under the questions and brings them back as they were', async ({page, api}) => {
+        /* Given */
+        await askedOnScreen(page, api);
+        await page.keyboard.press('2');
+
+        /* When */
+        await page.keyboard.press('t');
+
+        /* Then */
+        const back = page.getByRole('button', {name: /Back to questions/});
+        await expect(back).toBeVisible();
+        await expect(page.locator('.terminal-container.qp-under')).toHaveCount(0);
+        await expect(questionSheet(page)).toHaveClass(/is-peeking/);
+        expect(await focusIsIn(page)).toBe('panel');
+
+        /* When */
+        // Nothing answers while the questions are out of sight, and nothing reaches the terminal.
+        await page.keyboard.press('1');
+        await page.keyboard.press('t');
+
+        /* Then */
+        await expect(back).toHaveCount(0);
+        await expect(page.locator('.terminal-container.qp-under')).toHaveCount(1);
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'true');
+        expect(typedInto(api, S.loginFix)).not.toContain('1');
+
+        /* When */
+        await questionPanel(page)
+            .getByRole('button', {name: /Peek at terminal/})
+            .click();
+        await back.click();
+
+        /* Then */
+        await expect(back).toHaveCount(0);
+        await expect(heading(page, 0)).toBeVisible();
+        await expect.poll(() => focusIsIn(page)).toBe('panel');
+    });
+});
+
+test.describe('clicks', () => {
+    test('tabs, options, Back and the primary button', async ({page, api}) => {
+        /* When */
+        await askedOnScreen(page, api);
+
+        /* Then */
+        await expect(primary(page)).toHaveText(/^Next/);
+        await expect(primary(page)).toHaveAttribute('aria-disabled', 'true');
+        await expect(questionPanel(page).getByRole('button', {name: 'Back'})).toBeHidden();
+        await expect(tab(page, 'Cookie path')).toHaveAttribute('aria-current', 'step');
+        await expect(tab(page, 'Checks')).not.toHaveAttribute('aria-current');
+        // Patch speaks through a live status region.
+        await expect(patchSays(page)).toHaveAttribute('aria-live', 'polite');
+        await expect(patchSays(page)).toHaveText('Claude has 2 questions for you. I’ll keep count!');
+
+        /* When */
+        await option(page, /Only \/app/).click();
+
+        /* Then */
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'true');
+        await expect(primary(page)).toHaveAttribute('aria-disabled', 'false');
+
+        /* When */
+        // Clicking the picked option of a single-choice question lets go of it.
+        await option(page, /Only \/app/).click();
+
+        /* Then */
+        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'false');
+
+        /* When */
+        await tab(page, 'Checks').click();
+
+        /* Then */
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(tab(page, 'Checks')).toHaveAttribute('aria-current', 'step');
+        await expect(tab(page, 'Cookie path')).not.toHaveAttribute('aria-current');
+        await expect(primary(page)).toHaveText(/^Send answers/);
+        await expect(primary(page)).toHaveAttribute('aria-disabled', 'true');
+
+        /* When */
+        await questionPanel(page).getByRole('button', {name: 'Back'}).click();
+
+        /* Then */
+        await expect(heading(page, 0)).toBeVisible();
+
+        /* When */
+        await option(page, /Only \/app/).click();
+        await primary(page).click();
+
+        /* Then */
+        await expect(heading(page, 1)).toBeVisible();
+    });
+});
+
+test.describe('switching sessions', () => {
+    test('a draft and the keyboard survive switching away and back', async ({page, api}) => {
+        /* Given */
+        await openSession(page, api, LABEL.worktreeTry, S.worktreeTry);
+        await askedOnScreen(page, api);
+        await option(page, /Only \/app/).click();
+        await page.keyboard.press('Enter');
+        await expect(heading(page, 1)).toBeVisible();
+
+        /* When */
+        await option(page, /Lint/).click();
+
+        /* Then */
+        await expect(patchSays(page)).toHaveText('That’s everything. Send it!');
+
+        /* When */
+        await sessionRow(page, LABEL.worktreeTry).first().click();
+
+        /* Then */
+        await expect(questionPanel(page)).toHaveCount(0);
+
+        /* When */
+        await sessionRow(page, LABEL.loginFix).first().click();
+
+        /* Then */
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(option(page, /Lint/)).toHaveAttribute('aria-pressed', 'true');
+        // Patch picks up where it was rather than greeting again.
+        await expect(patchSays(page)).toHaveText('That’s everything. Send it!');
+        // Showing the session focuses its terminal; the questions take the keyboard back.
+        await expect.poll(() => focusIsIn(page)).toBe('panel');
+    });
+});
+
+test.describe('motion', () => {
+    test('the check mark pops; a question leaves over 140ms, holding keys, then comes in over 260ms', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        await askedOnScreen(page, api);
+        await recordAnimations(page);
+
+        /* When */
+        await option(page, /The whole site/).click();
+
+        /* Then */
+        await expect
+            .poll(async () => (await recordedAnimations(page)).filter((a) => a.target === 'svg').map((a) => a.duration))
+            .toEqual([220]);
+
+        /* When */
+        await recordedAnimations(page, {clear: true});
+        // Next, then a key that would pick on the next question, in the same task.
+        await keysAtOnce(page, ['Enter', '1']);
+
+        /* Then */
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(option(page, /Unit tests/)).toHaveAttribute('aria-pressed', 'false');
+        await expect
+            .poll(async () => (await recordedAnimations(page)).filter((a) => a.duration === 260).length)
+            .toBe(5);
+        const animations = await recordedAnimations(page);
+        const out = animations.find((a) => a.duration === 140);
+        expect(out, 'the question leaving').toBeTruthy();
+        const ins = animations.filter((a) => a.duration === 260);
+        // The block, then each of its four rows (three options and Other), 35ms apart.
+        expect(ins.map((a) => a.delay)).toEqual([0, 60, 95, 130, 165]);
+        expect(ins[0].at - out!.at).toBeGreaterThanOrEqual(130);
+    });
+});
+
+test.describe('send', () => {
+    test.describe('on the fake clock', () => {
+        test.use({fakeTimers: true});
+
+        test('a farewell Patch comes 280ms after sending and stays about 3.2s', async ({page, api}) => {
+            /* Given */
+            const asked = await askedOnScreen(page, api, QUESTIONS.slice(0, 1));
+            await option(page, /The whole site/).click();
+            await recordAnimations(page);
+
+            /* When */
+            await page.keyboard.press('Enter');
+            await asked.answers;
+
+            /* Then */
+            const farewell = page.getByText('Off it goes!');
+            await expect(farewell).toBeVisible();
+            const arrival = (await recordedAnimations(page)).find((a) => a.target === 'div.qp-farewell');
+            expect(arrival?.delay).toBe(280);
+            // The stay starts as the farewell arrives; `at` is on the same clock.
+            const since = await page.evaluate((at) => performance.now() - at, arrival!.at);
+            expect(since).toBeLessThan(3000);
+
+            /* When */
+            await page.clock.fastForward(Math.round(3100 - since));
+
+            /* Then */
+            await expect(farewell).toBeVisible();
+
+            /* When */
+            await page.clock.fastForward(200);
+
+            /* Then */
+            await expect(farewell).toHaveCount(0);
+        });
+    });
+
+    test('a new set sends the farewell away', async ({page, api}) => {
+        /* Given */
+        const asked = await askedOnScreen(page, api, QUESTIONS.slice(0, 1));
+        await option(page, /The whole site/).click();
+        await page.keyboard.press('Enter');
+        await asked.answers;
+        await expect(page.getByText('Off it goes!')).toBeVisible();
+
+        /* When */
+        await askQuestions(api, S.loginFix, QUESTIONS.slice(1));
+
+        /* Then */
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(page.getByText('Off it goes!')).toHaveCount(0, {timeout: 1000});
+    });
+});
+
+test.describe('doze', () => {
+    test.use({fakeTimers: true});
+
+    test('Patch says when the terminal takes over', async ({page, api}) => {
+        /* Given */
+        await openSession(page, api, LABEL.loginFix, S.loginFix);
+
+        /* When */
+        await askQuestions(api, S.loginFix, QUESTIONS.slice(0, 1), {deadlineInMs: 150_000});
+
+        /* Then */
+        await expect(heading(page, 0)).toBeVisible();
+        await expect(patchSays(page)).toHaveText('Claude has a question for you. I’ll keep count!');
+
+        /* When */
+        // The doze check runs every 5s; the clock started at FIXTURE_NOW, as the deadline did.
+        await page.clock.fastForward(5000);
+
+        /* Then */
+        // Once a minute at most, and not while plenty of time is left: test/question-copy.test.ts.
+        await expect(patchSays(page)).toHaveText('Still here. The terminal takes over in 3 min.');
+    });
+});

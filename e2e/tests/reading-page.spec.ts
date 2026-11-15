@@ -1,11 +1,12 @@
 /**
  * A page a session shows (`show_page`): laid over the session's terminal,
- * put away with Esc, brought back from the terminal header.
+ * put away with Esc, brought back from the session tray.
  *
- * The tool's protocol, the service and the pages slice are unit tested
- * (test/page-tool.test.ts). These keep what only the running app can show:
- * the round-trip from the MCP server to the window, the sandboxed frame,
- * where the keyboard goes, and how it looks.
+ * These keep what only the running app can show: the round trip from the MCP
+ * server to the window, and how it looks. The page against what main sends
+ * (the sandboxed frame, the back button) is in
+ * component/tests/reading-page.spec.ts; the tool's protocol, the service and
+ * the pages slice are unit tested (test/page-tool.test.ts).
  */
 import {test, expect, forEachAppearance, screenTest} from '../support/test';
 import {expectScreen, openSession, terminalHeader} from '../support/app';
@@ -65,36 +66,6 @@ test.describe('smoke', () => {
 
         /* Then */
         await expect(readingPage(page)).toBeVisible();
-    });
-
-    test('scripts in a page do not run', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await showPage(home, S.loginFix, {
-            title: TITLE,
-            html: '<p id="target">untouched</p><script>document.getElementById("target").textContent = "ran"</script>',
-        });
-
-        /* Then */
-        await expect(article(page).locator('#target')).toHaveText('untouched');
-    });
-
-    test('the back button returns to the terminal', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await showPage(home, S.loginFix, {title: TITLE, html: HTML});
-        await expect(readingPage(page)).toBeVisible();
-
-        /* When */
-        await readingPage(page)
-            .getByRole('button', {name: /Back to terminal/})
-            .click();
-
-        /* Then */
-        await expect(readingPage(page)).toHaveCount(0);
-        await expect(await reopenRow(page)).toBeEnabled();
     });
 });
 
