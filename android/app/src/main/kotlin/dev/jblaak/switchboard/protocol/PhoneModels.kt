@@ -59,7 +59,25 @@ data class PhoneLand(
     val offer: LandOffer,
     /** "Land it", the draft's hint, or the landed stage. */
     val label: String,
+    /** How the PR is doing, as the Mac's sidebar chip shows it; null until GitHub has said, and from older Macs. */
+    val dot: PrDot? = null,
 )
+
+/** A pull request's status dot: its checks, or a check mark once merged. */
+@Serializable
+enum class PrDot {
+    @SerialName("merged")
+    Merged,
+
+    @SerialName("green")
+    Green,
+
+    @SerialName("amber")
+    Amber,
+
+    @SerialName("red")
+    Red,
+}
 
 @Serializable
 enum class LandOffer {

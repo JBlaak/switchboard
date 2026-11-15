@@ -256,7 +256,7 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
                 waiting = null,
                 owner = TerminalOwner.Mac,
                 changedAt = 1792756980000,
-                land = PhoneLand(repository = "jblaak/switchboard", number = 432, offer = LandOffer.Landed, label = "Landed · 2nd in switchboard"),
+                land = PhoneLand(repository = "jblaak/switchboard", number = 432, offer = LandOffer.Landed, label = "Landed · 2nd in switchboard", dot = PrDot.Green),
             ),
         ),
     ),

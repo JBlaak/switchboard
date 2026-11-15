@@ -110,6 +110,11 @@ export interface PhoneLand {
     offer: 'land' | 'draft' | 'landed';
     /** "Land it", the draft's hint, or the landed stage. */
     label: string;
+    /**
+     * How the PR is doing, as the sidebar's `#1309` chip shows it: its checks
+     * (green, amber, red) or merged. Left out until GitHub has said.
+     */
+    dot?: 'merged' | 'green' | 'amber' | 'red';
 }
 
 /**

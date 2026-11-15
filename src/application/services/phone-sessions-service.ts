@@ -629,7 +629,8 @@ export class PhoneSessionsService {
     /** What Land it shows for a running session, from what `gh` read for it, else its transcript's PRs. */
     private landOf(sessionId: string, state: MergeManagerState, row?: SessionRow | null): PhoneLand | null {
         const transcript = (row !== undefined ? row : this.rowOf(sessionId))?.pullRequests ?? [];
-        return phoneLand(phoneLandCandidate(this.checkedPullRequests.get(sessionId), transcript), state);
+        const checked = this.checkedPullRequests.get(sessionId);
+        return phoneLand(phoneLandCandidate(checked, transcript), state, checked);
     }
 
     private rowOf(sessionId: string): SessionRow | null {

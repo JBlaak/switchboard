@@ -1469,7 +1469,53 @@ test('a land check that finds a draft lists Land it disabled with the reason', a
         number: 431,
         offer: 'draft',
         label: 'Mark it ready for review first',
+        dot: 'green',
     });
+});
+
+test('a land check gives Land it the pull request’s status dot, as the sidebar’s chip', async () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    h.setGhPullRequests('s1', [{...linkedPr('open'), status: {...linkedPr('open').status!, dot: 'amber'}}]);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'land-check', sessionId: 's1'});
+    await settle();
+    h.timers.tick();
+
+    /* Then */
+    assert.equal(lastList(phone)[0]!.land?.dot, 'amber');
+});
+
+test('a pull request that has not been checked has no status dot', () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.equal('dot' in lastList(phone)[0]!.land!, false);
+});
+
+test('a merged pull request’s dot is merged', () => {
+    /* Given */
+    const h = harness();
+    withPullRequest(h);
+    const pr = {...landedPr(431, 5, 'switchboard', {kind: 'merged', at: 0}), place: null};
+    h.setLanes({
+        lanes: [{repository: REPO, kind: 'switchboard', approvalLostOnPush: false, pullRequests: [pr]}],
+        needsYou: 0,
+    } as MergeManagerState);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.equal(lastList(phone)[0]!.land?.dot, 'merged');
 });
 
 test('a land check that finds a teammate’s pull request lists no Land it', async () => {

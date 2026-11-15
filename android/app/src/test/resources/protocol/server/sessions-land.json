@@ -11,7 +11,7 @@
             "waiting": null,
             "owner": {"kind": "mac"},
             "changedAt": 1792756980000,
-            "land": {"repository": "jblaak/switchboard", "number": 432, "offer": "landed", "label": "Landed · 2nd in switchboard"}
+            "land": {"repository": "jblaak/switchboard", "number": 432, "offer": "landed", "label": "Landed · 2nd in switchboard", "dot": "green"}
         }
     ]
 }

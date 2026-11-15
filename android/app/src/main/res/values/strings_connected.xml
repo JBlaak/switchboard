@@ -109,7 +109,7 @@
     <string name="session_archive_offline">Not connected to your Mac</string>
     <string name="session_back">Back to sessions</string>
     <string name="session_land_it">Land it</string>
-    <string name="session_land_pr">#%1$d in %2$s</string>
+    <string name="session_land_pr">Pull request #%1$d in %2$s</string>
     <string name="session_landing">Landing…</string>
     <string name="session_unland">Unland</string>
     <string name="session_unlanding">Unlanding…</string>
