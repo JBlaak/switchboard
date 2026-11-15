@@ -172,6 +172,42 @@ test('the selection falls back to the first row, and J/K move over the rows top 
     assert.equal(selectedRow([], null), null);
 });
 
+test('the head card times its active step: the checks by one CI run from when the first started', () => {
+    /* Given */
+    const read = prRead(2, {
+        checks: [
+            {name: 'Unit tests', state: 'passed', startedAt: NOW - 3 * MIN},
+            {name: 'e2e', state: 'running', startedAt: NOW - 2 * MIN},
+        ],
+    });
+    const state = mergeManagerState([landedPr(2, 40, 'switchboard', {kind: 'head', step: 'checks'})], new Map(), {
+        facts: new Map([[landedKey(REPO, 2), landedFacts(read, NO_RULES)]]),
+    });
+
+    /* When */
+    const steps = headSteps(row(pageLanes(state), 2), 10 * MIN, NOW - MIN);
+
+    /* Then */
+    assert.deepEqual(
+        steps.map((step) => step.timing),
+        [1, {actual: 1 / 2, startedAt: NOW - 3 * MIN, expectedMs: 10 * MIN}, 0],
+    );
+});
+
+test('the head card times the update and the merge from when the step was first seen', () => {
+    /* Given */
+    const state = mergeManagerState([landedPr(2, 40, 'switchboard', {kind: 'head', step: 'merging'})], new Map());
+
+    /* When */
+    const steps = headSteps(row(pageLanes(state), 2), 10 * MIN, NOW - 30_000);
+
+    /* Then */
+    assert.deepEqual(
+        steps.map((step) => step.timing),
+        [1, 1, {actual: null, startedAt: NOW - 30_000, expectedMs: MIN}],
+    );
+});
+
 test("the head card says how far its checks are: 'Checks 1 of 2' while they run", () => {
     /* Given */
     const read = prRead(2, {

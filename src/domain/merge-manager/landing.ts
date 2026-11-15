@@ -20,6 +20,8 @@
 import {MERGED_BUBBLE_MS} from './figure';
 import {dayStart, pageLanes, type PageRow} from './page';
 import {stageTone, type StageTone} from './stage-words';
+import {checksSince} from './times';
+import type {BarTiming} from './progress';
 import type {LandedView, LaneKind, LaneView, MergeManagerState} from './model';
 
 // ── Times ──
@@ -52,6 +54,9 @@ export function laneCycle(lane: LaneView): number {
     return Math.min(LONGEST_CYCLE_MS, Math.max(SHORTEST_CYCLE_MS, median(spans)));
 }
 
+/** The checks' share of a cycle. */
+const CHECKS_SHARE = 0.75;
+
 /** What a head's step leaves of a cycle: most of it while updating, the checks' share while they run, a little to merge. */
 function headLeft(row: PageRow, cycle: number): number {
     if (row.stage.kind !== 'head') return cycle;
@@ -63,7 +68,7 @@ function headLeft(row: PageRow, cycle: number): number {
             const checks = row.landed.facts?.checks ?? [];
             const passed = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
             const done = checks.length > 0 ? passed / checks.length : 0;
-            return left(0.1 + 0.75 * (1 - done));
+            return left(0.1 + CHECKS_SHARE * (1 - done));
         }
         case 'merging':
             return left(0.05);
@@ -107,6 +112,11 @@ export interface LandingRow {
     readonly eta: LandingEta | null;
     /** The head's checks done, 0–1; null for any other row, or before its checks are known. */
     readonly progress: number | null;
+    /**
+     * What that bar fills by: while the checks run, their share of the lane's
+     * cycle from when the first started; otherwise it stays at `progress`.
+     */
+    readonly timing: BarTiming | number | null;
     /** The page's row, for opening its session. */
     readonly row: PageRow;
 }
@@ -190,6 +200,8 @@ function landingLane(lane: LaneView, pageRows: readonly PageRow[], now: number):
     const rows = pageRows.map((row, i): LandingRow => {
         const checks = row.landed.facts?.checks ?? [];
         const passed = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
+        const progress = row.stage.kind === 'head' && checks.length > 0 ? passed / checks.length : null;
+        const running = row.stage.kind === 'head' && row.stage.step === 'checks';
         return {
             key: row.key,
             number: row.number,
@@ -197,7 +209,13 @@ function landingLane(lane: LaneView, pageRows: readonly PageRow[], now: number):
             tone: stageTone(row.stage),
             label: row.stage.kind === 'head' ? 'Merging · ' + row.stage.step : row.words.label,
             eta: etas[i] ?? null,
-            progress: row.stage.kind === 'head' && checks.length > 0 ? passed / checks.length : null,
+            progress,
+            timing:
+                progress === null
+                    ? null
+                    : running
+                      ? {actual: progress, startedAt: checksSince(row.landed), expectedMs: cycle * CHECKS_SHARE}
+                      : progress,
             row,
         };
     });

@@ -1,0 +1,51 @@
+/* ========== TIMED BARS ==========
+   The Merge manager's progress bars (TimedBar.tsx): the track and colour are
+   the place's own (`.mm-bar`, `.landing-bar`); this is how the fill moves.
+   Filling: one even scale from where the bar is now to near full, over what is
+   left of the step's expected time. Past it: a sliding segment, a loop, so it
+   follows `--loop-state`. */
+.timed-bar {
+    position: relative;
+
+    &.is-filling > span {
+        width: 100%;
+        transform-origin: left center;
+        transform: scaleX(var(--bar-to));
+        animation-name: timed-bar-fill;
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        will-change: transform;
+    }
+
+    &.is-indeterminate > span {
+        width: 35%;
+        animation: timed-bar-slide 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
+    }
+}
+
+@keyframes timed-bar-fill {
+    from {
+        transform: scaleX(var(--bar-from));
+    }
+    to {
+        transform: scaleX(var(--bar-to));
+    }
+}
+
+@keyframes timed-bar-slide {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(300%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .timed-bar.is-indeterminate > span {
+        width: 100%;
+        animation: none;
+        opacity: 0.45;
+    }
+}
