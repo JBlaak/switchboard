@@ -103,3 +103,26 @@ test('Land it in the session header shows the landed pill and the toast, and Und
     await expect(header.getByRole('button', {name: 'Land it'})).toBeVisible();
     expect(landRequests(api)).toEqual(['land acme/api#1320', 'unland acme/api#1320']);
 });
+
+test('Land it shows up for a PR the session opened while it is on screen, once the CI watch hears of it', async ({
+    page,
+    api,
+}) => {
+    /* Given the session has no PR yet, and the lanes never move */
+    api.answer('getSessionLinks', []);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    const header = terminalHeader(page);
+    await expect(header.getByRole('button', {name: 'Land it'})).toHaveCount(0);
+
+    /* When the session opens #1320 and the CI watch's next round finds it */
+    api.answer('getSessionLinks', [pr(1320)]);
+    await api.emit('onPrStatusChanged', {
+        sessionId: S.loginFix,
+        prs: [{number: 1320, dot: 'green'}],
+        needsYou: false,
+    });
+
+    /* Then */
+    await expect(header.getByText('PR #1320')).toBeVisible();
+    await expect(header.getByRole('button', {name: 'Land it'})).toBeVisible();
+});

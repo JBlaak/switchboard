@@ -7,8 +7,10 @@
  * Its rocket takes off from the session's row in the sidebar, not from up
  * here, when the row is on screen.
  *
- * The PRs are read as the session goes on screen, and again after each push
- * of the lanes, so a PR the session opened since shows up.
+ * The PRs are read as the session goes on screen, again after each push of
+ * the lanes, and again when the CI watch pushes news of the session's PRs:
+ * it finds a PR the session opened since within its minute, local or on a
+ * VM, with `gh`'s answer already in hand, while the lanes may not move at all.
  */
 import {useEffect} from 'react';
 import type {JSX} from 'react';
@@ -21,10 +23,11 @@ import {sidebarContent} from '../../lib/dom';
 export function HeaderLandIt({sessionId}: {sessionId: string}): JSX.Element | null {
     const prs = useStore((state) => state.mergeManager.sessionPullRequests[sessionId]);
     const lanes = useStore((state) => state.mergeManager.state);
+    const ci = useStore((state) => state.ciStatus.bySession[sessionId]);
 
     useEffect(() => {
         void loadSessionPullRequests(sessionId);
-    }, [sessionId, lanes]);
+    }, [sessionId, lanes, ci]);
 
     const candidate = prs ? sessionLandCandidate(prs) : null;
     if (!candidate || !landOffer(candidate, lanes)) return null;

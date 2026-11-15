@@ -110,6 +110,7 @@ import {ElectronWindowDrag} from '../infrastructure/electron/window-drag';
 import {ElectronDockAttention} from '../infrastructure/electron/dock-attention';
 import {ArchiveOnMergeService} from '../application/services/archive-on-merge-service';
 import {bouncesDock} from '../domain/merge-manager/transitions';
+import {mergePullRequests} from '../domain/session/pull-requests';
 import {E2eGlobalHotkey, ElectronGlobalHotkey} from '../infrastructure/electron/global-hotkey';
 import {QuickAskWindow} from '../infrastructure/electron/quick-ask-window';
 import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
@@ -1535,8 +1536,13 @@ export function buildContainer(): Container {
     // The session tray's links (#340): kept here, asked again behind each answer.
     const sessionLinks = new SessionLinksService({
         locate: locateSession,
+        // Both copies: a session handed off to a VM keeps its Mac transcript, PRs
+        // opened before the move, and any opened since are only in the VM's.
         pullRequests: (sessionId) =>
-            repository.getCachedSession(sessionId)?.pullRequests ?? vmTranscripts.pullRequests(sessionId),
+            mergePullRequests(
+                repository.getCachedSession(sessionId)?.pullRequests ?? [],
+                vmTranscripts.pullRequests(sessionId),
+            ),
         transcripts: routedTranscripts,
         remotes: git,
         github,
