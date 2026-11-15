@@ -49,3 +49,21 @@ jobs:
             # keeping the steps separate says which one broke.
             - name: Test
               run: npx tsx --test test/*.test.ts
+
+            # The component suite (component/): the built renderer in Chromium with a
+            # fake window.api, so no Electron and no macOS runner. Uses the build above.
+            - name: Install Chromium
+              run: npx playwright install --with-deps chromium
+
+            - name: Component tests
+              run: npx playwright test --config component/playwright.config.ts
+
+            - name: Upload the component report and traces
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: component-report
+                  path: |
+                      playwright-report-component/
+                      test-results/component/
+                  retention-days: 14

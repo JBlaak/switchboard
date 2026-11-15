@@ -1,20 +1,22 @@
 /**
- * The Issue manager page (#415) wired into the real app: ⌘I opens it on the
- * inbox main found at launch, J selects an issue and reads its thread, your
- * notes are kept by main, and ⏎ starts a session on it that the page then
- * lists under In progress. The detail closes with its × or Esc.
+ * The Issue manager page (#415): ⌘I opens it on the inbox main holds, J
+ * selects an issue and reads its thread, your notes are kept by main, and ⏎
+ * starts a session on it that the page then lists under In progress. The
+ * detail closes with its × or Esc.
  *
  * The rules (prompt, footer, labels, stages, keys) are unit tested in
  * test/inbox-issue-manager.test.ts, test/issue-manager-*.test.ts and
- * test/plan-start.test.ts; GitHub and git are stubbed here, the inbox and
- * the session start are real.
+ * test/plan-start.test.ts. Main's inbox is played by component/support/inbox.ts,
+ * and Start's worktree and prompt are answered as main makes them for this
+ * issue (test/issue-session-service.test.ts makes them for real).
  */
-import fs from 'node:fs';
-import {test, expect} from '../support/test';
-import {FakeCli} from '../support/fake-cli';
-import {FIXTURE_NOW} from '../support/fixture-home';
-import {P, standardFixture} from '../fixtures/standard';
+import {test, expect} from '../support/inbox';
+import {runSessions} from '../support/running-session';
+import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
+import {P} from '../../e2e/fixtures/standard';
+import {fixtureProjectPath} from '../fixtures/captured';
 import type {InboxItem} from '../../src/domain/inbox/model';
+import type {IssueThread} from '../../src/domain/inbox/issue-manager';
 import type {Page} from '@playwright/test';
 
 const KEY = 'issue:acme/api#482';
@@ -44,26 +46,32 @@ const ISSUE: InboxItem = {
     },
 };
 
-test.use({
-    fixture: {...standardFixture(), inboxItems: [ISSUE]},
-    stubs: {
-        issueManager: {
-            project: P.acmeApi,
-            threads: {
-                [KEY]: {
-                    body: 'The export button does nothing.',
-                    comments: [
-                        {
-                            author: 'marieke',
-                            body: "It's the athletes list, top right.",
-                            createdAt: new Date(FIXTURE_NOW - 3_600_000).toISOString(),
-                        },
-                    ],
-                    total: 2,
-                    viewer: 'joris',
-                },
-            },
+const THREAD: IssueThread = {
+    body: 'The export button does nothing.',
+    comments: [
+        {
+            author: 'marieke',
+            body: "It's the athletes list, top right.",
+            createdAt: new Date(FIXTURE_NOW - 3_600_000).toISOString(),
         },
+    ],
+    total: 2,
+    viewer: 'joris',
+};
+
+const PROJECT = fixtureProjectPath(P.acmeApi);
+const WORKTREE = PROJECT + '/.claude/worktrees/482-issue';
+const PROMPT = 'Work on #482, a loose issue in no plan.';
+
+test.use({
+    inbox: {items: [ISSUE]},
+    answers: {
+        issueManagerThread: (key) => (key === KEY ? THREAD : null),
+        // Claimed, and its worktree made, as main does for a loose issue.
+        issueManagerPrepareStart: (key) =>
+            key === KEY
+                ? {ok: true, projectPath: PROJECT, worktreePath: WORKTREE, branch: '482-issue', prompt: PROMPT}
+                : {ok: false, reason: 'That issue is no longer in the Issue manager'},
     },
 });
 
@@ -77,8 +85,12 @@ function detail(page: Page) {
 
 test('⌘I opens the Issue manager on its issues, keeps your notes, and ⏎ starts and claims one', async ({
     page,
-    home,
+    api,
+    mainInbox,
 }) => {
+    /* Given */
+    runSessions(api);
+
     /* When */
     await page.keyboard.press('Meta+i');
 
@@ -111,19 +123,18 @@ test('⌘I opens the Issue manager on its issues, keeps your notes, and ⏎ star
 
     /* Then: main kept them */
     await expect(detail(page).getByRole('textbox', {name: 'Your notes'})).toHaveValue('It is the CSV export.');
+    expect(mainInbox.item(KEY)?.notes).toBe('It is the CSV export.');
 
     /* When */
-    fs.mkdirSync(home.projectPath(P.acmeApi + '/.claude/worktrees/482-issue'), {recursive: true});
-    const before = fs.readdirSync(home.controlDir);
     await managerPage(page).focus();
     await page.keyboard.press('Enter');
 
     /* Then: a session in the issue's worktree, and the issue under In progress */
-    const startedSince = () => fs.readdirSync(home.controlDir).filter((key) => !before.includes(key));
-    await expect.poll(startedSince).toHaveLength(1);
-    const launch = await new FakeCli(home.controlDir, startedSince()[0]!).launched();
-    expect(launch.cwd).toMatch(/\/\.claude\/worktrees\/482-issue$/);
-    expect(launch.argv[launch.argv.length - 1]).toBe('Work on #482, a loose issue in no plan.');
+    await expect.poll(() => api.callsTo('openTerminal')).toHaveLength(1);
+    const [, cwd, isNew, options] = api.callsTo('openTerminal')[0]!;
+    expect(cwd).toBe(WORKTREE);
+    expect(isNew).toBe(true);
+    expect(options?.initialPrompt).toBe(PROMPT);
     await expect(managerPage(page)).toContainText('Inbox zero.');
     await expect(managerPage(page).getByRole('status')).toHaveText(
         'Started a session on #482; it is under In progress.',
@@ -162,6 +173,8 @@ test("a row's Backlog button puts the issue in the backlog at once, without sele
 test('The issue detail closes with its × or Esc, and Esc then closes the page', async ({page}) => {
     /* Given */
     await page.keyboard.press('Meta+i');
+    // J before the items are in selects nothing.
+    await expect(managerPage(page).getByRole('option', {name: /#482/})).toBeVisible();
     await page.keyboard.press('j');
     await expect(detail(page)).toBeVisible();
 

@@ -91,12 +91,55 @@ passes `test.use({ fakeTimers: true })` and jumps the renderer's clock with
 
 **What belongs in e2e.** Prefer a unit test (`test/`, against a reducer, a
 layout function or a service with fakes) whenever the behaviour can be decided
-without the app. An e2e test is for what only the wired-up app can prove: an
-IPC round-trip, the real terminal, keyboard and focus moving between surfaces,
-a side effect in the main process, or a journey across several surfaces. Each
+without the app, and a component test (below) when it is the renderer's
+behaviour against what main answers. An e2e test is for what only the
+wired-up app can prove: the real terminal and its process, the question hook,
+a second window, the global hotkey, focus handed to or taken from the OS, a
+side effect in the main process, or a journey across main and renderer. Each
 test launches the app, so a few fuller journeys beat many small checks. Find
 elements by role, label or text, and add a `data-testid` only where nothing
 accessible identifies the element.
+
+**Screenshot-only tests** are declared with `screenTest` instead of `test`:
+on CI, where comparisons are skipped, they are skipped before the app
+launches. Use it only when everything else the test asserts is proven by
+another test.
+
+## Component tests
+
+`component/` loads the built renderer in a plain Chromium page and puts a
+fake `window.api` (`component/support/fake-api.ts`) where the preload would
+be. `SwitchboardApi` is the renderer's only way to main, so the renderer runs
+as it does in the app, against answers the test gives: no Electron, no
+fixture home, no database, and no macOS. CI runs it in the Test job on Linux.
+
+```bash
+npm run test:component                       # build, then run the suite
+npx playwright test --config component/playwright.config.ts footer
+```
+
+A test sets answers with `test.use({answers: {getUpdate: UPDATE}})` before the
+renderer loads, or `api.answer(name, value)` and `api.handle(name, fn)` after;
+`api.emit('onStatusUpdate', …)` pushes an event as main would, and
+`api.callsTo(name)` lists what the renderer asked for. What nothing answers
+comes from `component/support/default-answers.ts` (a quiet machine with
+nothing set up); a call with no answer at all is attached to the test's report
+as "unhandled api calls". Settings are a store: what the renderer saves with
+`setSetting`, `getSetting` reads back. The clock, time zone, reduced motion
+and `confirm` stubs are the e2e harness's, so locators and helpers from
+`e2e/support/` work unchanged.
+
+Where a test needs main to keep state between calls, a small stand-in in
+`component/support/` plays it, over in-memory state and main's own domain
+functions: `running-session.ts` and `terminal-session.ts` for a session's
+process and output, `session-list.ts` and `main-world.ts` for the projects
+and row actions, `project-page.ts`, `vm-main.ts`, `inbox.ts` and
+`session-work.ts` for their surfaces. Reuse one before writing another.
+
+The fixtures a component test answers `getProjects` with are captured from
+the real app (`component/fixtures/`), and `e2e/tests/component-fixtures.spec.ts`
+fails when they drift from what main answers; rewrite them with
+`SB_UPDATE_COMPONENT_FIXTURES=1 npm run test:e2e -- component-fixtures`.
 
 ## Writing tests
 

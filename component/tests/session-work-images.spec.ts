@@ -1,29 +1,26 @@
 /**
- * The image card in the Session work diff (#115), wired into the real app:
- * both sides fetched over `sessionWorkImage` and decoded, the metadata line,
- * the keys on the card `n` landed on, an added image's single side, and a
- * right-click copying an image.
+ * The image card in the Session work diff (#115): both sides fetched over
+ * `sessionWorkImage` and decoded, the metadata line, the keys on the card `n`
+ * landed on, an added image's single side, and a right-click copying an image
+ * (`writeClipboardImage`).
  *
  * Which mode a key picks, how the view refits and what persists are decided
  * by the session-work slice, unit tested in test/session-work-image-card.test.ts;
- * this proves the wiring. The images are built in code (fixtures/png.ts) and
- * served by the stub in place of git (fixtures/session-work.ts).
+ * this proves the wiring. The images are built in code (e2e/fixtures/png.ts) and
+ * answered from the e2e stub in place of git (e2e/fixtures/session-work.ts).
  */
 import {test, expect} from '../support/test';
-import {openSession} from '../support/app';
-import {LABEL, S} from '../fixtures/standard';
-import {ICON_AFTER, LOGO_AFTER, LOGO_BEFORE, imageWorkStub} from '../fixtures/session-work';
-import {clipboardImages} from '../support/main-process';
+import {openSession} from '../support/running-session';
+import {sessionWorkAnswers, workPage} from '../support/session-work';
+import {LABEL, S} from '../../e2e/fixtures/standard';
+import {ICON_AFTER, LOGO_AFTER, LOGO_BEFORE, imageWorkStub} from '../../e2e/fixtures/session-work';
 import {formatBytes} from '../../src/renderer/ui/session-work/image-compare/image-meta';
 import {fitView} from '../../src/renderer/ui/session-work/image-compare/viewport';
 import type {Size} from '../../src/renderer/ui/session-work/image-compare/types';
 import type {Locator, Page} from '@playwright/test';
+import type {FakeApi} from '../support/fake-api';
 
-test.use({stubs: {sessionWork: imageWorkStub()}});
-
-function workPage(page: Page) {
-    return page.getByRole('region', {name: /^Session work for /});
-}
+test.use({answers: sessionWorkAnswers(imageWorkStub())});
 
 function fileCard(page: Page, path: string) {
     return workPage(page).getByTestId('session-work-diff').getByRole('region', {name: path, exact: true});
@@ -57,10 +54,10 @@ function stageTransform(card: Locator) {
 
 test('an image card loads both sides; n lands on it, 2 picks swipe and 0 fits it again; an added image shows one side', async ({
     page,
-    home,
+    api,
 }) => {
     /* Given */
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
     await page.keyboard.press('Meta+g');
     await expect(workPage(page)).toBeVisible();
     const logo = fileCard(page, 'assets/logo.png');
@@ -116,18 +113,22 @@ test('an image card loads both sides; n lands on it, 2 picks swipe and 0 fits it
 });
 
 /** A PNG's size, read off its IHDR chunk. */
-function pngSize(base64: string): string {
-    const bytes = Buffer.from(base64, 'base64');
+function pngSize(png: Uint8Array): string {
+    const bytes = Buffer.from(png);
     return `${bytes.readUInt32BE(16)}×${bytes.readUInt32BE(20)}`;
+}
+
+/** The size of each image the page copied, in order. */
+function copiedImages(api: FakeApi): string[] {
+    return api.callsTo('writeClipboardImage').map(([png]) => pngSize(png));
 }
 
 test('a right-click on an image copies that side as a PNG, and a toast says so for a moment; in blink, the side showing', async ({
     page,
-    app,
-    home,
+    api,
 }) => {
     /* Given */
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
     await page.keyboard.press('Meta+g');
     const logo = fileCard(page, 'assets/logo.png');
     await expect.poll(() => decodedSize(logo.getByRole('img', {name: 'After'}))).toBe('1600×600');
@@ -137,7 +138,7 @@ test('a right-click on an image copies that side as a PNG, and a toast says so f
     await logo.getByRole('figure', {name: 'After'}).locator('.sw-stage').click({button: 'right'});
 
     /* Then */
-    await expect.poll(async () => (await clipboardImages(app)).map(pngSize)).toEqual(['1200×600', '1600×600']);
+    await expect.poll(() => copiedImages(api)).toEqual(['1200×600', '1600×600']);
     await expect(logo.getByRole('status')).toHaveText('Copied to clipboard');
     await expect(logo.getByRole('status')).toBeHidden();
 
@@ -147,7 +148,5 @@ test('a right-click on an image copies that side as a PNG, and a toast says so f
 
     /* Then */
     await expect(logo.locator('.sw-blink-label')).toHaveText('Before');
-    await expect
-        .poll(async () => (await clipboardImages(app)).map(pngSize))
-        .toEqual(['1200×600', '1600×600', '1200×600']);
+    await expect.poll(() => copiedImages(api)).toEqual(['1200×600', '1600×600', '1200×600']);
 });

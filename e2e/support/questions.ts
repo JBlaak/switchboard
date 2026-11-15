@@ -8,11 +8,8 @@
  * the request the real CLI would make, held open until the user answers in
  * the question panel or the request is abandoned.
  */
-import {EVENT} from '../../src/ipc/channels';
 import {fakeClaude} from './fake-cli';
-import {FIXTURE_NOW} from './fixture-home';
-import {pushEvent} from './main-process';
-import type {ElectronApplication, Locator, Page} from '@playwright/test';
+import type {Locator, Page} from '@playwright/test';
 import type {FixtureHome} from './fixture-home';
 import type {HttpHook} from './fake-cli';
 
@@ -111,38 +108,6 @@ async function postHook(hook: HttpHook, body: Record<string, unknown>): Promise<
         body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`hook answered ${res.status}`);
-}
-
-/**
- * Tell the renderer a set is pending, as main would, without a hook request
- * behind it.
- *
- * For what a real ask cannot set up: a deadline a few minutes off (the
- * renderer's clock is frozen at FIXTURE_NOW, so `deadlineInMs` is measured
- * from there), or a tool-use id the renderer has already seen settled.
- * Answering such a set reaches no hook; main says so and the set is withdrawn.
- */
-export async function pushQuestions(
-    app: ElectronApplication,
-    sessionId: string,
-    questions: AskedQuestion[],
-    {toolUseId = 'toolu_push_' + Math.random().toString(36).slice(2, 10), deadlineInMs = 600_000} = {},
-): Promise<string> {
-    const pending = {
-        sessionId,
-        toolUseId,
-        source: 'ask',
-        questions: questions.map((q) => ({
-            question: q.question,
-            header: q.header ?? '',
-            multiSelect: !!q.multiSelect,
-            options: q.options.map((o) => ({label: o.label, description: o.description ?? ''})),
-        })),
-        askedAt: FIXTURE_NOW,
-        deadline: FIXTURE_NOW + deadlineInMs,
-    };
-    await pushEvent(app, EVENT.questionsAsked, pending);
-    return toolUseId;
 }
 
 /**

@@ -4,33 +4,26 @@
  *
  * The rules and the services are unit tested (test/tasks-service.test.ts,
  * test/tasks-handlers.test.ts, test/start-task-session.test.ts). This walks
- * the wired app across IPC: main prepares a real worktree in a real git
- * repository, the fake `claude` starts there on BlaakTasks' handoff, and once
- * it has started the link is stored, pushed to the renderer, and written to a
- * stand-in BlaakTasks: a local HTTP server speaking MCP, found through
- * `~/.claude.json` as the real one is. No real BlaakTasks is ever reached.
+ * the wired app across IPC, taking the steps the start helper takes
+ * (`startTaskSessionWith`) through `window.api`: main prepares a real
+ * worktree in a real git repository, the fake `claude` starts there on
+ * BlaakTasks' handoff, and once it has started the link is stored, pushed to
+ * the renderer, and written to a stand-in BlaakTasks: a local HTTP server
+ * speaking MCP, found through `~/.claude.json` as the real one is. No real
+ * BlaakTasks is ever reached.
  *
- * The first test takes the steps the start helper takes
- * (`startTaskSessionWith`) through `window.api`; the Tasks page (#249) drives
- * the same start from the UI: switched on in Settings, opened with ⌘T, and
- * S on the task's row. The page's views, keys and routing outcomes are unit
- * tested (test/tasks-slice.test.ts, test/tasks-page-actions.test.ts).
- * The project page's Tasks section (#251) lists the task linked to its repo,
- * and S there starts it in that repo, with no routing, keeping the page. What
- * it lists and its keys are unit tested (test/project-page-tasks.test.ts).
- * A linked session's task row in the session tray, Task tab and sidebar marker (#250) are walked
- * through the UI at the end.
+ * The Tasks page (#249), the project page's Tasks section (#251) and a linked
+ * session's task row, Task tab and sidebar marker (#250) are tested against
+ * the renderer in component/tests/tasks.spec.ts. That every task call answers
+ * off with no URL set is unit tested in test/tasks-service.test.ts.
  */
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test, expect} from '../support/test';
 import {FakeCli} from '../support/fake-cli';
-import {LABEL, P, S} from '../fixtures/standard';
-import {openSession, sidebar, terminalHeader} from '../support/app';
-import {sessionWorkStub} from '../fixtures/session-work';
-import {openedExternally} from '../support/main-process';
-import {fakeBlaakTasks, switchBlaakTasksOn, TASK, TITLE, TOKEN} from '../support/blaak-tasks';
+import {P} from '../fixtures/standard';
+import {fakeBlaakTasks, TASK, TITLE, TOKEN} from '../support/blaak-tasks';
 
 /** Make the project a git repository with one commit on `main`, as a real one would be. */
 function makeRepository(dir: string): void {
@@ -119,245 +112,4 @@ test('a session started from a task is linked to it, and the task is set In prog
     } finally {
         await blaakTasks.close();
     }
-});
-
-test('with no BlaakTasks URL set, nothing is started and nothing is linked', async ({page}) => {
-    /* When */
-    const answers = await page.evaluate(
-        async (task) => ({
-            prepared: await window.api.prepareTaskStart({task: {id: task, title: 'Anything'}}),
-            listed: await window.api.listTasks({view: 'today'}),
-            linked: await window.api.sessionTasks(),
-        }),
-        TASK,
-    );
-
-    /* Then */
-    expect(answers).toEqual({prepared: {kind: 'off'}, listed: {kind: 'off'}, linked: {}});
-});
-
-test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a session on the task without leaving it', async ({
-    page,
-    home,
-}) => {
-    /* Given: BlaakTasks set up in Claude Code, a repository the task is linked to, and no Tasks page yet */
-    const blaakTasks = await fakeBlaakTasks();
-    try {
-        fs.writeFileSync(
-            path.join(home.home, '.claude.json'),
-            JSON.stringify({
-                mcpServers: {
-                    blaaktasks: {type: 'http', url: blaakTasks.url, headers: {Authorization: `Bearer ${TOKEN}`}},
-                },
-            }),
-        );
-        const projectPath = home.projectPath(P.acmeApi);
-        makeRepository(projectPath);
-        const tasksPage = page.getByRole('region', {name: 'Tasks'});
-        const gear = page.getByRole('button', {name: 'Global settings', exact: true});
-        const tasksItem = page.getByRole('menuitem', {name: 'Tasks'});
-        await gear.click();
-        await expect(tasksItem).toHaveCount(0);
-        await page.keyboard.press('Escape');
-
-        /* When: the URL is saved in Settings */
-        await switchBlaakTasksOn(page, blaakTasks.url);
-        await page.evaluate(({task, projectPath}) => window.api.setTaskRepo(task, projectPath), {
-            task: TASK,
-            projectPath,
-        });
-
-        /* Then: the gear's menu has its entry point, and ⌘T opens it on ★ Today with the task's row */
-        await gear.click();
-        await expect(tasksItem).toBeVisible();
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Meta+t');
-        await expect(tasksPage).toBeFocused();
-        await expect(tasksPage.getByRole('tab', {name: '★ Today'})).toHaveAttribute('aria-selected', 'true');
-        await expect(tasksPage.getByRole('radio', {name: 'Work'})).toHaveAttribute('aria-checked', 'true');
-        const row = tasksPage.locator(`[data-task-id="${TASK}"]`);
-        await expect(row).toContainText(TITLE);
-        await expect(row).toContainText('In progress');
-        await expect(row).toHaveAttribute('aria-selected', 'true');
-
-        /* When: one click on the row */
-        await row.click();
-
-        /* Then: its detail opens */
-        await expect(tasksPage.getByRole('complementary', {name: 'Task detail'})).toContainText(TITLE);
-
-        /* When: S on the row under the cursor, and extra instructions for it */
-        await page.keyboard.press('s');
-        await expect(tasksPage.getByRole('textbox', {name: 'Extra instructions'})).toBeFocused();
-        await page.keyboard.type('Only the upload test.');
-        await page.keyboard.press('Enter');
-
-        /* Then: Claude started in the task's worktree with them, the page kept the main area, and the session has a sidebar row */
-        await expect(row.getByRole('status')).toContainText('Started in');
-        let owner: string | null = null;
-        await expect
-            .poll(async () => (owner = (await page.evaluate((task) => window.api.taskSessions(task), TASK)).owner))
-            .not.toBeNull();
-        const launch = await new FakeCli(home.controlDir, owner!).launched();
-        expect(fs.realpathSync(launch.cwd)).toBe(
-            fs.realpathSync(path.join(projectPath, '.claude/worktrees/fix-the-flaky-upload-test')),
-        );
-        expect(launch.argv.at(-1)).toMatch(/\n\nExtra instructions: Only the upload test\.$/);
-        await expect(sidebar(page).locator(`[data-session-id="${owner}"]`)).toBeVisible();
-        await expect(tasksPage).toBeVisible();
-        await expect
-            .poll(() => blaakTasks.calls.some((call) => call.tool === 'update' && call.args.id === TASK))
-            .toBe(true);
-
-        /* When: Esc, for the start's answer, the detail and the page */
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
-
-        /* Then */
-        await expect(tasksPage).toHaveCount(0);
-    } finally {
-        await blaakTasks.close();
-    }
-});
-
-test('the project page lists the repo’s linked task, and S starts it in this repo without leaving the page', async ({
-    page,
-    home,
-}) => {
-    /* Given: BlaakTasks on, and the task linked to the repository */
-    const blaakTasks = await fakeBlaakTasks();
-    try {
-        fs.writeFileSync(
-            path.join(home.home, '.claude.json'),
-            JSON.stringify({
-                mcpServers: {
-                    blaaktasks: {type: 'http', url: blaakTasks.url, headers: {Authorization: `Bearer ${TOKEN}`}},
-                },
-            }),
-        );
-        const projectPath = home.projectPath(P.acmeApi);
-        makeRepository(projectPath);
-        await switchBlaakTasksOn(page, blaakTasks.url);
-        await page.evaluate(({task, projectPath}) => window.api.setTaskRepo(task, projectPath), {
-            task: TASK,
-            projectPath,
-        });
-
-        /* When: the project's page opens */
-        await sidebar(page).locator(`[data-session-id="${S.loginFix}"]`).getByTestId('project-link').click();
-
-        /* Then: its Tasks section lists the task */
-        const projectPage = page.getByRole('region', {name: /^Project /});
-        const section = projectPage.getByRole('region', {name: 'Tasks'});
-        const row = section.locator(`[data-task-id="${TASK}"]`);
-        await expect(row).toContainText(TITLE);
-        await expect(row).toContainText('In progress');
-        expect(blaakTasks.calls.filter((call) => call.tool === 'get').map((call) => call.args.task)).toContain(TASK);
-
-        /* When: S on the task's row */
-        await row.click();
-        await expect(row).toHaveAttribute('aria-selected', 'true');
-        await page.keyboard.press('s');
-
-        /* Then: Claude started in the task's worktree in this repo, and the page kept the main area */
-        await expect(row.getByRole('status')).toContainText('Started in');
-        let owner: string | null = null;
-        await expect
-            .poll(async () => (owner = (await page.evaluate((task) => window.api.taskSessions(task), TASK)).owner))
-            .not.toBeNull();
-        const launch = await new FakeCli(home.controlDir, owner!).launched();
-        expect(fs.realpathSync(launch.cwd)).toBe(
-            fs.realpathSync(path.join(projectPath, '.claude/worktrees/fix-the-flaky-upload-test')),
-        );
-        await expect(sidebar(page).locator(`[data-session-id="${owner}"]`)).toBeVisible();
-        await expect(projectPage).toBeVisible();
-    } finally {
-        await blaakTasks.close();
-    }
-});
-
-test.describe('the task on its session', () => {
-    test.use({stubs: {sessionWork: sessionWorkStub()}});
-
-    test('a linked session shows its task: the tray’s task row, the Task tab and the sidebar marker', async ({
-        page,
-        home,
-        app,
-    }) => {
-        /* Given: BlaakTasks on, and a session on screen with no task */
-        const blaakTasks = await fakeBlaakTasks({
-            brief: 'The login page loops back to itself after the cookie expires.',
-            progress: [
-                {day: '2026-10-27', text: 'Claude started work'},
-                {day: '2026-10-28', text: 'Found the cause: the cookie path'},
-            ],
-            pullRequests: ['https://github.com/acme/api/pull/1320'],
-        });
-        try {
-            fs.writeFileSync(
-                path.join(home.home, '.claude.json'),
-                JSON.stringify({
-                    mcpServers: {
-                        blaaktasks: {type: 'http', url: blaakTasks.url, headers: {Authorization: `Bearer ${TOKEN}`}},
-                    },
-                }),
-            );
-            await switchBlaakTasksOn(page, blaakTasks.url);
-            await openSession(page, home, LABEL.loginFix, S.loginFix);
-            // The task is a row in the session tray's Links (#343), which hovering the bar opens.
-            const tray = page.getByRole('region', {name: 'Session tools'});
-            const taskRow = tray.locator('.tray-link').filter({hasText: TITLE});
-            const marker = page.locator(`[data-session-id="${S.loginFix}"]`).getByTestId('session-task-marker');
-            await expect(marker).toHaveCount(0);
-
-            /* When: the session is linked to the task */
-            await page.evaluate(({sessionId, task}) => window.api.linkSessionTask(sessionId, task), {
-                sessionId: S.loginFix,
-                task: TASK,
-            });
-
-            /* Then: the tray's task row names the task and its status, and the row is marked */
-            await expect(marker).toHaveAttribute('title', 'Task: ' + TITLE);
-            // Main answers links from what it has and asks BlaakTasks behind the answer: open the tray again until it has.
-            await expect(async () => {
-                await page.mouse.move(600, 600);
-                await expect(tray).not.toHaveClass(/is-open/);
-                await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
-                await expect(taskRow).toContainText('In progress', {timeout: 1000});
-            }).toPass();
-
-            /* When: the task row is clicked */
-            await taskRow.click();
-
-            /* Then: Session work opens on the Task tab, oldest progress first, with the PR's state */
-            const work = page.getByRole('region', {name: /^Session work for /});
-            await expect(work.getByRole('tab', {name: 'Task'})).toHaveAttribute('aria-selected', 'true');
-            const tab = work.getByTestId('session-task-tab');
-            await expect(tab.getByRole('heading', {name: TITLE})).toBeVisible();
-            await expect(tab).toContainText('The login page loops back to itself after the cookie expires.');
-            await expect(tab.locator('.st-log li')).toHaveText([
-                /Claude started work/,
-                /Found the cause: the cookie path/,
-            ]);
-            await expect(tab.getByRole('button', {name: '#1320 open'})).toBeVisible();
-            for (const name of ['Mark done', 'Snooze', 'Open in Notion'])
-                await expect(tab.getByRole('button', {name})).toBeVisible();
-
-            /* When: its PR is clicked */
-            await tab.getByRole('button', {name: '#1320 open'}).click();
-
-            /* Then: the PR opens in the browser */
-            await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
-
-            /* When: unlinked */
-            await page.evaluate((sessionId) => window.api.unlinkSessionTask(sessionId), S.loginFix);
-
-            /* Then: the tab and the marker go */
-            await expect(work.getByRole('tab', {name: 'Task'})).toHaveCount(0);
-            await expect(marker).toHaveCount(0);
-        } finally {
-            await blaakTasks.close();
-        }
-    });
 });

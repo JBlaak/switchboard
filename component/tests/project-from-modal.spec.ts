@@ -1,22 +1,25 @@
 /**
- * The Projects modal leads to the project page (#177) in the real app: → on
- * the highlighted project, or its Open button, closes the modal and opens the
- * project's page with no sidebar row lit (#168); a worktree opens its
- * repository's page; and with a prompt from Quick Ask waiting, → does
- * nothing. A plan now opens from the page, inside it (#173, #174), and the
- * routes #168 asked for still hold: no row lit, ⌘[ back to the overview, Esc
- * back to the session the page covered, lit and focused.
+ * The Projects modal leads to the project page (#177): → on the highlighted
+ * project, or its Open button, closes the modal and opens the project's page
+ * with no sidebar row lit (#168); a worktree opens its repository's page; and
+ * with a prompt from Quick Ask waiting, → does nothing. A plan now opens from
+ * the page, inside it (#173, #174), and the routes #168 asked for still hold:
+ * no row lit, ⌘[ back to the overview, Esc back to the session the page
+ * covered, lit and focused.
  *
- * The keys are unit tested in test/projects-modal.test.ts; the main area's
- * route and its highlight in test/main-area-slice.test.ts. Adding a project
- * and landing on its page is walked in dialogs.spec.ts.
+ * Main is answered as the e2e host stubs answered it (component/support/
+ * project-page.ts); a session started is the `openTerminal` call the renderer
+ * makes. The keys are unit tested in test/projects-modal.test.ts; the main
+ * area's route and its highlight in test/main-area-slice.test.ts. Adding a
+ * project and landing on its page is walked in e2e/tests/dialogs.spec.ts.
  */
 import {test, expect} from '../support/test';
-import {dialog, openSession, rowButton, sidebar} from '../support/app';
-import {fakeRoute, launchedKeys, waitForNewLaunch} from '../support/fake-cli';
-import {sessionItem} from '../support/session-list';
-import {LABEL, P, S} from '../fixtures/standard';
-import {acmeOverview, plansStub} from '../fixtures/plans';
+import {fixtureProjectPath} from '../fixtures/captured';
+import {openSession, PROJECT_PAGE_ANSWERS, runSessions, stubOverviews, stubPlans} from '../support/project-page';
+import {dialog, rowButton, sidebar} from '../../e2e/support/app';
+import {sessionItem} from '../../e2e/support/session-list';
+import {LABEL, P, S} from '../../e2e/fixtures/standard';
+import {acmeOverview, plansStub} from '../../e2e/fixtures/plans';
 import type {Locator, Page} from '@playwright/test';
 
 /** A worktree of old-parser, listed as a project of its own. */
@@ -81,15 +84,20 @@ async function openLoginRework(page: Page): Promise<void> {
     await expect(planPage(page).getByRole('heading', {name: 'Login rework'})).toBeVisible();
 }
 
-test.use({stubs: {projectOverview: {[P.acmeApi]: acmeOverview()}, plans: plansStub()}});
+test.use({answers: PROJECT_PAGE_ANSWERS});
+
+test.beforeEach(({api}) => {
+    stubOverviews(api, {[P.acmeApi]: acmeOverview()});
+    stubPlans(api, plansStub());
+    runSessions(api);
+});
 
 test('⌘A, →: the project page opens in the modal’s place, with no row lit and no session started', async ({
     page,
-    home,
+    api,
 }) => {
     /* Given */
     const rowsBefore = await sessionRows(page).count();
-    const before = launchedKeys(home);
     await openPickerOnAcme(page);
     await expect(footer(picker(page))).toContainText('→open project');
     await expect(footer(picker(page))).not.toContainText('plans');
@@ -104,7 +112,7 @@ test('⌘A, →: the project page opens in the modal’s place, with no row lit 
     await expect(plansSection(page).getByText('Login rework', {exact: true})).toBeVisible();
     await expect(litRows(page)).toHaveCount(0);
     await expect(sessionRows(page)).toHaveCount(rowsBefore);
-    expect(launchedKeys(home)).toEqual(before);
+    expect(api.callsTo('openTerminal')).toEqual([]);
 
     /* When */
     await page.keyboard.press('Escape');
@@ -188,10 +196,10 @@ test('a plan opens inside the page with no row lit; ⌘[ goes back to the overvi
 
 test('a plan opened over a session lights no row, and Esc brings the session back, lit and focused', async ({
     page,
-    home,
+    api,
 }) => {
     /* Given */
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
     await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bactive\b/);
 
     /* When */
@@ -212,13 +220,13 @@ test('a plan opened over a session lights no row, and Esc brings the session bac
     await expect(terminalInput(page)).toBeFocused();
 });
 
-test('clicking a sidebar row while a plan is open shows that session and closes the plan', async ({page, home}) => {
+test('clicking a sidebar row while a plan is open shows that session and closes the plan', async ({page, api}) => {
     /* Given */
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
     await openLoginRework(page);
 
     /* When */
-    await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
+    await openSession(page, api, LABEL.chartsDarkMode, S.chartsDarkMode);
 
     /* Then */
     await expect(planPage(page)).toHaveCount(0);
@@ -229,10 +237,9 @@ test('clicking a sidebar row while a plan is open shows that session and closes 
 
 test('with a prompt waiting, → does nothing and shows greyed, and ↵ still starts on the prompt', async ({
     page,
-    home,
+    api,
 }) => {
-    /* Given */
-    fakeRoute(home).answer({projectPath: null, confident: false, candidates: [], prompt: ''});
+    /* Given: ⌘↵ starts a session instead of asking, so the prompt waits in the picker */
     const ask = page.getByTestId('ask-box');
     await ask.fill('jot down an idea');
     await ask.press('Meta+Enter');
@@ -251,11 +258,12 @@ test('with a prompt waiting, → does nothing and shows greyed, and ↵ still st
     await expect(page.getByTestId('project-page')).toBeHidden();
 
     /* When */
-    const before = launchedKeys(home);
     await page.keyboard.press('Enter');
 
     /* Then */
-    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
-    expect(launch.cwd).toBe(home.projectPath(P.acmeApi));
-    expect(launch.argv.at(-1)).toBe('jot down an idea');
+    await expect.poll(() => api.callsTo('openTerminal')).toHaveLength(1);
+    const [, cwd, isNew, options] = api.callsTo('openTerminal')[0];
+    expect(cwd).toBe(fixtureProjectPath(P.acmeApi));
+    expect(isNew).toBe(true);
+    expect(options?.initialPrompt).toBe('jot down an idea');
 });

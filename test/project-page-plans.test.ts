@@ -5,8 +5,8 @@
  * sections, what each key does, when the overview is asked for, and the
  * recent-plans memory that opens the plan viewed last expanded.
  *
- * The page in the real app, with a stubbed overview, is in
- * e2e/tests/project-page.spec.ts.
+ * The page in the renderer, with a stubbed overview, is in
+ * component/tests/project-page.spec.ts.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

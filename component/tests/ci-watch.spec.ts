@@ -7,20 +7,16 @@
  * test/session-work-rules.test.ts);
  * these tests prove main's pushes and the log request reach the screen.
  *
- * The suite never reaches GitHub, so the watch itself is off here (it polls
- * the user's own `gh`); each test pushes what main would push instead —
- * `pr-status:changed` for the dots, a snapshot for the page — and the Checks
- * panel's log comes from the Session work stub.
+ * Each test pushes what main's watch would push — `onPrStatusChanged` for the
+ * dots, a snapshot for the page — and the Checks panel's log comes from the
+ * Session work stub.
  */
 import {test, expect} from '../support/test';
-import {openSession} from '../support/app';
-import {pushEvent} from '../support/main-process';
-import {sessionItem} from '../support/session-list';
-import {LABEL, S} from '../fixtures/standard';
-import {loginFixWorkWith, sessionWorkStub} from '../fixtures/session-work';
-import {EVENT} from '../../src/ipc/channels';
+import {openLoginFixWork, sessionWorkAnswers, workPage} from '../support/session-work';
+import {sessionItem} from '../../e2e/support/session-list';
+import {S} from '../../e2e/fixtures/standard';
+import {loginFixWorkWith, sessionWorkStub} from '../../e2e/fixtures/session-work';
 import type {PullRequestStatusChange} from '../../src/domain/session-work/status';
-import type {Page} from '@playwright/test';
 
 const RUN = 'https://github.com/acme/api/actions/runs/11/job/22';
 const LOG = 'FAIL src/session.test.ts\n  ✕ refresh does not loop (12 ms)\nExpected: null\nReceived: "/login"';
@@ -35,25 +31,15 @@ const FAILING = {
     ],
 };
 
-function workPage(page: Page) {
-    return page.getByRole('region', {name: /^Session work for /});
-}
-
-async function openLoginFixWork(page: Page, home: Parameters<typeof openSession>[1]): Promise<void> {
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
-    await page.keyboard.press('Meta+g');
-    await expect(workPage(page).getByRole('heading', {level: 1})).toHaveText('Work · ' + LABEL.loginFix);
-}
-
 function prStatus(prs: PullRequestStatusChange['prs'], needsYou = false): PullRequestStatusChange {
     return {sessionId: S.loginFix, prs, needsYou};
 }
 
-test.use({stubs: {sessionWork: {...sessionWorkStub(), checkLogs: {[RUN]: LOG}}}});
+test.use({answers: sessionWorkAnswers({...sessionWorkStub(), checkLogs: {[RUN]: LOG}})});
 
 test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" named in its tooltip, and needs-attention', async ({
     page,
-    app,
+    api,
 }) => {
     /* Given */
     const row = sessionItem(page, S.loginFix);
@@ -63,9 +49,8 @@ test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" na
     await expect(row).not.toHaveClass(/\bneeds-attention\b/);
 
     /* When */
-    await pushEvent(
-        app,
-        EVENT.prStatusChanged,
+    await api.emit(
+        'onPrStatusChanged',
         prStatus(
             [
                 {number: 1309, dot: 'red'},
@@ -85,22 +70,22 @@ test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" na
 
     /* When */
     // The session stopped: what the watch last said would go stale.
-    await pushEvent(app, EVENT.prStatusChanged, prStatus([]));
+    await api.emit('onPrStatusChanged', prStatus([]));
 
     /* Then */
     await expect(row.locator('.session-pr-dot')).toHaveCount(0);
 
     /* When */
     // What main sends when a PR of a session that is not on screen waits on you.
-    await pushEvent(app, EVENT.prStatusChanged, prStatus([{number: 1320, dot: 'red'}], true));
-    await pushEvent(app, EVENT.sessionNeedsAttention, S.loginFix);
+    await api.emit('onPrStatusChanged', prStatus([{number: 1320, dot: 'red'}], true));
+    await api.emit('onSessionNeedsAttention', S.loginFix);
 
     /* Then */
     await expect(row).toHaveClass(/\bneeds-attention\b/);
     await expect(chip('#1320').locator('.session-pr-dot')).toHaveAttribute('data-dot', 'red');
 
     /* When */
-    await pushEvent(app, EVENT.prStatusChanged, prStatus([{number: 1320, dot: 'merged'}]));
+    await api.emit('onPrStatusChanged', prStatus([{number: 1320, dot: 'merged'}]));
 
     /* Then */
     // A merged PR swaps its dot for a check.
@@ -109,12 +94,12 @@ test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" na
     await expect(chip('#1320')).toHaveAttribute('title', 'acme/api#1320 · merged');
 });
 
-test("the Checks panel lists each check, with the failing one's log", async ({page, home, app}) => {
+test("the Checks panel lists each check, with the failing one's log", async ({page, api}) => {
     /* Given */
-    await openLoginFixWork(page, home);
+    await openLoginFixWork(page, api);
 
     /* When */
-    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(FAILING));
+    await api.emit('onSessionWorkSnapshot', loginFixWorkWith(FAILING));
 
     /* Then */
     const checks = workPage(page).getByRole('region', {name: 'Checks'});

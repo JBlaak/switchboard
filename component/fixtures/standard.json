@@ -1,0 +1,498 @@
+{
+    "projects": [
+        {
+            "folder": "-home-fixture-Development-acme-api",
+            "projectPath": "/home/fixture/Development/acme-api",
+            "sessions": [
+                {
+                    "sessionId": "06a5788f-b5a8-4ae7-83a0-b5ee451cd004",
+                    "summary": "Fix the login redirect loop",
+                    "firstPrompt": "Fix the login redirect loop",
+                    "created": "2026-06-10T13:30:00.000Z",
+                    "modified": "2026-06-10T13:40:00.000Z",
+                    "messageCount": 12,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [
+                        {
+                            "number": 1309,
+                            "url": "https://github.com/acme/api/pull/1309",
+                            "repository": "acme/api"
+                        },
+                        {
+                            "number": 1312,
+                            "url": "https://github.com/acme/api/pull/1312",
+                            "repository": "acme/api"
+                        },
+                        {
+                            "number": 1320,
+                            "url": "https://github.com/acme/api/pull/1320",
+                            "repository": "acme/api"
+                        }
+                    ],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "2d7950bf-e863-4de6-8279-a19f8238c5dd",
+                    "summary": "Try the session-cookie fix in a worktree",
+                    "firstPrompt": "Try the session-cookie fix in a worktree",
+                    "created": "2026-06-10T13:05:00.000Z",
+                    "modified": "2026-06-10T13:15:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "bf2f135d-4b3d-4dc0-89ba-1a86b34f1cd1",
+                    "summary": "Implement the plan: move the payment webhooks",
+                    "firstPrompt": "Implement the plan: move the payment webhooks",
+                    "created": "2026-06-10T12:50:00.000Z",
+                    "modified": "2026-06-10T13:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": "Refactor billing into its own service",
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "511dbe83-36c6-4f60-8bfb-294840310094",
+                    "summary": "Implement the plan: extract the invoice model",
+                    "firstPrompt": "Implement the plan: extract the invoice model",
+                    "created": "2026-06-10T10:50:00.000Z",
+                    "modified": "2026-06-10T11:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "4fa723fb-9aa7-44f0-8349-fdfe9866d1c6",
+                    "summary": "Plan how to move billing out of the monolith",
+                    "firstPrompt": "Plan how to move billing out of the monolith",
+                    "created": "2026-06-10T08:50:00.000Z",
+                    "modified": "2026-06-10T09:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "686d5c85-9753-41e6-8f0f-38875b9ab9a3",
+                    "summary": "Write the release notes for 2.3",
+                    "firstPrompt": "Write the release notes for 2.3",
+                    "created": "2026-06-05T13:50:00.000Z",
+                    "modified": "2026-06-05T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 1,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "-home-fixture-Development-web-dashboard",
+            "projectPath": "/home/fixture/Development/web-dashboard",
+            "sessions": [
+                {
+                    "sessionId": "6ea3b5fe-801a-4e43-8845-e21e13d6a901",
+                    "summary": "Add a dark mode to the dashboard charts",
+                    "firstPrompt": "Add a dark mode to the dashboard charts",
+                    "created": "2026-06-10T11:50:00.000Z",
+                    "modified": "2026-06-10T12:00:00.000Z",
+                    "messageCount": 6,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": "Charts: dark mode",
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "d6d2df8c-8826-48ff-8a13-241f22d40fff",
+                    "summary": "Investigate the flaky checkout e2e test",
+                    "firstPrompt": "Investigate the flaky checkout e2e test",
+                    "created": "2026-06-04T13:50:00.000Z",
+                    "modified": "2026-06-04T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "00bd95f2-8297-4ee8-89cf-e3ead3c399ba",
+                    "summary": "Bump dependencies and fix the fallout",
+                    "firstPrompt": "Bump dependencies and fix the fallout",
+                    "created": "2026-05-31T13:50:00.000Z",
+                    "modified": "2026-05-31T14:00:00.000Z",
+                    "messageCount": 2,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "ssh---joris-buildbox-local---apps-api",
+            "projectPath": "ssh://joris@buildbox.local/~/apps/api",
+            "sessions": [
+                {
+                    "firstPrompt": "",
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "messageCount": 0,
+                    "sessionId": "9d3414f6-7ebd-41c1-8fe0-6c86106be6f6",
+                    "projectPath": "ssh://joris@buildbox.local/~/apps/api",
+                    "summary": "Remote Claude",
+                    "created": "2026-06-08T14:00:00.000Z",
+                    "modified": "2026-06-10T11:00:00.000Z",
+                    "snoozedUntil": null,
+                    "type": "remote",
+                    "remoteKind": "claude"
+                }
+            ],
+            "remote": true
+        },
+        {
+            "folder": "-home-fixture-Development-old-parser--claude-worktrees-streaming",
+            "projectPath": "/home/fixture/Development/old-parser/.claude/worktrees/streaming",
+            "sessions": [
+                {
+                    "sessionId": "e6e1376d-556c-45fb-86a9-01aabea0af02",
+                    "summary": "Experiment with a streaming parser",
+                    "firstPrompt": "Experiment with a streaming parser",
+                    "created": "2026-06-09T07:50:00.000Z",
+                    "modified": "2026-06-09T08:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/old-parser/.claude/worktrees/streaming",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "-home-fixture-Documents-notes",
+            "projectPath": "/home/fixture/Documents/notes",
+            "sessions": [
+                {
+                    "sessionId": "43e556d7-44b8-40f7-8eb6-716fc6254bfd",
+                    "summary": "Summarise the planning meeting notes",
+                    "firstPrompt": "Summarise the planning meeting notes",
+                    "created": "2026-06-06T13:50:00.000Z",
+                    "modified": "2026-06-06T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Documents/notes",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        }
+    ],
+    "projectsWithArchived": [
+        {
+            "folder": "-home-fixture-Development-acme-api",
+            "projectPath": "/home/fixture/Development/acme-api",
+            "sessions": [
+                {
+                    "sessionId": "06a5788f-b5a8-4ae7-83a0-b5ee451cd004",
+                    "summary": "Fix the login redirect loop",
+                    "firstPrompt": "Fix the login redirect loop",
+                    "created": "2026-06-10T13:30:00.000Z",
+                    "modified": "2026-06-10T13:40:00.000Z",
+                    "messageCount": 12,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [
+                        {
+                            "number": 1309,
+                            "url": "https://github.com/acme/api/pull/1309",
+                            "repository": "acme/api"
+                        },
+                        {
+                            "number": 1312,
+                            "url": "https://github.com/acme/api/pull/1312",
+                            "repository": "acme/api"
+                        },
+                        {
+                            "number": 1320,
+                            "url": "https://github.com/acme/api/pull/1320",
+                            "repository": "acme/api"
+                        }
+                    ],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "2d7950bf-e863-4de6-8279-a19f8238c5dd",
+                    "summary": "Try the session-cookie fix in a worktree",
+                    "firstPrompt": "Try the session-cookie fix in a worktree",
+                    "created": "2026-06-10T13:05:00.000Z",
+                    "modified": "2026-06-10T13:15:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "bf2f135d-4b3d-4dc0-89ba-1a86b34f1cd1",
+                    "summary": "Implement the plan: move the payment webhooks",
+                    "firstPrompt": "Implement the plan: move the payment webhooks",
+                    "created": "2026-06-10T12:50:00.000Z",
+                    "modified": "2026-06-10T13:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": "Refactor billing into its own service",
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "511dbe83-36c6-4f60-8bfb-294840310094",
+                    "summary": "Implement the plan: extract the invoice model",
+                    "firstPrompt": "Implement the plan: extract the invoice model",
+                    "created": "2026-06-10T10:50:00.000Z",
+                    "modified": "2026-06-10T11:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "4fa723fb-9aa7-44f0-8349-fdfe9866d1c6",
+                    "summary": "Plan how to move billing out of the monolith",
+                    "firstPrompt": "Plan how to move billing out of the monolith",
+                    "created": "2026-06-10T08:50:00.000Z",
+                    "modified": "2026-06-10T09:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": "gentle-orbiting-falcon",
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "df7fc0c5-1c36-4936-8d7e-1057872daf6f",
+                    "summary": "Spike a GraphQL gateway",
+                    "firstPrompt": "Spike a GraphQL gateway",
+                    "created": "2026-06-09T13:50:00.000Z",
+                    "modified": "2026-06-09T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 1,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "686d5c85-9753-41e6-8f0f-38875b9ab9a3",
+                    "summary": "Write the release notes for 2.3",
+                    "firstPrompt": "Write the release notes for 2.3",
+                    "created": "2026-06-05T13:50:00.000Z",
+                    "modified": "2026-06-05T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/acme-api",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 1,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "-home-fixture-Development-web-dashboard",
+            "projectPath": "/home/fixture/Development/web-dashboard",
+            "sessions": [
+                {
+                    "sessionId": "6ea3b5fe-801a-4e43-8845-e21e13d6a901",
+                    "summary": "Add a dark mode to the dashboard charts",
+                    "firstPrompt": "Add a dark mode to the dashboard charts",
+                    "created": "2026-06-10T11:50:00.000Z",
+                    "modified": "2026-06-10T12:00:00.000Z",
+                    "messageCount": 6,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": "Charts: dark mode",
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "d6d2df8c-8826-48ff-8a13-241f22d40fff",
+                    "summary": "Investigate the flaky checkout e2e test",
+                    "firstPrompt": "Investigate the flaky checkout e2e test",
+                    "created": "2026-06-04T13:50:00.000Z",
+                    "modified": "2026-06-04T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                },
+                {
+                    "sessionId": "00bd95f2-8297-4ee8-89cf-e3ead3c399ba",
+                    "summary": "Bump dependencies and fix the fallout",
+                    "firstPrompt": "Bump dependencies and fix the fallout",
+                    "created": "2026-05-31T13:50:00.000Z",
+                    "modified": "2026-05-31T14:00:00.000Z",
+                    "messageCount": 2,
+                    "projectPath": "/home/fixture/Development/web-dashboard",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "ssh---joris-buildbox-local---apps-api",
+            "projectPath": "ssh://joris@buildbox.local/~/apps/api",
+            "sessions": [
+                {
+                    "firstPrompt": "",
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "messageCount": 0,
+                    "sessionId": "9d3414f6-7ebd-41c1-8fe0-6c86106be6f6",
+                    "projectPath": "ssh://joris@buildbox.local/~/apps/api",
+                    "summary": "Remote Claude",
+                    "created": "2026-06-08T14:00:00.000Z",
+                    "modified": "2026-06-10T11:00:00.000Z",
+                    "snoozedUntil": null,
+                    "type": "remote",
+                    "remoteKind": "claude"
+                }
+            ],
+            "remote": true
+        },
+        {
+            "folder": "-home-fixture-Development-old-parser--claude-worktrees-streaming",
+            "projectPath": "/home/fixture/Development/old-parser/.claude/worktrees/streaming",
+            "sessions": [
+                {
+                    "sessionId": "e6e1376d-556c-45fb-86a9-01aabea0af02",
+                    "summary": "Experiment with a streaming parser",
+                    "firstPrompt": "Experiment with a streaming parser",
+                    "created": "2026-06-09T07:50:00.000Z",
+                    "modified": "2026-06-09T08:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Development/old-parser/.claude/worktrees/streaming",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        },
+        {
+            "folder": "-home-fixture-Documents-notes",
+            "projectPath": "/home/fixture/Documents/notes",
+            "sessions": [
+                {
+                    "sessionId": "43e556d7-44b8-40f7-8eb6-716fc6254bfd",
+                    "summary": "Summarise the planning meeting notes",
+                    "firstPrompt": "Summarise the planning meeting notes",
+                    "created": "2026-06-06T13:50:00.000Z",
+                    "modified": "2026-06-06T14:00:00.000Z",
+                    "messageCount": 4,
+                    "projectPath": "/home/fixture/Documents/notes",
+                    "slug": null,
+                    "aiTitle": null,
+                    "pullRequests": [],
+                    "name": null,
+                    "starred": 0,
+                    "archived": 0,
+                    "snoozedUntil": null
+                }
+            ]
+        }
+    ]
+}

@@ -2,8 +2,8 @@
  * Your review on the Session work page (#77): commenting a line of a PR's
  * diff, the pending review and its bar, and the threads already on GitHub.
  *
- * Nothing here reaches GitHub: the page's writes are recorded by the stub
- * (`sessionWorkReviews`), and what GitHub would say afterwards is pushed as a
+ * The page's writes are read back from the fake api (`sessionWorkComment`,
+ * `sessionWorkReview`), and what GitHub would say afterwards is pushed as a
  * snapshot, as the poll would.
  *
  * Where threads, pending comments and the composer go, which diffs take
@@ -12,16 +12,12 @@
  * the focus and what reaches main.
  */
 import {test, expect} from '../support/test';
-import {openSession} from '../support/app';
-import {pushEvent, sessionWorkReviews} from '../support/main-process';
-import {LABEL, S} from '../fixtures/standard';
-import {FIRST_PR_ID, loginFixWorkWithReview, sessionWorkStub} from '../fixtures/session-work';
-import {EVENT} from '../../src/ipc/channels';
+import {openLoginFixWork, sessionWorkAnswers, workPage} from '../support/session-work';
+import {S} from '../../e2e/fixtures/standard';
+import {FIRST_PR_ID, loginFixWorkWithReview, sessionWorkStub} from '../../e2e/fixtures/session-work';
 import type {Page} from '@playwright/test';
-
-function workPage(page: Page) {
-    return page.getByRole('region', {name: /^Session work for /});
-}
+import type {FakeApi} from '../support/fake-api';
+import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 
 function sessionFile(page: Page) {
     return workPage(page).getByTestId('session-work-diff').getByRole('region', {name: 'src/session.ts', exact: true});
@@ -36,26 +32,33 @@ function composer(page: Page) {
     return workPage(page).getByTestId('session-work-composer');
 }
 
-async function openLoginFixWork(page: Page, home: Parameters<typeof openSession>[1]): Promise<void> {
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
-    await expect(page.getByRole('textbox', {name: 'Terminal input'})).toBeFocused();
-    await page.keyboard.press('Meta+g');
-    await expect(workPage(page).getByRole('heading', {level: 1})).toHaveText('Work · ' + LABEL.loginFix);
+type ReviewWrite = {comment: CommentRequest} | {review: ReviewRequest};
+
+/** Every write to your review the page asked main for, in order. */
+function reviewWrites(api: FakeApi): ReviewWrite[] {
+    return api.calls.flatMap((call): ReviewWrite[] => {
+        if (call.name === 'sessionWorkComment') return [{comment: call.args[0] as CommentRequest}];
+        if (call.name === 'sessionWorkReview') return [{review: call.args[0] as ReviewRequest}];
+        return [];
+    });
+}
+
+async function openWithDiff(page: Page, api: FakeApi): Promise<void> {
+    await openLoginFixWork(page, api);
     await expect(sessionFile(page).locator('.sw-dl[data-kind="add"]')).toHaveCount(3);
 }
 
 const COMMENT_BASE = {sessionId: S.loginFix, itemId: FIRST_PR_ID, path: 'src/session.ts'};
 
 test.describe('commenting a line', () => {
-    test.use({stubs: {sessionWork: sessionWorkStub()}});
+    test.use({answers: sessionWorkAnswers(sessionWorkStub())});
 
     test('a + shows on the hovered line and opens the composer under it; Add to review sends the comment, from either side of the split view', async ({
         page,
-        home,
-        app,
+        api,
     }) => {
         /* Given */
-        await openLoginFixWork(page, home);
+        await openWithDiff(page, api);
         const row = line(page, 11);
         const plus = row.getByRole('button', {name: 'Comment on line 11'});
         await expect(plus).toHaveCSS('opacity', '0');
@@ -87,7 +90,7 @@ test.describe('commenting a line', () => {
         /* Then */
         await expect(workPage(page)).toBeVisible();
         await expect
-            .poll(() => sessionWorkReviews(app))
+            .poll(() => reviewWrites(api))
             .toEqual([{comment: {...COMMENT_BASE, line: 11, side: 'RIGHT', body: 'Return early, and keep the jump.'}}]);
         await expect(composer(page)).toHaveCount(0);
 
@@ -101,13 +104,13 @@ test.describe('commenting a line', () => {
 
         /* Then */
         await expect
-            .poll(async () => (await sessionWorkReviews(app)).at(-1))
+            .poll(() => reviewWrites(api).at(-1))
             .toEqual({comment: {...COMMENT_BASE, line: 11, side: 'LEFT', body: 'Old side'}});
     });
 
-    test('c comments on the focused line; Esc closes the composer before the page', async ({page, home, app}) => {
+    test('c comments on the focused line; Esc closes the composer before the page', async ({page, api}) => {
         /* Given */
-        await openLoginFixWork(page, home);
+        await openWithDiff(page, api);
         // A deleted line is on the old side.
         const deleted = line(page, 12, 'LEFT');
         await deleted.click();
@@ -134,7 +137,7 @@ test.describe('commenting a line', () => {
 
         /* Then */
         await expect(workPage(page)).toHaveCount(0);
-        expect(await sessionWorkReviews(app)).toEqual([]);
+        expect(reviewWrites(api)).toEqual([]);
     });
 });
 
@@ -143,22 +146,20 @@ test.describe('review threads and a pending review', () => {
         {path: 'src/session.ts', line: 11, side: 'RIGHT' as const, body: 'Return early instead.', threadId: 'PRRT_p1'},
     ];
     test.use({
-        stubs: {
-            sessionWork: {
-                ...sessionWorkStub(),
-                // Started in the browser: it is on GitHub before the page opens.
-                snapshots: {...sessionWorkStub().snapshots, [S.loginFix]: loginFixWorkWithReview({pending})},
-            },
-        },
+        answers: sessionWorkAnswers({
+            ...sessionWorkStub(),
+            // Started in the browser: it is on GitHub before the page opens.
+            snapshots: {...sessionWorkStub().snapshots, [S.loginFix]: loginFixWorkWithReview({pending})},
+        }),
     });
 
     function thread(page: Page, id: string) {
         return workPage(page).locator(`[data-thread-id="${id}"]`);
     }
 
-    test('show inline under their lines, and the bar submits or discards the review', async ({page, home, app}) => {
+    test('show inline under their lines, and the bar submits or discards the review', async ({page, api}) => {
         /* Given */
-        await openLoginFixWork(page, home);
+        await openWithDiff(page, api);
         const bar = workPage(page).getByRole('region', {name: 'Pending review'});
 
         /* Then */
@@ -187,12 +188,12 @@ test.describe('review threads and a pending review', () => {
 
         /* When */
         await bar.getByRole('button', {name: 'Discard'}).click();
-        await expect.poll(async () => (await sessionWorkReviews(app)).length).toBe(1);
+        await expect.poll(() => reviewWrites(api).length).toBe(1);
         await bar.getByRole('button', {name: 'Submit', exact: true}).click();
 
         /* Then */
         await expect
-            .poll(() => sessionWorkReviews(app))
+            .poll(() => reviewWrites(api))
             .toEqual(
                 ['discard', 'submit'].map((mode) => ({
                     review: {sessionId: S.loginFix, itemId: FIRST_PR_ID, mode},
@@ -202,7 +203,7 @@ test.describe('review threads and a pending review', () => {
 
         /* When */
         // GitHub says the review went out.
-        await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWithReview());
+        await api.emit('onSessionWorkSnapshot', loginFixWorkWithReview());
 
         /* Then */
         await expect(bar).toHaveCount(0);

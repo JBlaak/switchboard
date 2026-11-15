@@ -1,24 +1,18 @@
 /**
- * The sidebar footer: the running count, the activity line main writes into,
- * the quota gauges and the update notice.
+ * The sidebar footer's screenshot, in the real app's pixels.
  *
- * The timing rules (the activity line's linger, the five-minute usage poll)
- * run on fake timers, so they are checked by jumping the clock rather than by
- * waiting it out. What each part shows for a given state (gauge colours, the
- * notice's labels, what installing asks) is decided in
- * src/renderer/ui/footer/footer-view.ts and tested in test/footer-view.test.ts.
+ * What the footer does (the running count, the activity line, the quota
+ * gauges and the update notice) is tested against a fake main process in
+ * component/tests/footer.spec.ts, and what each part shows for a given state
+ * in test/footer-view.test.ts.
  */
-import {test, expect, forEachAppearance} from '../support/test';
-import {expectScreen, openSession, sidebarFooter} from '../support/app';
-import {hostStubCalls, openedExternally, pushEvent, setHostStub} from '../support/main-process';
-import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
+import {test, expect, forEachAppearance, screenTest} from '../support/test';
+import {expectScreen, sidebarFooter} from '../support/app';
+import {pushEvent} from '../support/main-process';
 import {EVENT} from '../../src/ipc/channels';
-import {LABEL, S} from '../fixtures/standard';
-import type {ElectronApplication, Locator, Page} from '@playwright/test';
+import type {ElectronApplication} from '@playwright/test';
 import type {UpdateNotice} from '../../src/domain/update/release';
 import type {Usage} from '../../src/domain/usage/usage';
-
-const USAGE_POLL_MS = 5 * 60 * 1000;
 
 const UPDATE: UpdateNotice = {
     version: '9.1.0',
@@ -50,302 +44,16 @@ function usageAt(session: number, week: number): Usage {
     };
 }
 
-/** A gauge, by its tooltip: the full label, the percentage and the reset. */
-function gauge(page: Page, tooltip: string): Locator {
-    return sidebarFooter(page).locator(`[data-tooltip="${tooltip}"]`);
-}
-
-function noticeButton(page: Page, name: string): Locator {
-    return sidebarFooter(page).getByRole('button', {name, exact: true});
-}
-
 /** A line from main's indexer, as `onStatusUpdate` delivers it. */
 async function statusUpdate(app: ElectronApplication, text: string, kind: string): Promise<void> {
     await pushEvent(app, EVENT.statusUpdate, text, kind);
 }
 
-test.describe('activity line', () => {
-    test.use({fakeTimers: true});
-
-    test('shows what main writes; only a done message lingers, for three seconds', async ({page, app}) => {
-        /* When */
-        await statusUpdate(app, 'Indexed 3 sessions', 'done');
-        await statusUpdate(app, 'Indexing 4 of 9…', 'progress');
-
-        /* Then */
-        const progress = sidebarFooter(page).getByText('Indexing 4 of 9…', {exact: true});
-        await expect(progress).toBeVisible();
-        await expect(sidebarFooter(page).getByText('Indexed 3 sessions')).toHaveCount(0);
-
-        /* When */
-        await page.clock.fastForward(10_000);
-
-        /* Then */
-        // The done message's linger was cancelled with it.
-        await expect(progress).toBeVisible();
-
-        /* When */
-        await statusUpdate(app, 'Indexed 9 sessions', 'done');
-        await page.clock.fastForward(2_500);
-
-        /* Then */
-        const done = sidebarFooter(page).getByText('Indexed 9 sessions', {exact: true});
-        await expect(done).toBeVisible();
-
-        /* When */
-        await page.clock.fastForward(1_000);
-
-        /* Then */
-        await expect(done).toHaveCount(0);
-    });
-});
-
-test.describe('quota gauges', () => {
-    test.use({fakeTimers: true});
-
-    test('show the usage fetched at launch, and fetch it again every five minutes', async ({page, app}) => {
-        /* Given */
-        const session = gauge(page, 'Current session: 42% — resets 6pm (UTC)');
-        await expect(session).toBeVisible();
-        await setHostStub(app, 'usage', usageAt(85, 90));
-        const before = (await hostStubCalls(app)).getUsage;
-
-        /* When */
-        await page.clock.fastForward(USAGE_POLL_MS - 10_000);
-
-        /* Then */
-        expect((await hostStubCalls(app)).getUsage).toBe(before);
-        await expect(session).toHaveText('5h42%');
-        await expect(gauge(page, 'Week (all models): 67% — resets Jun 12 at 9am (UTC)')).toHaveText('Week67%');
-
-        /* When */
-        await page.clock.fastForward(10_000);
-
-        /* Then */
-        await expect(gauge(page, 'Current session: 85% — resets 6pm (UTC)')).toBeVisible();
-        expect((await hostStubCalls(app)).getUsage).toBe(before + 1);
-    });
-
-    test('keep what they show when a fetch fails, and hide when one has no windows', async ({page, app}) => {
-        /* Given */
-        const session = gauge(page, 'Current session: 42% — resets 6pm (UTC)');
-        await expect(session).toBeVisible();
-        await setHostStub(app, 'usageFails', true);
-        const before = (await hostStubCalls(app)).getUsage;
-
-        /* When */
-        await page.clock.fastForward(USAGE_POLL_MS);
-
-        /* Then */
-        await expect.poll(async () => (await hostStubCalls(app)).getUsage).toBe(before + 1);
-        await expect(session).toBeVisible();
-
-        /* When */
-        await setHostStub(app, 'usageFails', false);
-        await setHostStub(app, 'usage', null);
-        await page.clock.fastForward(USAGE_POLL_MS);
-
-        /* Then */
-        await expect(session).toBeHidden();
-        await expect(sidebarFooter(page).getByText(/%$/)).toHaveCount(0);
-    });
-
-    test('show when each window resets while hovered, and nothing otherwise', async ({page}) => {
-        for (const tooltip of [
-            'Current session: 42% — resets 6pm (UTC)',
-            'Week (all models): 67% — resets Jun 12 at 9am (UTC)',
-        ]) {
-            /* Given */
-            const hovered = gauge(page, tooltip);
-            await page.mouse.move(0, 0);
-            expect(await hoverLabel(hovered)).toBeNull();
-
-            /* When */
-            await hovered.hover();
-
-            /* Then */
-            expect(await hoverLabel(hovered)).toBe(tooltip);
-        }
-    });
-});
-
-/**
- * The label a gauge paints on hover, or null while none shows. It is a
- * pseudo-element, so it is read from the computed style rather than the DOM.
- */
-async function hoverLabel(gauge: Locator): Promise<string | null> {
-    return gauge.evaluate((el) => {
-        const after = getComputedStyle(el, '::after');
-        if (after.content === 'none' || after.display === 'none') return null;
-        return JSON.parse(after.content) as string;
-    });
-}
-
-test.describe('update notice', () => {
-    test('links to the release page when main announces one the app cannot install', async ({page, app}) => {
-        /* When */
-        await pushEvent(app, EVENT.updateAvailable, {...UPDATE, installable: false});
-
-        /* Then */
-        await expect(sidebarFooter(page).getByText('Version 9.1.0 is available', {exact: true})).toBeVisible();
-
-        /* When */
-        await noticeButton(page, 'View').click();
-
-        /* Then */
-        await expect.poll(() => openedExternally(app)).toContain(UPDATE.pageUrl);
-        expect((await hostStubCalls(app)).installUpdate).toBe(0);
-    });
-
-    test.describe('found before launch', () => {
-        test.use({stubs: {update: UPDATE}});
-
-        test('is shown from the start, and dismisses that version only, until the window reloads', async ({
-            page,
-            app,
-        }) => {
-            /* Given */
-            const notice = sidebarFooter(page).getByText(/^Version [\d.]+ is available$/);
-            await expect(sidebarFooter(page).getByText('Version 9.1.0 is available', {exact: true})).toBeVisible();
-
-            /* When */
-            await noticeButton(page, 'Dismiss').click();
-
-            /* Then */
-            await expect(notice).toBeHidden();
-
-            /* When */
-            await pushEvent(app, EVENT.updateAvailable, UPDATE);
-
-            /* Then */
-            await expect(notice).toBeHidden();
-
-            /* When */
-            await pushEvent(app, EVENT.updateAvailable, {...UPDATE, version: '9.2.0'});
-
-            /* Then */
-            await expect(sidebarFooter(page).getByText('Version 9.2.0 is available', {exact: true})).toBeVisible();
-
-            /* When */
-            // Held in memory only: a fresh window offers the dismissed version again.
-            await page.reload();
-
-            /* Then */
-            await expect(sidebarFooter(page).getByText('Version 9.1.0 is available', {exact: true})).toBeVisible();
-        });
-
-        test('counts the running sessions, asks before stopping them, and offers a retry when the install fails', async ({
-            page,
-            app,
-            home,
-        }) => {
-            /* Given */
-            await setHostStub(app, 'installUpdate', {
-                ok: false,
-                failure: {step: 'downloading', reason: 'GitHub answered 404.'},
-            });
-
-            /* When */
-            // Started after the list loaded: the count follows the poll, no reload.
-            await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-            /* Then */
-            await expect(sidebarFooter(page).getByText('1 running', {exact: true})).toBeVisible();
-
-            /* When */
-            await answerDialogs(page, false);
-            await noticeButton(page, 'Install').click();
-
-            /* Then */
-            await expect
-                .poll(() => dialogsAsked(page))
-                .toEqual(['Restarting to update stops 1 running session. Install now?']);
-            await expect(noticeButton(page, 'Install')).toBeEnabled();
-            expect((await hostStubCalls(app)).installUpdate).toBe(0);
-
-            /* When */
-            await answerDialogs(page, true);
-            await noticeButton(page, 'Install').click();
-
-            /* Then */
-            const failed = sidebarFooter(page).getByText('Download failed', {exact: true});
-            await expect(failed).toBeVisible();
-            await expect(failed).toHaveAttribute('title', 'GitHub answered 404. This app was left as it was.');
-            expect((await hostStubCalls(app)).installUpdate).toBe(1);
-
-            /* When */
-            // An install that works never answers: the app quits from under it.
-            await setHostStub(app, 'installUpdate', 'pending');
-            await noticeButton(page, 'Retry').click();
-
-            /* Then */
-            await expect(sidebarFooter(page).getByText('Starting the 9.1.0 download…', {exact: true})).toBeVisible();
-            await expect(noticeButton(page, 'Retry')).toHaveCount(0);
-            expect((await hostStubCalls(app)).installUpdate).toBe(2);
-        });
-
-        test('follows the install through each step, with a bar for the download', async ({page, app}) => {
-            /* Given */
-            const bar = sidebarFooter(page).getByRole('progressbar', {name: 'Update progress'});
-            const line = (text: string) => sidebarFooter(page).getByText(text, {exact: true});
-
-            /* When */
-            await noticeButton(page, 'Install').click();
-
-            /* Then */
-            await expect(line('Starting the 9.1.0 download…')).toBeVisible();
-            await expect(noticeButton(page, 'Dismiss')).toHaveCount(0);
-
-            /* When */
-            await pushEvent(app, EVENT.updateProgress, {step: 'downloading', received: 41_200_000, total: 98_000_000});
-
-            /* Then */
-            await expect(line('Downloading 9.1.0… 42%')).toHaveAttribute('title', '41.2 MB of 98.0 MB');
-            await expect(bar).toHaveAttribute('aria-valuenow', '42');
-
-            /* When */
-            await pushEvent(app, EVENT.updateProgress, {step: 'unpacking'});
-
-            /* Then */
-            await expect(line('Unpacking 9.1.0…')).toBeVisible();
-
-            /* When */
-            await pushEvent(app, EVENT.updateProgress, {step: 'checking'});
-
-            /* Then */
-            await expect(line('Checking 9.1.0…')).toBeVisible();
-
-            /* When */
-            await pushEvent(app, EVENT.updateProgress, {step: 'restarting'});
-
-            /* Then */
-            await expect(line('Restarting into 9.1.0…')).toBeVisible();
-            await expect(bar).toHaveAttribute('aria-valuenow', '100');
-        });
-    });
-
-    test.describe('after the restart', () => {
-        test.use({stubs: {updateOutcome: {kind: 'updated', version: '9.1.0'}}});
-
-        test('says the update arrived, until dismissed', async ({page}) => {
-            /* Given */
-            const updated = sidebarFooter(page).getByText('Updated to 9.1.0', {exact: true});
-            await expect(updated).toBeVisible();
-
-            /* When */
-            await noticeButton(page, 'Dismiss').click();
-
-            /* Then */
-            await expect(updated).toBeHidden();
-        });
-    });
-});
-
 forEachAppearance(() => {
     test.describe('busy', () => {
         test.use({stubs: {update: UPDATE, usage: usageAt(63, 86)}});
 
-        test('footer with an update, activity and low quota', async ({page, app}) => {
+        screenTest('footer with an update, activity and low quota', async ({page, app}) => {
             /* When */
             await statusUpdate(app, 'Indexing 4 of 9…', 'progress');
 

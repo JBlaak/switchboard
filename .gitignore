@@ -16,6 +16,7 @@ dev-app-update.yml
 # End-to-end run output (see e2e/playwright.config.ts).
 /test-results/
 /playwright-report/
+/playwright-report-component/
 
 # The Linux node-pty builds the agent ships with, fetched by scripts/fetch-agent-pty.mjs.
 /build/agent-pty/

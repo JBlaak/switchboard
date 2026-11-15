@@ -3,13 +3,10 @@
  * speaking MCP, found through `~/.claude.json` as the real one is, and the
  * Settings field that turns it on. No real BlaakTasks is ever reached.
  */
-import fs from 'node:fs';
 import http from 'node:http';
-import path from 'node:path';
 import {expect} from '@playwright/test';
 import type {AddressInfo} from 'node:net';
 import type {Page} from '@playwright/test';
-import type {FixtureHome} from './fixture-home';
 
 export const TASK = '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9';
 export const TITLE = 'Fix the flaky upload test';
@@ -84,12 +81,4 @@ export async function switchBlaakTasksOn(page: Page, url: string): Promise<void>
         .fill(url);
     await page.getByRole('button', {name: 'Save Settings'}).click();
     await expect(page.getByText('Global Settings', {exact: true})).toBeHidden();
-}
-
-/** `~/.claude.json` naming the stand-in, with its token, as the user's own names the real one. */
-export function writeBlaakTasksConfig(home: FixtureHome, url: string): void {
-    fs.writeFileSync(
-        path.join(home.home, '.claude.json'),
-        JSON.stringify({mcpServers: {blaaktasks: {type: 'http', url, headers: {Authorization: `Bearer ${TOKEN}`}}}}),
-    );
 }

@@ -4,13 +4,14 @@
  * toast with its place in the lane; the toast's Undo unlands it.
  */
 import {test, expect} from '../support/test';
-import {openSession, terminalHeader} from '../support/app';
-import {landRequests, stubLandIt} from '../support/main-process';
-import {LABEL, S} from '../fixtures/standard';
+import {openSession} from '../support/running-session';
+import {terminalHeader} from '../../e2e/support/app';
+import {LABEL, S} from '../../e2e/fixtures/standard';
 import {landedView, mergeManagerState} from '../../src/domain/merge-manager/landed';
 import {landedKey} from '../../src/domain/merge-manager/model';
 import type {LandedPullRequest} from '../../src/domain/merge-manager/model';
 import type {SessionLink} from '../../src/domain/session/links';
+import type {FakeApi} from '../support/fake-api';
 
 const REPO = 'acme/api';
 
@@ -42,21 +43,45 @@ function landedPr(number: number, landedAt: number, stage: LandedPullRequest['st
     };
 }
 
-test('Land it in the session header shows the landed pill and the toast, and Undo unlands', async ({
-    page,
-    app,
-    home,
-}) => {
-    /* Given: #1320 lands behind #1300, the lane's head */
-    const lanes = mergeManagerState(
-        [
-            landedPr(1300, 1, {kind: 'head', step: 'checks'}),
-            landedPr(1320, 2, {kind: 'waiting', willConflict: false, position: null}),
-        ],
-        new Map(),
-    );
-    await stubLandIt(app, {links: [pr(1320)], lanes, landed: landedView(lanes, landedKey(REPO, 1320))!});
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
+/** #1320 lands behind #1300, the lane's head. */
+const LANES = mergeManagerState(
+    [
+        landedPr(1300, 1, {kind: 'head', step: 'checks'}),
+        landedPr(1320, 2, {kind: 'waiting', willConflict: false, position: null}),
+    ],
+    new Map(),
+);
+
+/**
+ * Land it's back end, as main's Merge manager answers it: every session's
+ * links are the PR, landing pushes the lanes it changed and answers the PR in
+ * its lane, and unlanding pushes the empty lanes back.
+ */
+function answerLandIt(api: FakeApi): void {
+    api.answer('getSessionLinks', [pr(1320)]);
+    api.handle('mergeManagerLand', async () => {
+        await api.emit('onMergeManagerChanged', LANES);
+        return {ok: true as const, landed: landedView(LANES, landedKey(REPO, 1320))!};
+    });
+    api.handle('mergeManagerUnland', async () => {
+        await api.emit('onMergeManagerChanged', {lanes: [], needsYou: 0});
+        return {ok: true as const};
+    });
+}
+
+/** Every Land it and Unland, as `land owner/repo#n`. */
+function landRequests(api: FakeApi): string[] {
+    return api.calls.flatMap((call) => {
+        if (call.name === 'mergeManagerLand') return [`land ${call.args[0]}#${call.args[1]}`];
+        if (call.name === 'mergeManagerUnland') return [`unland ${call.args[0]}#${call.args[1]}`];
+        return [];
+    });
+}
+
+test('Land it in the session header shows the landed pill and the toast, and Undo unlands', async ({page, api}) => {
+    /* Given */
+    answerLandIt(api);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
     const header = terminalHeader(page);
     await expect(header.getByText('PR #1320')).toBeVisible();
 
@@ -68,7 +93,7 @@ test('Land it in the session header shows the landed pill and the toast, and Und
     await expect(header.getByRole('button', {name: 'Land it'})).toHaveCount(0);
     const toast = page.getByTestId('land-toast');
     await expect(toast).toContainText("Landed #1320 · 2nd in api's lane");
-    expect(await landRequests(app)).toEqual(['land acme/api#1320']);
+    expect(landRequests(api)).toEqual(['land acme/api#1320']);
 
     /* When */
     await toast.getByRole('button', {name: 'Undo'}).click();
@@ -76,5 +101,5 @@ test('Land it in the session header shows the landed pill and the toast, and Und
     /* Then */
     await expect(toast).toHaveCount(0);
     await expect(header.getByRole('button', {name: 'Land it'})).toBeVisible();
-    expect(await landRequests(app)).toEqual(['land acme/api#1320', 'unland acme/api#1320']);
+    expect(landRequests(api)).toEqual(['land acme/api#1320', 'unland acme/api#1320']);
 });
