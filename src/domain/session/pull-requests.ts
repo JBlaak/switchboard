@@ -64,6 +64,21 @@ export function decodePullRequests(json: string | null | undefined): SessionPull
     return result;
 }
 
+/**
+ * One session's PRs from two copies of its transcript, the earlier copy's
+ * first, each URL once. A session handed off to a VM has both: the Mac's,
+ * from before the move, and the VM's, which carries on from there and is
+ * where any PR opened since shows up.
+ */
+export function mergePullRequests(
+    earlier: readonly SessionPullRequest[],
+    later: readonly SessionPullRequest[],
+): SessionPullRequest[] {
+    const byUrl = new Map<string, SessionPullRequest>();
+    for (const pr of [...earlier, ...later]) if (!byUrl.has(pr.url)) byUrl.set(pr.url, pr);
+    return [...byUrl.values()];
+}
+
 /** `owner/repo#1309`, or just `#1309` when the transcript did not name the repo. */
 export function pullRequestLabel(pr: SessionPullRequest): string {
     return (pr.repository || '') + '#' + pr.number;

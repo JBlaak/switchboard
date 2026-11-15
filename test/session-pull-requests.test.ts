@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {parseTranscript} from '../src/domain/session/transcript';
 import {
     decodePullRequests,
+    mergePullRequests,
     pullRequestChips,
     pullRequestFromLink,
     pullRequestLabel,
@@ -212,4 +213,30 @@ test('pullRequestChips with none shows nothing', () => {
         /* Then */
         assert.deepEqual(chips, {shown: [], hidden: []});
     }
+});
+
+const pr = (n: number): SessionPullRequest => ({number: n, url: url(n), repository: 'owner/repo'});
+
+test('mergePullRequests keeps the VM copy\'s PRs when the Mac\'s copy has none', () => {
+    /* Given a session handed off to a VM: the Mac kept its transcript from before the move */
+    const onTheMac: SessionPullRequest[] = [];
+    const onTheVm = [pr(7)];
+
+    /* When */
+    const merged = mergePullRequests(onTheMac, onTheVm);
+
+    /* Then */
+    assert.deepEqual(merged, [pr(7)]);
+});
+
+test('mergePullRequests lists the earlier copy first, each URL once', () => {
+    /* Given the VM copy carries on the conversation the Mac copy started */
+    const onTheMac = [pr(1), pr(2)];
+    const onTheVm = [pr(1), pr(2), pr(3)];
+
+    /* When */
+    const merged = mergePullRequests(onTheMac, onTheVm);
+
+    /* Then */
+    assert.deepEqual(merged, [pr(1), pr(2), pr(3)]);
 });
