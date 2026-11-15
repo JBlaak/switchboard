@@ -234,6 +234,10 @@ test.describe('the diff', () => {
         page,
         api,
     }) => {
+        // The 5,000-line file fills in 400 rows a step; on a CI runner busy with
+        // three other tests that takes longer than the default 5 s expect.
+        test.slow();
+
         /* Given */
         await openLoginFixWork(page, api);
         const diff = diffOf(page);
@@ -289,7 +293,9 @@ test.describe('the diff', () => {
 
         /* Then */
         await expect(diff.getByRole('button', {name: 'Split'})).toHaveAttribute('aria-pressed', 'true');
-        await expect(big.locator('.sw-lines')).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1));
+        await expect(big.locator('.sw-lines')).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1), {
+            timeout: 20_000,
+        });
         await expect(big.locator('.sw-dl.is-pair')).toHaveCount(BIG_FILE_LINES);
         await expect(big.locator('.sw-dl.is-pair').last()).toContainText(
             `export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`,
