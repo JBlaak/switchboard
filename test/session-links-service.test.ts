@@ -301,3 +301,97 @@ test("a Fix session's Bugsnag error is listed, as the Bug manager knows it for t
         [['bug', 'ImageSourceNotReadyException']],
     );
 });
+
+// ── How fresh a PR's status is ──
+
+/** The PR link's freshness, from the links. */
+function prRead(links: Awaited<ReturnType<SessionLinksService['links']>>) {
+    const pr = links.find((link) => link.kind === 'pr');
+    return pr?.kind === 'pr' ? pr.read : undefined;
+}
+
+test("a PR's status says when gh was last asked about it", async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => [openStatus];
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION);
+    await service.refresh(SESSION);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.deepEqual(prRead(links), {fetchedAt: 1_000, failed: false});
+});
+
+test('a failed ask keeps the last good PR status, as of when it was read, and says it failed', async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => [openStatus];
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION);
+    await service.refresh(SESSION);
+    w.now += LINKS_GITHUB_TTL_MS;
+    w.prAnswer = async () => null;
+    await service.refresh(SESSION);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.equal(links[0].title, 'Add the tray');
+    assert.equal(links[0].kind === 'pr' && links[0].status?.state, 'open');
+    assert.deepEqual(prRead(links), {fetchedAt: 1_000, failed: true});
+});
+
+test('a good ask after a failed one is fresh again', async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => null;
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION);
+    await service.refresh(SESSION);
+    w.now += LINKS_GITHUB_TTL_MS;
+    w.prAnswer = async () => [openStatus];
+    await service.refresh(SESSION);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.deepEqual(prRead(links), {fetchedAt: 1_000 + LINKS_GITHUB_TTL_MS, failed: false});
+});
+
+test("a status the CI watch gave says nothing about gh's freshness", async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => [openStatus];
+    w.watched.set(PR.url, {...openStatus, title: 'From the watch'});
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION);
+    await service.refresh(SESSION);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.equal(links[0].title, 'From the watch');
+    assert.equal(prRead(links), undefined);
+});
+
+test('a PR without a status says nothing about freshness', async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => null;
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION);
+    await service.refresh(SESSION);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.equal(links[0].status, null);
+    assert.equal(prRead(links), undefined);
+});

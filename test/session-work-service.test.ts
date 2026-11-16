@@ -343,6 +343,8 @@ function setup(overrides: Partial<World> = {}) {
         reads,
         live: () => watchers.filter((watcher) => !watcher.disposed),
         last: () => snapshots[snapshots.length - 1],
+        /** The clock's latest reading (it moves on a second every time it is read). */
+        now: () => now,
     };
 }
 
@@ -1436,4 +1438,96 @@ test("image answers nothing once the item's diff comes from GitHub instead", asy
     assert.equal(fromGitHub.source, 'github');
     assert.equal(bytes, null);
     assert.deepEqual(reads, []);
+});
+
+// ── How fresh the PRs' status is ──
+
+test("the snapshot says when GitHub was last read for the session's PRs", async () => {
+    /* Given */
+    const {service, now} = setup({pullRequests: [prLink(5)], prs: [prStatus(5)]});
+    const before = now();
+
+    /* When */
+    const snapshot = await service.open('s1');
+
+    /* Then */
+    const read = snapshot!.pullRequestsRead!;
+    assert.equal(read.failed, false);
+    assert.ok(read.fetchedAt! > before && read.fetchedAt! <= now());
+});
+
+test('a session without PRs says nothing about how fresh their status is', async () => {
+    /* Given */
+    const {service} = setup({pullRequests: [], prs: []});
+
+    /* When */
+    const snapshot = await service.open('s1');
+
+    /* Then */
+    assert.equal(snapshot!.pullRequestsRead, undefined);
+});
+
+test('a failed ask keeps the last good PR status and says it could not refresh', async () => {
+    /* Given */
+    const {service, world, timers, last} = setup({pullRequests: [prLink(5)], prs: [prStatus(5, {title: 'Good'})]});
+    const first = (await service.open('s1'))!.pullRequestsRead!.fetchedAt;
+    world.prs = null;
+
+    /* When */
+    timers.fireIntervals();
+    await settle();
+
+    /* Then */
+    assert.deepEqual(last().pullRequestsRead, {fetchedAt: first, failed: true});
+    const pr = last().items.find((item) => item.kind === 'pr')!;
+    assert.equal(pr.error, undefined);
+    assert.equal(pr.kind === 'pr' && pr.pr.title, 'Good');
+});
+
+test('a good ask after a failed one is fresh again', async () => {
+    /* Given */
+    const {service, world, timers, last} = setup({pullRequests: [prLink(5)], prs: [prStatus(5)]});
+    const first = (await service.open('s1'))!.pullRequestsRead!.fetchedAt!;
+    world.prs = null;
+    timers.fireIntervals();
+    await settle();
+    world.prs = [prStatus(5)];
+
+    /* When */
+    timers.fireIntervals();
+    await settle();
+
+    /* Then */
+    const read = last().pullRequestsRead!;
+    assert.equal(read.failed, false);
+    assert.ok(read.fetchedAt! > first);
+});
+
+test('a first ask that fails has no time to show, and marks the PR', async () => {
+    /* Given */
+    const {service} = setup({pullRequests: [prLink(5)], prs: null});
+
+    /* When */
+    const snapshot = await service.open('s1');
+
+    /* Then */
+    assert.deepEqual(snapshot!.pullRequestsRead, {fetchedAt: null, failed: true});
+    assert.match(snapshot!.items.find((item) => item.kind === 'pr')!.error ?? '', /GitHub did not answer/);
+});
+
+test('a PR linked after the last good ask is marked when the next ask fails', async () => {
+    /* Given */
+    const {service, world, last} = setup({pullRequests: [prLink(5)], prs: [prStatus(5)]});
+    await service.open('s1');
+    world.pullRequests = [prLink(5), prLink(6)];
+    world.prs = null;
+
+    /* When */
+    await service.refreshGitHub('s1');
+
+    /* Then */
+    const six = last().items.find((item) => item.kind === 'pr' && item.pr.number === 6)!;
+    assert.match(six.error ?? '', /GitHub did not answer/);
+    const five = last().items.find((item) => item.kind === 'pr' && item.pr.number === 5)!;
+    assert.equal(five.error, undefined);
 });

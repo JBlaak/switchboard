@@ -95,6 +95,20 @@ export interface PlanState {
      * Only plans a row asked for: a plan view's loads refresh them, never add.
      */
     readonly progress: IdRecord<PlanProgress>;
+    /**
+     * `owner/repo#n` → how a pinned plan's own live reads went, for its row's
+     * freshness. Absent until the first live read answers: the stored copy
+     * shown before it counts as refreshing, not as old.
+     */
+    readonly progressReads: IdRecord<PlanProgressRead>;
+}
+
+/** How a pinned plan's live reads went. */
+export interface PlanProgressRead {
+    /** When the last successful live read answered; null when none has yet. */
+    readonly fetchedAt: number | null;
+    /** The last live read failed, so the progress shown is older. */
+    readonly failed: boolean;
 }
 
 /** A celebration to play: which plan, what for, and the issues that just turned Ready. */
@@ -132,6 +146,7 @@ export const initialPlanState: PlanState = {
     celebration: null,
     levelStart: null,
     progress: {},
+    progressReads: {},
 };
 
 /** A stable string for a source, to tell an answer for it from one for another. */
@@ -146,7 +161,24 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
     // Every plan the view shows is sighted: on each load and poll, and when the switcher picks it (A4).
     const sighted =
         viewed !== state && (event.type === 'planLoaded' || event.type === 'planChosen') ? sight(viewed) : viewed;
-    return reduceProgress(reduceLevels(sighted, event), event);
+    return reduceProgressReads(reduceProgress(reduceLevels(sighted, event), event), event);
+}
+
+/** A pinned plan's live read answered (`fetchedAt`) or failed; a stored copy is no read. */
+function reduceProgressReads(state: PlanState, event: RendererEvent): PlanState {
+    if (event.type === 'planProgressFailed') {
+        const planKey = issueKeyString(event.plan);
+        const known = state.progressReads[planKey];
+        if (known?.failed) return state;
+        const read: PlanProgressRead = {fetchedAt: known?.fetchedAt ?? null, failed: true};
+        return {...state, progressReads: withEntry(state.progressReads, planKey, read)};
+    }
+    if (event.type !== 'planProgressLoaded' || event.fetchedAt === undefined) return state;
+    let progressReads = state.progressReads;
+    for (const plan of event.plans) {
+        progressReads = withEntry(progressReads, issueKeyString(plan), {fetchedAt: event.fetchedAt, failed: false});
+    }
+    return {...state, progressReads};
 }
 
 /** Pinned plans' progress: from their own loads, and from any plan view load of the same plan. */

@@ -310,6 +310,45 @@ test.describe('plans and issues', () => {
         await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'false');
     });
 
+    test('a pinned plan’s progress looks as ever while fresh, and dims with why on hover while GitHub’s budget is held', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        const progress = sidebar(page)
+            .locator('.pinned-plan-item')
+            .filter({hasText: 'Login rework'})
+            .getByTestId('pinned-plan-progress');
+        await rowProjectLink(page, S.loginFix).click();
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+        await planPage.getByTestId('plan-page-pin').click();
+        await expect(progress).toHaveText(/Level 2 of 3/);
+        await expect(progress).not.toHaveClass(/\bis-stale\b/);
+        await expect(progress).not.toHaveAttribute('title');
+        const until = Date.now() + 20 * 60_000;
+        // In the page's timezone, which need not be this process's.
+        const clock = await page.evaluate((ms) => {
+            const at = new Date(ms);
+            return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+        }, until);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', until);
+
+        /* Then */
+        await expect(progress).toHaveClass(/\bis-stale\b/);
+        await expect(progress).toHaveAttribute('title', new RegExp(`Paused: GitHub budget low until ${clock}$`));
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', null);
+
+        /* Then */
+        await expect(progress).not.toHaveClass(/\bis-stale\b/);
+        await expect(progress).not.toHaveAttribute('title');
+    });
+
     test('a pinned plan’s project name opens the project page, as a session row’s does', async ({page}) => {
         /* Given */
         const planPage = page.getByRole('region', {name: /^Plan in /});
@@ -396,6 +435,51 @@ test.describe('plans and issues', () => {
         await expect(label).toHaveAttribute('aria-expanded', 'true');
         await expect(label.locator('.session-section-count')).toHaveCount(0);
         await expect(pinnedRow).toBeVisible();
+    });
+
+    test('the header says how fresh GitHub’s part is, and that its reads are paused while the budget is held', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        await rowProjectLink(page, S.loginFix).click();
+        const freshness = projectPage(page).getByTestId('freshness');
+        await expect(freshness).toHaveText(/^Updated /);
+        const until = Date.now() + 20 * 60_000;
+        // In the page's timezone, which need not be this process's.
+        const clock = await page.evaluate((ms) => {
+            const at = new Date(ms);
+            return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+        }, until);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', until);
+
+        /* Then */
+        await expect(freshness).toContainText(`Paused: GitHub budget low until ${clock}`);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', null);
+
+        /* Then */
+        await expect(freshness).not.toContainText('Paused');
+    });
+
+    test('the header says how old the plans are when they were read minutes before the rest', async ({page}) => {
+        /* Given */
+        const overview = acmeOverview();
+        if (!overview.github?.ok) throw new Error('acmeOverview has no GitHub part');
+        overviews.set({
+            [P.acmeApi]: {...overview, github: {...overview.github, plansFetchedAt: Date.now() - 4 * 60_000}},
+        });
+
+        /* When */
+        await rowProjectLink(page, S.loginFix).click();
+
+        /* Then */
+        // The ages follow the harness's session-list clock, so only the part itself is asserted here;
+        // its words are freshnessLine's, tested in node.
+        await expect(projectPage(page).getByTestId('freshness')).toHaveText(/^Updated .+ · plans .+$/);
     });
 
     test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({page}) => {

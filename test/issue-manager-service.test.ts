@@ -34,7 +34,8 @@ function setup({
     assign?: GitHubWrite;
     thread?: IssueThread | null;
     polished?: string | null;
-    pullRequests?: RepositoryPullRequest[];
+    /** Null as when GitHub did not answer. */
+    pullRequests?: RepositoryPullRequest[] | null;
 } = {}) {
     const items = new Map<string, InboxItem>();
     for (const item of syncSource([], [issue(482, {title: 'Export on the coach page'})], {
@@ -56,6 +57,8 @@ function setup({
     const writes: string[] = [];
     const prepared: LooseIssueWorktreeRequest[] = [];
     const calls: string[][] = [];
+    /** What the inbox was told of the PR reads, in order. */
+    const reads: string[] = [];
     const service = new IssueManagerService({
         inbox: {
             item: (key) => items.get(key) ?? null,
@@ -66,6 +69,8 @@ function setup({
             finish: (key) => change(key, (item) => finish(item, NOW)),
             returnToInbox: (key) => change(key, returnToInbox),
             projectFor: async (repository) => (repository === REPO ? PROJECT : null),
+            sourcesReading: (group) => reads.push(`reading ${group}`),
+            sourcesRead: (group, results) => reads.push(`read ${group} ${JSON.stringify([...results])}`),
         },
         github: {
             issueThread: async () => thread,
@@ -107,7 +112,7 @@ function setup({
         timers: fakeTimers(),
         log: silentLog,
     });
-    return {service, items, writes, prepared, calls};
+    return {service, items, writes, prepared, calls, reads};
 }
 
 // ── Start and claim ──
@@ -292,4 +297,31 @@ test('a started issue follows the PR that closes it, and is done once it merged'
     assert.equal(failing.items.get(KEY)?.work?.pullRequest, 244);
     assert.deepEqual(merged.items.get(KEY)?.state, {kind: 'done', at: NOW});
     assert.equal(merged.items.get(KEY)?.work?.pullRequest, 244);
+});
+
+test("following tells the inbox it is reading the started issues' PRs, and which repositories answered", async () => {
+    /* Given */
+    const answered = setup({pullRequests: []});
+    answered.service.started(KEY, '482-export', 's');
+    const failed = setup({pullRequests: null});
+    failed.service.started(KEY, '482-export', 's');
+
+    /* When */
+    await answered.service.follow();
+    await failed.service.follow();
+
+    /* Then */
+    assert.deepEqual(answered.reads, ['reading pull-requests', `read pull-requests [["${REPO}",true]]`]);
+    assert.deepEqual(failed.reads, ['reading pull-requests', `read pull-requests [["${REPO}",false]]`]);
+});
+
+test('following with no started issues reads nothing and clears the PR reads', async () => {
+    /* Given */
+    const {service, reads} = setup();
+
+    /* When */
+    await service.follow();
+
+    /* Then */
+    assert.deepEqual(reads, ['read pull-requests []']);
 });

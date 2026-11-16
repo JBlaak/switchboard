@@ -381,7 +381,7 @@ test('only the landed PRs are read, one request per repository', async () => {
     assert.deepEqual(calls, ['queued', `lane ${REPO} 1,3`]);
 });
 
-test('the state is pushed when it changed, with the PRs that need me counted, and not when it did not', async () => {
+test('a poll pushes as it starts and as it ends, with the PRs that need me counted, and nothing more', async () => {
     /* Given */
     const {service, state, pushes} = setup({prs: {[REPO]: {1: prRead(1)}}});
     await service.land(REPO, 1);
@@ -393,9 +393,65 @@ test('the state is pushed when it changed, with the PRs that need me counted, an
     await service.poll();
     await service.poll();
 
+    /* Then: Updating…, then the read, twice; the lanes changed only in the first */
+    const polled = pushes().slice(before);
+    assert.deepEqual(
+        polled.map((pushed) => pushed.freshness?.refreshing),
+        [true, false, true, false],
+    );
+    assert.equal(polled[1].needsYou, 1);
+    assert.deepEqual(polled[3].lanes, polled[1].lanes);
+});
+
+// ── Freshness ──
+
+test('the lanes say when GitHub was last read: the oldest lane read, and the queued-PR search', async () => {
+    /* Given: two repositories, the second read a minute after the first */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}, [QUEUE_REPO]: {7: inQueue(7)}}});
+    await service.land(REPO, 1);
+    state.now += MIN;
+    await service.land(QUEUE_REPO, 7);
+
+    /* When */
+    const landed = service.state().freshness;
+    state.now += MIN;
+    await service.poll();
+    const polled = service.state().freshness;
+
+    /* Then: before any poll the oldest lane read; after it the poll's own time */
+    assert.deepEqual(landed, {fetchedAt: NOW, refreshing: false, failed: false});
+    assert.deepEqual(polled, {fetchedAt: NOW + 2 * MIN, refreshing: false, failed: false});
+});
+
+test('a lane that could not be read keeps its last good read time and the read says it failed, until one reads again', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+
+    /* When */
+    state.now += MIN;
+    state.unreachable.add(REPO);
+    await service.poll();
+    const failed = service.state().freshness;
+    state.now += MIN;
+    state.unreachable.delete(REPO);
+    await service.poll();
+    const again = service.state().freshness;
+
     /* Then */
-    assert.equal(pushes().length, before + 1);
-    assert.equal(pushes().at(-1)?.needsYou, 1);
+    assert.deepEqual(failed, {fetchedAt: NOW, refreshing: false, failed: true});
+    assert.deepEqual(again, {fetchedAt: NOW + 2 * MIN, refreshing: false, failed: false});
+});
+
+test('nothing read yet says no read time', () => {
+    /* Given */
+    const {service} = setup();
+
+    /* When */
+    const freshness = service.state().freshness;
+
+    /* Then */
+    assert.deepEqual(freshness, {fetchedAt: null, refreshing: false, failed: false});
 });
 
 test('a set-aside holds on its commit and the errand link is kept', async () => {

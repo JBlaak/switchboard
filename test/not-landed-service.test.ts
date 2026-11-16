@@ -1,7 +1,8 @@
 /**
  * Not landed's read: the user's open PRs kept to the known repositories,
  * kept for 30 s, shared while under way, and the last good answer standing
- * when GitHub cannot be read.
+ * when GitHub cannot be read, each answer saying when GitHub was last read
+ * well and whether the latest read failed.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,7 +57,7 @@ test('only the PRs in a known repository are read, case aside', async () => {
 
     /* Then */
     assert.deepEqual(
-        read?.map((p) => p.number),
+        read.pullRequests?.map((p) => p.number),
         [1, 3],
     );
 });
@@ -74,11 +75,11 @@ test('a good answer is kept for 30 s, then GitHub is asked again', async () => {
 
     /* Then */
     assert.deepEqual(
-        kept?.map((p) => p.number),
+        kept.pullRequests?.map((p) => p.number),
         [1],
     );
     assert.deepEqual(
-        fresh?.map((p) => p.number),
+        fresh.pullRequests?.map((p) => p.number),
         [2],
     );
     assert.equal(reads(), 2);
@@ -108,11 +109,11 @@ test('when GitHub cannot be read, the last good answer stands', async () => {
 
     /* Then */
     assert.deepEqual(
-        afterNull?.map((p) => p.number),
+        afterNull.pullRequests?.map((p) => p.number),
         [1],
     );
     assert.deepEqual(
-        afterThrow?.map((p) => p.number),
+        afterThrow.pullRequests?.map((p) => p.number),
         [1],
     );
 });
@@ -126,10 +127,30 @@ test('null when GitHub cannot be read and there never was a good answer, and ask
     const retried = await service.read();
 
     /* Then */
-    assert.equal(failed, null);
+    assert.equal(failed.pullRequests, null);
+    assert.equal(failed.fetchedAt, null);
+    assert.equal(failed.failed, true);
     assert.deepEqual(
-        retried?.map((p) => p.number),
+        retried.pullRequests?.map((p) => p.number),
         [1],
     );
     assert.equal(reads(), 2);
+});
+
+test('each answer says when GitHub was last read well, and whether the latest read failed', async () => {
+    /* Given */
+    const {service, clock} = world([[pr('JBlaak/switchboard', 1)], null, [pr('JBlaak/switchboard', 2)]]);
+    clock.time = 5_000;
+    const good = await service.read();
+
+    /* When */
+    clock.time = 5_000 + NOT_LANDED_FRESH_MS;
+    const failed = await service.read();
+    clock.time = 5_000 + 2 * NOT_LANDED_FRESH_MS;
+    const again = await service.read();
+
+    /* Then */
+    assert.deepEqual([good.fetchedAt, good.failed], [5_000, false]);
+    assert.deepEqual([failed.fetchedAt, failed.failed], [5_000, true]);
+    assert.deepEqual([again.fetchedAt, again.failed], [5_000 + 2 * NOT_LANDED_FRESH_MS, false]);
 });

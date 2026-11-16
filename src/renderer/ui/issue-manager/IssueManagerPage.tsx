@@ -16,6 +16,8 @@
 import {useEffect, useLayoutEffect, useRef, type JSX, type KeyboardEvent} from 'react';
 import {getState} from '../../state/app-store';
 import {useStore} from '../use-store';
+import {managerFreshnessOf} from '../../state/inbox-slice';
+import {Freshness} from '../shared/Freshness';
 import {formatDate} from '../../lib/format';
 import {selectedItem, visibleGroups, type IssueManagerState} from '../../state/issue-manager-slice';
 import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tabs';
@@ -170,6 +172,7 @@ function IssueManagerView(): JSX.Element {
                                 {repositories === 1 ? '1 watched repo' : `${repositories} watched repos`} · loose,
                                 unassigned or yours
                             </span>
+                            <IssuesFreshness />
                         </div>
                     </div>
                 </div>
@@ -399,4 +402,13 @@ function EmptyLine({page, count}: {page: IssueManagerState; count: number}): JSX
         );
     if (page.tab === 'inbox' && page.filter) return <div className="pp-quiet">Nothing matches this filter.</div>;
     return <div className="pp-quiet">{page.tab === 'inbox' ? 'Inbox zero.' : 'Nothing here.'}</div>;
+}
+
+/**
+ * "Updated 3m ago": the oldest last answer of the watched repositories' issues
+ * and the started issues' PRs. These are GitHub reads, so a held budget shows.
+ */
+function IssuesFreshness(): JSX.Element | null {
+    const freshness = useStore((state) => managerFreshnessOf(state.inbox, 'issue'));
+    return <Freshness fetchedAt={freshness.fetchedAt} refreshing={freshness.refreshing} failed={freshness.failed} />;
 }

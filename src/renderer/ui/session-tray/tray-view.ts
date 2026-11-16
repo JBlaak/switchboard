@@ -4,7 +4,8 @@
  * the facts a saved prompt is filled from, and the ⌘ keys its PRs open
  * with. Pure, so it is tested in node.
  */
-import type {SessionLink} from '../../../domain/session/links';
+import {LINKS_GITHUB_TTL_MS, type SessionLink} from '../../../domain/session/links';
+import {freshnessText} from '../shared/freshness-text';
 import type {SessionStats} from '../../../domain/session/stats';
 import {SAVED_PROMPT_KEYS} from '../../../domain/settings/saved-prompts';
 import type {SavedPromptFacts} from '../../../domain/settings/saved-prompts';
@@ -90,6 +91,24 @@ function prStateText(status: Extract<SessionLink, {kind: 'pr'}>['status']): stri
         case 'none':
             return 'open';
     }
+}
+
+/** A PR's status this old (two of the links' `gh` intervals) is worth a word in the tray. */
+export const TRAY_STALE_PR_MS = 2 * LINKS_GITHUB_TTL_MS;
+
+/**
+ * How fresh a PR link's status is, only when it matters in the compact tray:
+ * the last read failed, GitHub's reads are held back (`heldUntil` in the
+ * future), or it is older than {@link TRAY_STALE_PR_MS}. Null otherwise, and
+ * for anything that is not a PR with a status from the links' own read.
+ */
+export function prFreshness(link: SessionLink, now: number, heldUntil: number | null): string | null {
+    if (link.kind !== 'pr' || !link.read) return null;
+    const {fetchedAt, failed} = link.read;
+    const held = heldUntil !== null && heldUntil > now;
+    const old = fetchedAt !== null && now - fetchedAt > TRAY_STALE_PR_MS;
+    if (!failed && !held && !old) return null;
+    return freshnessText({fetchedAt, failed}, now, heldUntil);
 }
 
 /** The page this window keeps for the session (`pages-slice`): its latest, the only one a row can bring back. */

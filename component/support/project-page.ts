@@ -54,6 +54,8 @@ export function stubOverviews(api: FakeApi, initial: Record<string, ProjectOverv
         const github = overview.github?.ok
             ? {
                   ...overview.github,
+                  // An answer without plans carries no plans read time, as main's does not.
+                  plansFetchedAt: options?.plans === false ? undefined : overview.github.plansFetchedAt,
                   fetchedAt: Date.now(),
                   plansPending: options?.plans === false,
                   plans:

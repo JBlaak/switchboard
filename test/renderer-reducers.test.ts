@@ -10,6 +10,7 @@ import {rowActivity} from '../src/renderer/state/row-activity';
 import type {PushEvent, RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
 import type {PendingQuestions} from '../src/domain/questions/question';
+import {NO_INBOX_FRESHNESS} from '../src/domain/inbox/freshness';
 
 /** Freeze a state all the way down, so a reducer that mutates its input throws. */
 function deepFreeze<T>(value: T): T {
@@ -108,9 +109,10 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     sessionTaskChanged: {type: 'sessionTaskChanged', sessionId: 's9', taskId: null},
     inboxChanged: {
         type: 'inboxChanged',
-        summary: {bug: {unread: 2, urgent: 1}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}, triaging: []},
+        summary: {bug: {unread: 2, urgent: 1}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}, triaging: [], freshness: NO_INBOX_FRESHNESS},
     },
     mergeManagerChanged: {type: 'mergeManagerChanged', state: {lanes: [], needsYou: 1}},
+    githubBudgetHeld: {type: 'githubBudgetHeld', until: 5},
 };
 
 test('every push event reduces without mutating the state it was given', () => {

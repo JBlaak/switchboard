@@ -27,6 +27,7 @@ import {
 } from '../../src/domain/inbox/items';
 import type {FakeApi} from './fake-api';
 import type {ConfiguredManagers, InboxItem} from '../../src/domain/inbox/model';
+import {NO_INBOX_FRESHNESS, type InboxFreshness} from '../../src/domain/inbox/freshness';
 
 export class FakeInbox {
     private readonly items = new Map<string, InboxItem>();
@@ -35,6 +36,7 @@ export class FakeInbox {
         private readonly api: FakeApi,
         items: readonly InboxItem[],
         private readonly configured: ConfiguredManagers,
+        private readonly freshness: InboxFreshness = NO_INBOX_FRESHNESS,
     ) {
         for (const item of items) this.items.set(item.key, item);
         api.handle('inboxSummary', () => this.summary());
@@ -72,17 +74,18 @@ export class FakeInbox {
     }
 
     public summary() {
-        return inboxSummary([...this.items.values()], this.configured);
+        return inboxSummary([...this.items.values()], this.configured, undefined, this.freshness);
     }
 }
 
 export interface InboxOptions {
     /**
      * The items main's inbox holds at launch, and which managers are set up
-     * (both by default). An object, as a fixture option given as an array is
+     * (both by default), and how fresh each manager is (nothing read yet by
+     * default). An object, as a fixture option given as an array is
      * read as Playwright's `[value, options]`.
      */
-    inbox: {items: InboxItem[]; configured?: ConfiguredManagers};
+    inbox: {items: InboxItem[]; configured?: ConfiguredManagers; freshness?: InboxFreshness};
 }
 
 const stores = new WeakMap<FakeApi, FakeInbox>();
@@ -91,7 +94,7 @@ export const test = base.extend<InboxOptions & {mainInbox: FakeInbox}>({
     inbox: [{items: []}, {option: true}],
     // In place before the page loads, which asks for the summary first.
     api: async ({api, inbox}, use) => {
-        stores.set(api, new FakeInbox(api, inbox.items, inbox.configured ?? {bug: true, issue: true}));
+        stores.set(api, new FakeInbox(api, inbox.items, inbox.configured ?? {bug: true, issue: true}, inbox.freshness));
         await use(api);
     },
     mainInbox: async ({api}, use) => {

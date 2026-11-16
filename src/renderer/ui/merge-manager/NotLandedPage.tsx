@@ -12,6 +12,7 @@ import {useEffect, useLayoutEffect, useRef, type JSX, type KeyboardEvent} from '
 import {getState} from '../../state/app-store';
 import {useStore} from '../use-store';
 import {SceneFigure} from '../bug-manager/ManagerFigure';
+import {Freshness} from '../shared/Freshness';
 import {mergeFigureOf, type MergeFigure} from '../../../domain/merge-manager/figure';
 import {
     inRepository,
@@ -38,6 +39,8 @@ export function NotLandedPage(): JSX.Element {
     const root = useRef<HTMLDivElement>(null);
     const merge = useStore((state) => state.mergeManager.state);
     const open = useStore((state) => state.mergeManager.notLanded);
+    const openAt = useStore((state) => state.mergeManager.notLandedFetchedAt);
+    const openFailed = useStore((state) => state.mergeManager.notLandedFailed);
     const page = useStore((state) => state.mergeManager.page);
     const busy = useStore((state) => state.mergeManager.busy);
     const figure = useStore((state) => mergeFigureOf(state.mergeManager.state), sameFigure);
@@ -142,6 +145,8 @@ export function NotLandedPage(): JSX.Element {
                         <h1 className="sw-title pp-title">Not landed</h1>
                         <div className="sw-subline pp-subline">
                             <span>{notLandedPageSubline(all, projects.length)}</span>
+                            {/* The open PRs search is never held back for GitHub's budget. */}
+                            <Freshness fetchedAt={openAt} failed={openFailed} showHeld={false} />
                         </div>
                     </div>
                 </div>

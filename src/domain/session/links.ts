@@ -19,11 +19,14 @@ import {confirmedIssues} from '../session-work/issues';
 import {deriveWorkItems} from '../session-work/items';
 import {statusDot, type StatusDot} from '../session-work/status';
 import {pullRequestLabel} from './pull-requests';
-import type {IssueRef, IssueStatus, PullRequestStatus} from '../session-work/model';
+import type {GitHubRead, IssueRef, IssueStatus, PullRequestStatus} from '../session-work/model';
 import type {TaskStatus} from '../tasks/model';
 import type {ArtifactRef} from './artifacts';
 import type {ShownPageRef} from './page-tool';
 import type {SessionPullRequest} from './session';
+
+/** How long what `gh` said about a session's links is used before it is asked again. */
+export const LINKS_GITHUB_TTL_MS = 60_000;
 
 /** The kinds of link, in the order the list gives them. */
 export type SessionLinkKind = 'pr' | 'issue' | 'artifact' | 'page' | 'bug' | 'task';
@@ -55,6 +58,11 @@ export interface LinkedPr {
     number: number;
     /** Null until `gh` has answered, and always without `gh`. */
     status: LinkedPrStatus | null;
+    /**
+     * How fresh `status` is, when it is the links' own `gh` read; absent
+     * without a status, and when the CI watch's live answer stands in for it.
+     */
+    read?: GitHubRead;
 }
 
 /** An issue the conversation mentioned that none of the session's PRs closes. */

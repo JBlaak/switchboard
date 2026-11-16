@@ -19,7 +19,8 @@ import {sessionRow, sidebar, terminalHeader} from '../../e2e/support/app';
 import {hasTerminal} from '../../e2e/support/terminal';
 import {sessionItem} from '../../e2e/support/session-list';
 import {LABEL, S} from '../../e2e/fixtures/standard';
-import {BIG_FILE_LINES, sessionWorkStub} from '../../e2e/fixtures/session-work';
+import {BIG_FILE_LINES, LOGIN_FIX_WORK, sessionWorkStub} from '../../e2e/fixtures/session-work';
+import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
 import type {Page} from '@playwright/test';
 import type {FakeApi} from '../support/fake-api';
 
@@ -294,5 +295,30 @@ test.describe('the diff', () => {
         await expect(big.locator('.sw-dl.is-pair').last()).toContainText(
             `export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`,
         );
+    });
+});
+
+test.describe('when the last read of its PRs failed', () => {
+    test.use({
+        answers: sessionWorkAnswers({
+            ...sessionWorkStub(),
+            snapshots: {
+                ...sessionWorkStub().snapshots,
+                [S.loginFix]: {
+                    ...LOGIN_FIX_WORK,
+                    pullRequestsRead: {fetchedAt: FIXTURE_NOW - 5 * 60_000, failed: true},
+                },
+            },
+        }),
+    });
+
+    test("the header says how old the PRs' status is and that it could not refresh", async ({page, api}) => {
+        /* When */
+        await openLoginFixWork(page, api);
+
+        /* Then */
+        const freshness = workPage(page).locator('.sw-header').getByTestId('freshness');
+        await expect(freshness).toContainText('Updated');
+        await expect(freshness).toContainText('Couldn’t refresh');
     });
 });

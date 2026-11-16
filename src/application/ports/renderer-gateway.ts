@@ -117,4 +117,8 @@ export interface RendererGateway {
     // ── The Merge manager (#434) ──
     /** The landed PRs' lanes changed after a poll or an action: every lane, and how many PRs need you. */
     mergeManagerChanged(state: MergeManagerState): void;
+
+    // ── GitHub's GraphQL budget ──
+    /** Expensive GitHub reads are held back until this time for the budget, or no longer (null). */
+    githubBudgetHeld(until: number | null): void;
 }

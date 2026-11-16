@@ -14,7 +14,8 @@
  */
 import {test, expect} from '../support/inbox';
 import {runSessions} from '../support/running-session';
-import {HARNESS_SETTINGS} from '../../e2e/support/fixture-home';
+import {FIXTURE_NOW, HARNESS_SETTINGS} from '../../e2e/support/fixture-home';
+import {NO_INBOX_FRESHNESS} from '../../src/domain/inbox/freshness';
 import {P} from '../../e2e/fixtures/standard';
 import {fixtureProjectPath} from '../fixtures/captured';
 import {fixBranch, fixPrompt} from '../../src/domain/inbox/fix';
@@ -272,4 +273,25 @@ test('a bug seen again after its merge from an older release asks, and Treat as 
     await expect(row(page, SEEN_AGAIN)).toContainText('Regressed');
     await expect(row(page, SEEN_AGAIN)).toHaveClass(/is-unread/);
     expect(api.callsTo('bugTreatAsRegressed')).toEqual([[`bug:${API}:${SEEN_AGAIN}`]]);
+});
+
+test('the header says when Bugsnag was last read, and that the last read failed', async ({page, api, mainInbox}) => {
+    /* Given */
+    const read = {fetchedAt: FIXTURE_NOW - 3 * 60_000, refreshing: false, failed: false};
+    await page.keyboard.press('Meta+b');
+
+    /* When */
+    await api.emit('onInboxChanged', {...mainInbox.summary(), freshness: {...NO_INBOX_FRESHNESS, bug: read}});
+
+    /* Then */
+    await expect(bugPage(page).getByTestId('freshness')).toHaveText('Updated 3m ago');
+
+    /* When */
+    await api.emit('onInboxChanged', {
+        ...mainInbox.summary(),
+        freshness: {...NO_INBOX_FRESHNESS, bug: {...read, failed: true}},
+    });
+
+    /* Then */
+    await expect(bugPage(page).getByTestId('freshness')).toHaveText('Updated 3m ago · Couldn’t refresh');
 });

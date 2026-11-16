@@ -23,7 +23,15 @@ import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
 import type {HandoffHost} from '../../../application/services/project-handoff';
 import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
 import {ChipDot} from '../session-list/RowMeta';
-import {contextPercent, linkMeta, pullRequestKeys, sessionMetaLine, type LinkDot, type TrayLink} from './tray-view';
+import {
+    contextPercent,
+    linkMeta,
+    prFreshness,
+    pullRequestKeys,
+    sessionMetaLine,
+    type LinkDot,
+    type TrayLink,
+} from './tray-view';
 import {SESSION_TRAY_ID} from './focus';
 
 /** What the tray's controls do. */
@@ -64,6 +72,8 @@ export interface SessionTrayContentProps {
     /** Copy session id was just pressed. */
     copied: boolean;
     now: number;
+    /** Until when GitHub's reads are held back (`state.github.heldUntil`); null or absent when they are not. */
+    heldUntil?: number | null;
     actions: SessionTrayActions;
     /** What goes under a PR's link: Land it, or its landed stage (#436); a slot so the markup draws without the store. */
     land?: (pr: LinkedPr) => ReactNode;
@@ -118,7 +128,7 @@ function AskGroup({prompts, sent, actions}: SessionTrayContentProps): JSX.Elemen
     );
 }
 
-function LinksGroup({links, prompts, now, actions, land}: SessionTrayContentProps): JSX.Element {
+function LinksGroup({links, prompts, now, heldUntil, actions, land}: SessionTrayContentProps): JSX.Element {
     const keys = pullRequestKeys(
         prompts,
         links.map((row) => row.link),
@@ -133,6 +143,7 @@ function LinksGroup({links, prompts, now, actions, land}: SessionTrayContentProp
                 {links.map(({link, opens}) => {
                     const meta = linkMeta(link, now);
                     const key = keys.get(link.key);
+                    const freshness = prFreshness(link, now, heldUntil ?? null);
                     const inside = (
                         <>
                             <span className="tray-link-title">{link.title}</span>
@@ -144,6 +155,11 @@ function LinksGroup({links, prompts, now, actions, land}: SessionTrayContentProp
                                 {meta.text}
                                 {key !== undefined && <span className="tray-key">{'⌘' + key}</span>}
                             </span>
+                            {freshness && (
+                                <span className="tray-link-freshness" data-testid="tray-link-freshness">
+                                    {freshness}
+                                </span>
+                            )}
                         </>
                     );
                     const url = linkUrl(link);

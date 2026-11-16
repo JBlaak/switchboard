@@ -331,6 +331,16 @@ $tray-height: 240px;
     color: var(--sb-text-faint);
 }
 
+/* How fresh a PR's status is, only when it is old, failed or held. */
+.tray-link-freshness {
+    max-width: 100%;
+    font-size: 11px;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* The sidebar's PR chip, a size up. */
 .tray-chip {
     display: inline-flex;

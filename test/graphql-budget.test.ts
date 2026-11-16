@@ -12,6 +12,7 @@ import {
     toBudgetAnswer,
     withBudget,
 } from '../src/infrastructure/github/graphql-budget';
+import {fakeTimers} from './support/fakes';
 
 const MINUTE = 60_000;
 
@@ -260,4 +261,129 @@ test('a mutation is left as it is', () => {
 
     /* Then */
     assert.equal(sent, mutation);
+});
+
+// ── Telling whoever shows the hold ──
+
+/** A budget with timers, and every hold it told about. */
+function watchedBudget() {
+    let now = 1_000_000;
+    const timers = fakeTimers();
+    const tracker = new GraphqlBudget({clock: {now: () => now}, log: {info: () => {}}, timers});
+    const told: (number | null)[] = [];
+    tracker.onHeldChanged((until) => told.push(until));
+    return {tracker, timers, told, advance: (ms: number) => (now += ms), at: (ms: number) => now + ms};
+}
+
+test('a spent budget tells its hold until the reset, once', () => {
+    /* Given */
+    const {tracker, told, at} = watchedBudget();
+    const resetAt = at(20 * MINUTE);
+
+    /* When */
+    tracker.answered('plan', {cost: 44, remaining: BUDGET_RESERVE - 1, resetAt});
+    tracker.answered('plan', {cost: 44, remaining: BUDGET_RESERVE - 45, resetAt});
+
+    /* Then */
+    assert.deepEqual(told, [resetAt]);
+});
+
+test('a fresh budget tells nothing: there is no hold', () => {
+    /* Given */
+    const {tracker, told, at} = watchedBudget();
+
+    /* When */
+    tracker.answered('plan', {cost: 44, remaining: 4000, resetAt: at(20 * MINUTE)});
+
+    /* Then */
+    assert.deepEqual(told, []);
+});
+
+test('a rate-limit refusal tells its pause, and a spent answer after it moves the hold to the reset', () => {
+    /* Given */
+    const {tracker, told, at} = watchedBudget();
+    const paused = at(RATE_LIMITED_PAUSE_MS);
+    const resetAt = at(40 * MINUTE);
+
+    /* When */
+    tracker.rateLimited('plan');
+    tracker.answered('plan', {cost: 44, remaining: 10, resetAt});
+
+    /* Then */
+    assert.deepEqual(told, [paused, resetAt]);
+});
+
+test('a fresh answer lifts the hold and tells so', () => {
+    /* Given */
+    const {tracker, timers, told, at} = watchedBudget();
+    const resetAt = at(20 * MINUTE);
+    tracker.answered('plan', {cost: 44, remaining: 10, resetAt});
+
+    /* When */
+    tracker.answered('plan', {cost: 44, remaining: 4900, resetAt: at(60 * MINUTE)});
+
+    /* Then */
+    assert.deepEqual(told, [resetAt, null]);
+    assert.equal(timers.pending, 0);
+});
+
+test('the hold lifts by itself when its reset time passes', () => {
+    /* Given */
+    const {tracker, timers, told, advance, at} = watchedBudget();
+    const resetAt = at(20 * MINUTE);
+    tracker.answered('plan', {cost: 44, remaining: 10, resetAt});
+
+    /* When */
+    advance(20 * MINUTE);
+    timers.tick();
+
+    /* Then */
+    assert.deepEqual(told, [resetAt, null]);
+    assert.equal(tracker.heldUntil(), null);
+    assert.equal(timers.pending, 0);
+});
+
+test('a timer woken before the reset keeps watching the same hold and tells nothing new', () => {
+    /* Given */
+    const {tracker, timers, told, advance, at} = watchedBudget();
+    const resetAt = at(20 * MINUTE);
+    tracker.answered('plan', {cost: 44, remaining: 10, resetAt});
+
+    /* When */
+    advance(20 * MINUTE - 5);
+    timers.tick();
+
+    /* Then */
+    assert.deepEqual(told, [resetAt]);
+    assert.equal(timers.pending, 1);
+});
+
+test('a pause ending under a spent budget moves the hold back to the reset', () => {
+    /* Given */
+    const {tracker, timers, told, advance, at} = watchedBudget();
+    const resetAt = at(30 * MINUTE);
+    tracker.answered('plan', {cost: 44, remaining: 10, resetAt});
+    tracker.rateLimited('plan');
+    const paused = at(RATE_LIMITED_PAUSE_MS);
+
+    /* When */
+    advance(RATE_LIMITED_PAUSE_MS);
+    timers.tick();
+
+    /* Then */
+    assert.deepEqual(told, [resetAt, paused, resetAt]);
+});
+
+test('an unsubscribed listener is told nothing more', () => {
+    /* Given */
+    const tracker = new GraphqlBudget({clock: {now: () => 1_000_000}, log: {info: () => {}}});
+    const told: (number | null)[] = [];
+    const off = tracker.onHeldChanged((until) => told.push(until));
+    off();
+
+    /* When */
+    tracker.rateLimited('plan');
+
+    /* Then */
+    assert.deepEqual(told, []);
 });

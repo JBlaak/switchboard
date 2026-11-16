@@ -12,14 +12,21 @@
  * and the task's detail once a minute. The very first answer for a session
  * reads its transcript (and its origin remote) first, which is local; its
  * PRs come without status until `gh` has answered, unless the CI watch
- * already knows them.
+ * already knows them. A PR status from our own `gh` read says how fresh it
+ * is (`LinkedPr.read`); when an ask fails, the last good status stays.
  */
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {byRepository} from '../../domain/session-work/issues';
-import {sessionLinks, type BugLinkFacts, type SessionLink, type TaskFacts} from '../../domain/session/links';
+import {
+    LINKS_GITHUB_TTL_MS,
+    sessionLinks,
+    type BugLinkFacts,
+    type SessionLink,
+    type TaskFacts,
+} from '../../domain/session/links';
 import type {SessionPullRequest} from '../../domain/session/session';
-import type {IssueRef, IssueStatus, PullRequestStatus} from '../../domain/session-work/model';
+import type {GitHubRead, IssueRef, IssueStatus, PullRequestStatus} from '../../domain/session-work/model';
 import type {BlaakTasksResult, TaskDetail} from '../../domain/tasks/model';
 import type {Clock} from '../ports/clock';
 import type {GitHubCli} from '../ports/github-cli';
@@ -28,8 +35,7 @@ import type {Logger} from '../ports/logger';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import type {TranscriptProducts} from '../ports/transcript-store';
 
-/** How long what `gh` said is used before it is asked again. */
-export const LINKS_GITHUB_TTL_MS = 60_000;
+export {LINKS_GITHUB_TTL_MS};
 
 /** How long a task's detail is used before BlaakTasks is asked again. */
 export const LINKS_TASK_TTL_MS = 60_000;
@@ -79,8 +85,10 @@ interface TranscriptFacts {
 interface GitHubFacts {
     at: number;
     key: string;
-    /** Null when `gh` is missing or signed out. */
+    /** Null when `gh` is missing or signed out; the last good status where a later ask failed. */
     pullRequests: PullRequestStatus[] | null;
+    /** How fresh `pullRequests` is; null when it is null or no PR was asked about. */
+    pullRequestsRead: GitHubRead | null;
     issues: Map<string, IssueStatus[] | null> | null;
 }
 
@@ -166,10 +174,15 @@ export class SessionLinksService {
     private assemble(sessionId: string, entry: Entry): SessionLink[] {
         const pullRequests = this.deps.pullRequests(sessionId);
         const taskId = this.deps.tasks.sessionTask(sessionId);
-        return sessionLinks({
+        const ours = new Set<PullRequestStatus>(entry.github?.pullRequests ?? []);
+        const statuses = this.pullRequestStatuses(pullRequests, entry.github);
+        const read = entry.github?.pullRequestsRead ?? null;
+        // Only a status from our own read says how fresh it is; the CI watch's is live.
+        const ourUrls = new Set((statuses ?? []).filter((status) => ours.has(status)).map((status) => status.url));
+        const links = sessionLinks({
             repository: entry.repository ?? '',
             pullRequests,
-            pullRequestStatuses: this.pullRequestStatuses(pullRequests, entry.github),
+            pullRequestStatuses: statuses,
             issueMentions: entry.transcript?.mentions ?? [],
             issueStatuses: entry.github?.issues ?? null,
             artifacts: entry.transcript?.products.artifacts ?? [],
@@ -177,6 +190,10 @@ export class SessionLinksService {
             bug: entry.target ? (this.deps.bug?.(entry.target.projectPath) ?? null) : null,
             task: taskId ? {id: taskId, detail: this.tasks.get(taskId)?.detail ?? null} : null,
         });
+        if (!read) return links;
+        return links.map((link) =>
+            link.kind === 'pr' && link.status && ourUrls.has(link.url) ? {...link, read} : link,
+        );
     }
 
     /** The CI watch's answer for each PR where it has one, ours otherwise; null when neither knows any. */
@@ -268,18 +285,34 @@ export class SessionLinksService {
         const key = this.githubKey(sessionId, entry);
         const repository = entry.repository ?? '';
         if ((await github.available()) !== 'ok') {
-            entry.github = {at: clock.now(), key, pullRequests: null, issues: null};
+            entry.github = {at: clock.now(), key, pullRequests: null, pullRequestsRead: null, issues: null};
             return;
         }
+        const known = entry.github;
         const pullRequests: PullRequestStatus[] = [];
-        for (const [repo, numbers] of byRepository(this.deps.pullRequests(sessionId), repository)) {
-            pullRequests.push(...((await github.pullRequests(repo, numbers)) ?? []));
+        const repositories = byRepository(this.deps.pullRequests(sessionId), repository);
+        let failed = false;
+        for (const [repo, numbers] of repositories) {
+            const answer = await github.pullRequests(repo, numbers);
+            if (answer === null) {
+                failed = true;
+                // A failed ask keeps the last good status of this repository's PRs, marked as old.
+                const wanted = new Set(numbers);
+                for (const status of known?.pullRequests ?? []) {
+                    if ((status.repository || repository) === repo && wanted.has(status.number))
+                        pullRequests.push(status);
+                }
+            } else pullRequests.push(...answer);
         }
+        const pullRequestsRead: GitHubRead | null =
+            repositories.size === 0
+                ? null
+                : {fetchedAt: failed ? (known?.pullRequestsRead?.fetchedAt ?? null) : clock.now(), failed};
         const issues = new Map<string, IssueStatus[] | null>();
         for (const [repo, numbers] of byRepository(entry.transcript?.mentions ?? [], repository)) {
             issues.set(repo, await github.issues(repo, numbers));
         }
-        entry.github = {at: clock.now(), key, pullRequests, issues};
+        entry.github = {at: clock.now(), key, pullRequests, pullRequestsRead, issues};
     }
 
     private async fetchTask(taskId: string): Promise<void> {

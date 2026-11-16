@@ -18,6 +18,7 @@
  * as they came.
  */
 import type {IssueLabel} from '../project/overview';
+import {NO_INBOX_FRESHNESS, type InboxFreshness} from './freshness';
 
 export type InboxManager = 'bug' | 'issue';
 
@@ -296,6 +297,8 @@ export interface InboxSummary {
     readonly configured: ConfiguredManagers;
     /** The Bug manager's triage errands still running or stuck, for the Errands shelf. */
     readonly triaging: readonly TriageErrandView[];
+    /** How fresh each manager's items are, for its page's "Updated …" line. */
+    readonly freshness: InboxFreshness;
 }
 
 export const EMPTY_INBOX_SUMMARY: InboxSummary = {
@@ -303,4 +306,5 @@ export const EMPTY_INBOX_SUMMARY: InboxSummary = {
     issue: {unread: 0, urgent: 0},
     configured: {bug: false, issue: false},
     triaging: [],
+    freshness: NO_INBOX_FRESHNESS,
 };

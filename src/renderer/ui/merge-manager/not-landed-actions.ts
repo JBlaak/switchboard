@@ -16,12 +16,13 @@ import {jumpToSession} from '../session-work/plan/actions';
 import {notLandedKey, type OpenPullRequest} from '../../../domain/merge-manager/not-landed';
 import type {NotLandedKeyAction} from './page-keys';
 
-/** Ask main for your open PRs; a failed read keeps what was there. */
+/** Ask main for your open PRs; a failed read keeps what was there, and says it failed. */
 export async function loadNotLanded(): Promise<void> {
     try {
-        dispatch({type: 'mergeManagerNotLandedLoaded', pullRequests: await window.api.mergeManagerNotLanded()});
+        dispatch({type: 'mergeManagerNotLandedLoaded', ...(await window.api.mergeManagerNotLanded())});
     } catch {
         // The next change asks again.
+        dispatch({type: 'mergeManagerNotLandedLoaded', pullRequests: null, fetchedAt: null, failed: true});
     }
 }
 

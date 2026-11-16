@@ -9,6 +9,7 @@ import type {SessionTrayActions, SessionTrayContentProps} from '../src/renderer/
 import {
     contextPercent,
     linkMeta,
+    prFreshness,
     promptFacts,
     pullRequestForKey,
     pullRequestKeys,
@@ -16,7 +17,7 @@ import {
     sessionMetaLine,
     trayLinks,
 } from '../src/renderer/ui/session-tray/tray-view';
-import type {SessionLink} from '../src/domain/session/links';
+import {LINKS_GITHUB_TTL_MS, type SessionLink} from '../src/domain/session/links';
 import type {SessionStats} from '../src/domain/session/stats';
 
 const NOW = Date.parse('2026-11-06T12:00:00.000Z');
@@ -357,4 +358,93 @@ test('a ⌘ key finds the PR numbered on it, and nothing on a prompt’s key or 
     assert.equal(second?.number, 19);
     assert.equal(onPrompt, null);
     assert.equal(past, null);
+});
+
+// ── How fresh a PR's status is ──
+
+const green = {state: 'open', checks: 'passing', dot: 'green', mine: true} as const;
+const read = (fetchedAt: number | null, failed = false): SessionLink => ({
+    ...(pr(7, green) as Extract<SessionLink, {kind: 'pr'}>),
+    read: {fetchedAt, failed},
+});
+
+test("a PR's status read within two of gh's intervals says nothing in the tray", () => {
+    /* Given */
+    const link = read(NOW - 2 * LINKS_GITHUB_TTL_MS);
+
+    /* When */
+    const text = prFreshness(link, NOW, null);
+
+    /* Then */
+    assert.equal(text, null);
+});
+
+test("a PR's status older than two of gh's intervals says how old it is", () => {
+    /* Given */
+    const link = read(NOW - 5 * 60_000);
+
+    /* When */
+    const text = prFreshness(link, NOW, null);
+
+    /* Then */
+    assert.equal(text, 'Updated 5m ago');
+});
+
+test('a PR whose last read failed says so, even when it is recent', () => {
+    /* Given */
+    const link = read(NOW - 30_000, true);
+
+    /* When */
+    const text = prFreshness(link, NOW, null);
+
+    /* Then */
+    assert.match(text ?? '', /Couldn’t refresh$/);
+});
+
+test("a PR says GitHub's reads are paused while they are held back", () => {
+    /* Given */
+    const link = read(NOW - 30_000);
+    const heldUntil = NOW + 10 * 60_000;
+
+    /* When */
+    const text = prFreshness(link, NOW, heldUntil);
+
+    /* Then */
+    assert.match(text ?? '', /Paused: GitHub budget low until/);
+});
+
+test('a PR without its own read, or another kind of link, says nothing about freshness', () => {
+    /* Given */
+    const links: SessionLink[] = [pr(7, green), task];
+
+    /* When */
+    const texts = links.map((link) => prFreshness(link, NOW, NOW + 60_000));
+
+    /* Then */
+    assert.deepEqual(texts, [null, null]);
+});
+
+test('the tray draws a stale PR status as a muted line under its link', () => {
+    /* Given */
+    const links = trayLinks([read(NOW - 5 * 60_000, true)], null);
+
+    /* When */
+    const html = tray({links});
+
+    /* Then */
+    assert.match(
+        html,
+        /<span class="tray-link-freshness" data-testid="tray-link-freshness">Updated 5m ago · Couldn’t refresh<\/span>/,
+    );
+});
+
+test('the tray draws no freshness line for a fresh PR status', () => {
+    /* Given */
+    const links = trayLinks([read(NOW - 30_000)], null);
+
+    /* When */
+    const html = tray({links});
+
+    /* Then */
+    assert.doesNotMatch(html, /tray-link-freshness/);
 });

@@ -58,23 +58,27 @@ const EMPTY: TrayData = {sessionId: null, prompts: [], links: [], editor: null};
 const COPIED_MS = 1200;
 
 export function SessionTray(): JSX.Element | null {
-    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy} = useStore((state) => {
-        const id = state.terminal.onScreen;
-        const page = id ? state.pages.bySession[id] : undefined;
-        const path = id ? sessionMap.get(id)?.projectPath : undefined;
-        return {
-            sessionId: id,
-            phase: state.sessionTray.phase,
-            deadline: state.sessionTray.deadline,
-            sent: state.sessionTray.sent,
-            stats: sessionStatsIn(state.sessionTray, id),
-            running: !!id && state.view.activePtyIds.has(id),
-            hosts: state.handoff.hosts,
-            kept: page ?? null,
-            isVm: isVmProjectIn(state.agentHost, path),
-            isCopy: isVmCopyIn(state.agentHost, path),
-        };
-    }, shallowEqual);
+    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy, heldUntil} = useStore(
+        (state) => {
+            const id = state.terminal.onScreen;
+            const page = id ? state.pages.bySession[id] : undefined;
+            const path = id ? sessionMap.get(id)?.projectPath : undefined;
+            return {
+                sessionId: id,
+                phase: state.sessionTray.phase,
+                deadline: state.sessionTray.deadline,
+                sent: state.sessionTray.sent,
+                stats: sessionStatsIn(state.sessionTray, id),
+                running: !!id && state.view.activePtyIds.has(id),
+                hosts: state.handoff.hosts,
+                kept: page ?? null,
+                isVm: isVmProjectIn(state.agentHost, path),
+                isCopy: isVmCopyIn(state.agentHost, path),
+                heldUntil: state.github.heldUntil,
+            };
+        },
+        shallowEqual,
+    );
     const open = trayIsOpen(phase);
     const shown = phase !== 'closed';
 
@@ -320,6 +324,7 @@ export function SessionTray(): JSX.Element | null {
                 running={running}
                 copied={copied}
                 now={Date.now()}
+                heldUntil={heldUntil}
                 actions={actions}
                 land={trayLand}
             />

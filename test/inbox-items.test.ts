@@ -24,6 +24,7 @@ import {
     type SyncContext,
 } from '../src/domain/inbox/items';
 import type {InboxFacts, InboxItem, InboxState} from '../src/domain/inbox/model';
+import {NO_INBOX_FRESHNESS} from '../src/domain/inbox/freshness';
 import {DAY, HOUR, ME, NOW, THRESHOLDS, bug, issue} from './support/inbox-fixtures';
 
 const CONTEXT: SyncContext = {
@@ -470,5 +471,6 @@ test('urgent counts the unread bugs that are trending or regressed', () => {
         issue: {unread: 1, urgent: 0},
         configured: {bug: true, issue: true},
         triaging: [],
+        freshness: NO_INBOX_FRESHNESS,
     });
 });

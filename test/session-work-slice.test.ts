@@ -146,6 +146,19 @@ test('session work: the first snapshot fills the skeleton and selects the first 
     assert.strictEqual(filled.sessionWork.page?.selectedItemId, openPr.id, 'the first item is selected');
 });
 
+test("session work: a newer snapshot brings how fresh its PRs' status is, and that the last read failed", () => {
+    /* Given */
+    const open = run(openPage(), {type: 'sessionWorkSnapshot', snapshot: snapshot([openPr])});
+    const pullRequestsRead = {fetchedAt: AT - 120_000, failed: true};
+
+    /* When */
+    const next = run(open, {type: 'sessionWorkSnapshot', snapshot: {...snapshot([openPr]), pullRequestsRead}});
+
+    /* Then */
+    assert.deepStrictEqual(next.sessionWork.page?.snapshot?.pullRequestsRead, pullRequestsRead);
+    assert.strictEqual(next.sessionWork.page?.selectedItemId, openPr.id, 'the selection stays');
+});
+
 test('session work: opening the open page again changes nothing', () => {
     /* Given */
     const open = openPage();

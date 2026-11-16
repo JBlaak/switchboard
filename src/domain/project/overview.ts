@@ -153,6 +153,12 @@ export type ProjectGitHubOverview =
           /** The last refresh failed: this is the answer before it, as of `fetchedAt`. */
           stale: boolean;
           /**
+           * Epoch ms of the plans' read. They are kept longer than the PRs and
+           * issues (OVERVIEW_PLANS_MS), so they can be older than `fetchedAt`.
+           * Absent on an answer without plans (`plansPending`).
+           */
+          plansFetchedAt?: number;
+          /**
            * Asked without plans (`plans: false`): `plans` is empty and the issues
            * and PRs were grouped without them, so the page shows its plans as
            * still coming. False on a full answer.

@@ -13,6 +13,7 @@
 import {test, expect} from '../support/inbox';
 import {runSessions} from '../support/running-session';
 import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
+import {NO_INBOX_FRESHNESS} from '../../src/domain/inbox/freshness';
 import {P} from '../../e2e/fixtures/standard';
 import {fixtureProjectPath} from '../fixtures/captured';
 import type {InboxItem} from '../../src/domain/inbox/model';
@@ -199,4 +200,27 @@ test('The issue detail closes with its × or Esc, and Esc then closes the page',
 
     /* Then */
     await expect(managerPage(page)).toHaveCount(0);
+});
+
+test('the header says when GitHub was last read, and spins while it is read again', async ({page, api, mainInbox}) => {
+    /* Given */
+    const read = {fetchedAt: FIXTURE_NOW - 5 * 60_000, refreshing: false, failed: false};
+    await page.keyboard.press('Meta+i');
+
+    /* When */
+    await api.emit('onInboxChanged', {...mainInbox.summary(), freshness: {...NO_INBOX_FRESHNESS, issue: read}});
+
+    /* Then */
+    await expect(managerPage(page).getByTestId('freshness')).toHaveText('Updated 5m ago');
+
+    /* When */
+    await api.emit('onInboxChanged', {
+        ...mainInbox.summary(),
+        freshness: {...NO_INBOX_FRESHNESS, issue: {...read, refreshing: true}},
+    });
+
+    /* Then */
+    const freshness = managerPage(page).getByTestId('freshness');
+    await expect(freshness.getByRole('status', {name: 'Updating…'})).toBeVisible();
+    await expect(freshness).toHaveText('Updated 5m ago');
 });

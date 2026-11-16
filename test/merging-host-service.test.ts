@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {MergingHostService, type MergingLink} from '../src/application/services/merging-host-service';
 import {MAC_HOST, handedOff, type MergingHostRecord} from '../src/domain/merge-manager/merging-host';
 import {mergeManagerState} from '../src/domain/merge-manager/landed';
-import type {LandedPullRequest, MergeManagerState} from '../src/domain/merge-manager/model';
+import type {LandedPullRequest, LaneFreshness, MergeManagerState} from '../src/domain/merge-manager/model';
 import type {MergeCallMethod} from '../src/domain/agent/protocol';
 import type {LandedTransitions} from '../src/domain/merge-manager/transitions';
 import {fakeTimers, silentLog} from './support/fakes';
@@ -28,6 +28,8 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
         /** Dialling again brings it back. */
         comesBack: false,
         landed: [landedPr(1, 10, 'switchboard', WAITING)] as LandedPullRequest[],
+        /** How fresh the VM says its lanes are; absent like an agent that does not say. */
+        freshness: undefined as LaneFreshness | undefined,
         answer: {} as Record<string, unknown>,
     };
     const link: MergingLink = {
@@ -46,7 +48,10 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
             if (!vm.reachable) throw new Error('the agent link dropped');
             if (method === 'state') {
                 return {
-                    state: mergeManagerState(vm.landed, new Map()),
+                    state: {
+                        ...mergeManagerState(vm.landed, new Map()),
+                        ...(vm.freshness ? {freshness: vm.freshness} : {}),
+                    },
                     landed: vm.landed,
                     errands: [],
                     savedByRepository: {},
@@ -356,4 +361,34 @@ test("the page shows the VM's errands and savings with the checkouts and the CI 
     assert.deepEqual(facts.errands, []);
     assert.ok(Object.values(facts.runMs).every((ms) => ms === 11 * 60_000));
     service.stop();
+});
+
+test('while the VM merges, the lanes are as fresh as the VM says, and failed while it cannot be reached', async () => {
+    /* Given */
+    const {service, vm} = setup({record: handedOff(DEVBOX, null, NOW)});
+    vm.freshness = {fetchedAt: NOW - 60_000, refreshing: true, failed: false};
+    service.focused();
+    await settle();
+    const read = service.state().freshness;
+
+    /* When */
+    vm.reachable = false;
+    service.focused();
+    await settle();
+
+    /* Then: its own poll is not shown as Updating…; its last read time stands */
+    assert.deepEqual(read, {fetchedAt: NOW - 60_000, refreshing: false, failed: false});
+    assert.deepEqual(service.state().freshness, {fetchedAt: NOW - 60_000, refreshing: false, failed: true});
+});
+
+test('a VM agent that does not say how fresh its lanes are counts as read when it answered', async () => {
+    /* Given */
+    const {service} = setup({record: handedOff(DEVBOX, null, NOW)});
+
+    /* When */
+    service.focused();
+    await settle();
+
+    /* Then */
+    assert.deepEqual(service.state().freshness, {fetchedAt: NOW, refreshing: false, failed: false});
 });

@@ -5,7 +5,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
-import {managerCountsOf, managerFigureOf} from '../src/renderer/state/inbox-slice';
+import {managerCountsOf, managerFigureOf, managerFreshnessOf} from '../src/renderer/state/inbox-slice';
+import {NO_FRESHNESS, NO_INBOX_FRESHNESS} from '../src/domain/inbox/freshness';
 import type {InboxSummary} from '../src/domain/inbox/model';
 
 const SUMMARY: InboxSummary = {
@@ -13,6 +14,7 @@ const SUMMARY: InboxSummary = {
     issue: {unread: 2, urgent: 0},
     configured: {bug: true, issue: true},
     triaging: [],
+    freshness: NO_INBOX_FRESHNESS,
 };
 
 /** The state after main pushed `summary`. */
@@ -121,4 +123,48 @@ test('an unread trending or regressed bug is urgent, counting every unread item'
 
     /* Then */
     assert.deepEqual(managerFigureOf(inbox, 'bug'), {pose: 'urgent', count: 3});
+});
+
+test("a pushed summary gives each manager's freshness", () => {
+    /* Given */
+    const freshness = {
+        bug: {fetchedAt: 1_000, refreshing: false, failed: true},
+        issue: {fetchedAt: 2_000, refreshing: true, failed: false},
+    };
+
+    /* When */
+    const inbox = pushed({...SUMMARY, freshness});
+
+    /* Then */
+    assert.deepEqual(managerFreshnessOf(inbox, 'bug'), {fetchedAt: 1_000, refreshing: false, failed: true});
+    assert.deepEqual(managerFreshnessOf(inbox, 'issue'), {fetchedAt: 2_000, refreshing: true, failed: false});
+});
+
+test('nothing read before main has said anything', () => {
+    /* When */
+    const state = initialRendererState();
+
+    /* Then */
+    assert.deepEqual(managerFreshnessOf(state.inbox, 'issue'), NO_FRESHNESS);
+});
+
+test('a newer read with the same counts is a change', () => {
+    /* Given */
+    const state = rootReducer(initialRendererState(), {type: 'inboxChanged', summary: SUMMARY});
+    const read = {...NO_FRESHNESS, fetchedAt: 5_000};
+
+    /* When */
+    const fresher = rootReducer(state, {
+        type: 'inboxChanged',
+        summary: {...SUMMARY, freshness: {...NO_INBOX_FRESHNESS, bug: read}},
+    });
+    const same = rootReducer(fresher, {
+        type: 'inboxChanged',
+        summary: {...SUMMARY, freshness: {...NO_INBOX_FRESHNESS, bug: {...read}}},
+    });
+
+    /* Then */
+    assert.notEqual(fresher, state);
+    assert.equal(managerFreshnessOf(fresher.inbox, 'bug').fetchedAt, 5_000);
+    assert.equal(same, fresher);
 });

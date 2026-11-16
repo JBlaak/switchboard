@@ -1,6 +1,8 @@
 /**
  * The page's header: Back, `Work · <session name>`, where the work lives and
- * how fresh it is, and the strip of agents working (D11, D16).
+ * how fresh it is, and the strip of agents working (D11, D16). With PRs, how
+ * fresh is how long ago GitHub was read for their status and checks (the
+ * shared freshness line); without, when the snapshot was last built.
  *
  * Nothing in the first row's title or the agents strip needs git, so both
  * show the moment the page opens; the repository and counts wait for the
@@ -19,6 +21,7 @@ import {isPullRequestPageId} from '../../../domain/session-work/pull-request-lin
 import type {SessionWorkPage, WorkTab} from '../../state/session-work-slice';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
 import {LinkTaskButton} from '../session-task/LinkTask';
+import {Freshness} from '../shared/Freshness';
 
 const NO_AGENTS: readonly WorkingAgent[] = [];
 
@@ -84,7 +87,15 @@ export function WorkHeader({
                             </a>
                         )}
                         {snapshot && !pullPage && <span>{footprintLine(snapshot)}</span>}
-                        {snapshot && <span className="sw-updated">{updatedAgo(snapshot.updatedAt, now)}</span>}
+                        {snapshot?.pullRequestsRead ? (
+                            // Its PRs' status and checks are GitHub's: how fresh is that read.
+                            <Freshness
+                                fetchedAt={snapshot.pullRequestsRead.fetchedAt}
+                                failed={snapshot.pullRequestsRead.failed}
+                            />
+                        ) : (
+                            snapshot && <span className="sw-updated">{updatedAgo(snapshot.updatedAt, now)}</span>
+                        )}
                     </div>
                 </div>
                 {!pullPage && (

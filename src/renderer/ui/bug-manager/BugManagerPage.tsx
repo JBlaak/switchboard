@@ -20,6 +20,8 @@
 import {useEffect, useLayoutEffect, useRef, type JSX, type KeyboardEvent} from 'react';
 import {getState} from '../../state/app-store';
 import {useStore} from '../use-store';
+import {managerFreshnessOf} from '../../state/inbox-slice';
+import {Freshness} from '../shared/Freshness';
 import {
     bugCursorRow,
     bugGroups,
@@ -182,7 +184,7 @@ function BugManagerView(): JSX.Element {
                             <span>
                                 {sources} Bugsnag {sources === 1 ? 'project' : 'projects'}
                             </span>
-                            <CheckedAgo at={page.polledAt} />
+                            <BugsnagFreshness />
                         </div>
                     </div>
                 </div>
@@ -295,10 +297,17 @@ function emptyLine(page: BugPageState): string {
         : 'No bugs like that.';
 }
 
-function CheckedAgo({at}: {at: number | null}): JSX.Element | null {
-    if (at === null) return <span>not checked yet</span>;
-    const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
-    return <span>checked {minutes === 0 ? 'just now' : `${minutes} min ago`}</span>;
+/** "Updated 3m ago": when the opted-in Bugsnag projects last answered. Bugsnag reads are never held by GitHub's budget. */
+function BugsnagFreshness(): JSX.Element | null {
+    const freshness = useStore((state) => managerFreshnessOf(state.inbox, 'bug'));
+    return (
+        <Freshness
+            fetchedAt={freshness.fetchedAt}
+            refreshing={freshness.refreshing}
+            failed={freshness.failed}
+            showHeld={false}
+        />
+    );
 }
 
 function Filter({

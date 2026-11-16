@@ -39,14 +39,7 @@ export interface OpenPullRequest {
 
 /** What stands between a PR and landing. */
 export type NotLandedStatus =
-    | 'ready'
-    | 'checksRunning'
-    | 'inReview'
-    | 'noReview'
-    | 'changesAsked'
-    | 'checksFailing'
-    | 'conflicts'
-    | 'draft';
+    'ready' | 'checksRunning' | 'inReview' | 'noReview' | 'changesAsked' | 'checksFailing' | 'conflicts' | 'draft';
 
 /** How many the Merge manager's page shows before View all. */
 export const NOT_LANDED_SHOWN = 5;
@@ -139,6 +132,16 @@ export function notLandedWhy(pr: OpenPullRequest): string | null {
     }
 }
 
+/** Not landed's read as main answers it: your open PRs, and when GitHub was last read for them. */
+export interface NotLandedRead {
+    /** The last good answer; null when there never was one. */
+    readonly pullRequests: OpenPullRequest[] | null;
+    /** When that answer was read from GitHub; null when never. */
+    readonly fetchedAt: number | null;
+    /** The latest read failed, so `pullRequests` is older. */
+    readonly failed: boolean;
+}
+
 /** The row's second line: its repository, branch, age and why. */
 export function notLandedMeta(pr: OpenPullRequest, now: number): string {
     return [repositoryShortName(pr.repository), pr.headRef, 'opened ' + openedAgo(pr.createdAt, now), notLandedWhy(pr)]
@@ -170,7 +173,8 @@ export function notLandedRepositories(rows: readonly OpenPullRequest[]): {reposi
         counts.set(id, entry);
     }
     return [...counts.values()].sort(
-        (a, b) => b.count - a.count || repositoryShortName(a.repository).localeCompare(repositoryShortName(b.repository)),
+        (a, b) =>
+            b.count - a.count || repositoryShortName(a.repository).localeCompare(repositoryShortName(b.repository)),
     );
 }
 

@@ -117,6 +117,8 @@ export type PushEvent =
     | {type: 'inboxChanged'; summary: InboxSummary}
     /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
     | {type: 'mergeManagerChanged'; state: MergeManagerState}
+    /** Expensive GitHub reads are held back until `until` for the GraphQL budget, or no longer (null). */
+    | {type: 'githubBudgetHeld'; until: number | null}
     /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
     | {type: 'agentInstallProgress'; hostKey: string; line: string}
     /** One line of a project hand-off's progress (#276), for the local project. */
@@ -306,8 +308,13 @@ export type LocalEvent =
     | {type: 'planLoaded'; owner: string; sourceKey: string; answer: SessionPlansAnswer | null}
     /** The answer stored when the source last loaded, shown until main answers (`plan/stored-plans`). */
     | {type: 'planSeeded'; owner: string; sourceKey: string; answer: SessionPlansAnswer}
-    /** Pinned plans as main or the stored copies answered them, for their rows' progress. */
-    | {type: 'planProgressLoaded'; plans: readonly Plan[]}
+    /**
+     * Pinned plans as main or the stored copies answered them, for their rows'
+     * progress; `fetchedAt` is when main answered, absent for a stored copy.
+     */
+    | {type: 'planProgressLoaded'; plans: readonly Plan[]; fetchedAt?: number}
+    /** A pinned plan's live read failed, or main had no answer; its last progress stays. */
+    | {type: 'planProgressFailed'; plan: IssueKey}
     /** A plan picked in the switcher (W2). */
     | {type: 'planChosen'; plan: IssueKey}
     /** The pointer is over an issue, or over none (D3). */

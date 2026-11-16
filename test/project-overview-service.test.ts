@@ -437,6 +437,51 @@ test('after five minutes the plans are asked of GitHub again', async () => {
     );
 });
 
+test('the plans keep the time they were read while the minute polls move fetchedAt on', async () => {
+    /* Given */
+    const {service, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    const first = answered((await service.overview(PROJECT)).github);
+
+    /* When */
+    advance(60_000);
+    const minuteLater = answered((await service.overview(PROJECT)).github);
+    advance(3 * 60_000);
+    const fourMinutesLater = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(first.plansFetchedAt, 1_000_000);
+    assert.equal(minuteLater.fetchedAt, 1_060_000);
+    assert.equal(minuteLater.plansFetchedAt, 1_000_000);
+    assert.equal(fourMinutesLater.fetchedAt, 1_240_000);
+    assert.equal(fourMinutesLater.plansFetchedAt, 1_000_000);
+});
+
+test('after five minutes the plans carry the time of their new read', async () => {
+    /* Given */
+    const {service, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT);
+
+    /* When */
+    advance(OVERVIEW_PLANS_MS);
+    const github = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(github.fetchedAt, 1_000_000 + OVERVIEW_PLANS_MS);
+    assert.equal(github.plansFetchedAt, 1_000_000 + OVERVIEW_PLANS_MS);
+});
+
+test('an answer without plans carries no plans read time', async () => {
+    /* Given */
+    const {service} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+
+    /* When */
+    const github = answered((await service.overview(PROJECT, {plans: false})).github);
+
+    /* Then */
+    assert.equal(github.plansPending, true);
+    assert.equal('plansFetchedAt' in github, false);
+});
+
 test('closed plans are kept apart from the open ones: Show closed asks for its own', async () => {
     /* Given */
     const {service, calls, advance} = setUp({
@@ -513,6 +558,7 @@ test('a failed plan read is not kept: the next poll asks for the plans again, an
     const stale = answered(failed.github);
     assert.equal(stale.stale, true);
     assert.equal(stale.fetchedAt, 1_000_000);
+    assert.equal(stale.plansFetchedAt, 1_000_000);
     assert.deepEqual([...calls].sort(), ['issuesIn', 'plan #112', 'plansIn', 'pullRequestsIn']);
     const github = answered(answer.github);
     assert.equal(github.stale, false);

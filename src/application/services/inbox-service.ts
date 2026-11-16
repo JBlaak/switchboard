@@ -22,11 +22,17 @@
  * Every change is pushed to the renderer as both managers' counts, which of
  * them are set up and the Bug manager's triage errands (`inboxChanged`), and
  * after each poll when that differs (a triage's session archived since); the
- * pages ask for the items themselves. Settings → Bug manager and a
+ * pages ask for the items themselves. The summary also says how fresh each
+ * manager is (`freshness`): when its sources last answered, whether a read is
+ * in flight, and whether the last read of one failed. The Issue manager's
+ * following of started issues' PRs reports its reads here too
+ * (`sourcesReading`, `sourcesRead`). Settings → Bug manager and a
  * project's Watch issues say when what is watched may have changed (`settingsChanged`): a manager that came
  * or went is pushed at once, and new sources are polled without waiting.
  */
 import {bugFacts} from '../../domain/inbox/bugs';
+import {afterReads, inboxFreshness} from '../../domain/inbox/freshness';
+import type {InboxFreshness, InboxReadGroup, SourceRead} from '../../domain/inbox/freshness';
 import {
     expired,
     finish,
@@ -108,6 +114,10 @@ export class InboxService {
     /** What was watched when last looked, so a change to it polls at once. */
     private watching = '';
     private lastPolledAt: number | null = null;
+    /** Each group's sources' last reads, for the pages' "Updated …" lines. */
+    private readonly reads = new Map<InboxReadGroup, Map<string, SourceRead>>();
+    /** The groups being read right now. */
+    private readonly reading = new Set<InboxReadGroup>();
 
     constructor(private readonly deps: InboxServiceDeps) {
         for (const item of deps.store.all()) this.items.set(item.key, item);
@@ -142,9 +152,31 @@ export class InboxService {
         return this.lastPolledAt;
     }
 
-    /** Both managers' counts, and which of them are set up. */
+    /** Both managers' counts, which of them are set up, and how fresh each is. */
     public summary(): InboxSummary {
-        return inboxSummary([...this.items.values()], this.configured(), this.deps.sessionGone);
+        return inboxSummary([...this.items.values()], this.configured(), this.deps.sessionGone, this.freshness());
+    }
+
+    /** How fresh each manager's items are: see `ManagerFreshness`. */
+    public freshness(): InboxFreshness {
+        return inboxFreshness(this.reads, this.reading);
+    }
+
+    /** A group of sources is being read: its manager is refreshing until `sourcesRead`. */
+    public sourcesReading(group: InboxReadGroup): void {
+        this.reading.add(group);
+        this.push();
+    }
+
+    /**
+     * A group of sources was read: `results` says which answered (true) and
+     * which failed (false). A source left out is no longer read and stops
+     * counting toward its manager's freshness.
+     */
+    public sourcesRead(group: InboxReadGroup, results: ReadonlyMap<string, boolean>): void {
+        this.reading.delete(group);
+        this.reads.set(group, afterReads(this.reads.get(group) ?? new Map(), results, this.deps.clock.now()));
+        this.push();
     }
 
     /** Something outside the items the summary reads changed (a session archived): push it when it differs. */
@@ -252,18 +284,28 @@ export class InboxService {
         const settings = this.deps.bugsnag.settings();
         const optedIn = settings.projects.filter((project) => project.optedIn).map((project) => project.id);
         this.commit([], unwatched([...this.items.values()], 'bug', new Set(optedIn)));
-        if (optedIn.length === 0) return;
         const api = this.deps.bugsnag.api();
-        if (!api) return;
-        for (const projectId of optedIn) {
-            let read: {facts: InboxFacts[]; complete: boolean};
-            try {
-                read = await this.readBugs(api, projectId);
-            } catch (err) {
-                this.deps.log.warn(`[inbox] Bugsnag project ${projectId} not read:`, (err as Error).message);
-                continue;
+        const results = new Map<string, boolean>();
+        if (optedIn.length === 0 || !api) {
+            this.sourcesRead('bugsnag', results);
+            return;
+        }
+        this.sourcesReading('bugsnag');
+        try {
+            for (const projectId of optedIn) {
+                let read: {facts: InboxFacts[]; complete: boolean};
+                try {
+                    read = await this.readBugs(api, projectId);
+                } catch (err) {
+                    this.deps.log.warn(`[inbox] Bugsnag project ${projectId} not read:`, (err as Error).message);
+                    results.set(projectId, false);
+                    continue;
+                }
+                results.set(projectId, true);
+                this.sync('bug', projectId, read.facts, {complete: read.complete, viewer: null});
             }
-            this.sync('bug', projectId, read.facts, {complete: read.complete, viewer: null});
+        } finally {
+            this.sourcesRead('bugsnag', results);
         }
     }
 
@@ -278,16 +320,27 @@ export class InboxService {
     private async pollIssues(): Promise<void> {
         const repositories = [...(await this.watchedRepositories()).keys()];
         this.commit([], unwatched([...this.items.values()], 'issue', new Set(repositories)));
-        for (const repository of repositories) {
-            const answer = await this.deps.github.inboxIssuesIn(repository);
-            if (!answer) {
-                this.deps.log.warn(`[inbox] issues of ${repository} not read`);
-                continue;
+        const results = new Map<string, boolean>();
+        if (repositories.length === 0) {
+            this.sourcesRead('issues', results);
+            return;
+        }
+        this.sourcesReading('issues');
+        try {
+            for (const repository of repositories) {
+                const answer = await this.deps.github.inboxIssuesIn(repository);
+                results.set(repository, answer !== null);
+                if (!answer) {
+                    this.deps.log.warn(`[inbox] issues of ${repository} not read`);
+                    continue;
+                }
+                const facts = looseIssues(repository, answer);
+                const kept = new Set(facts.map(inboxKey));
+                const excluded = new Set(answer.issues.map(inboxKey).filter((key) => !kept.has(key)));
+                this.sync('issue', repository, facts, {complete: answer.complete, viewer: answer.viewer, excluded});
             }
-            const facts = looseIssues(repository, answer);
-            const kept = new Set(facts.map(inboxKey));
-            const excluded = new Set(answer.issues.map(inboxKey).filter((key) => !kept.has(key)));
-            this.sync('issue', repository, facts, {complete: answer.complete, viewer: answer.viewer, excluded});
+        } finally {
+            this.sourcesRead('issues', results);
         }
     }
 
