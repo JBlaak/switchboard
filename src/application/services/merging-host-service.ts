@@ -42,6 +42,7 @@ import {
 import {
     LANE_SAVINGS,
     type LandedPullRequest,
+    type LaneFreshness,
     type LaneSaving,
     type MergeManagerState,
 } from '../../domain/merge-manager/model';
@@ -134,6 +135,8 @@ export class MergingHostService {
     private record: MergingHostRecord;
     /** The VM's last read while it merges. */
     private remote: RemoteRead | null = null;
+    /** When the VM last answered that read. */
+    private remoteAt: number | null = null;
     private reachable = true;
     /** Why the VM last failed to answer, as the link said it. */
     private reason: string | null = null;
@@ -371,6 +374,7 @@ export class MergingHostService {
     private takeOver(landed: readonly LandedPullRequest[]): void {
         this.stop();
         this.remote = null;
+        this.remoteAt = null;
         this.reachable = true;
         this.reason = null;
         this.deps.local.adopt(landed);
@@ -440,6 +444,7 @@ export class MergingHostService {
         } else {
             const before = new Map((this.remote?.landed ?? []).map((pr) => [pr.key, pr]));
             this.remote = read;
+            this.remoteAt = this.deps.clock.now();
             this.reachable = true;
             this.reason = null;
             this.deps.remoteRead?.(vm.key);
@@ -477,7 +482,27 @@ export class MergingHostService {
 
     private decorate(state: MergeManagerState): MergeManagerState {
         const link = {reachable: this.reachable, reconnecting: this.reconnecting !== null, reason: this.reason};
-        return {...state, merging: mergingHostView(this.record, state, this.deps.vms(), link)};
+        return {
+            ...state,
+            merging: mergingHostView(this.record, state, this.deps.vms(), link),
+            freshness: this.freshness(state),
+        };
+    }
+
+    /**
+     * How fresh the lanes shown are: this Mac's as its Merge manager says;
+     * a VM's as the VM said in its last answer (when it last answered, from
+     * an agent that does not say), failed too while the VM cannot be reached.
+     * Reading the VM is not shown as Updating…: its own poll is not seen.
+     */
+    private freshness(state: MergeManagerState): LaneFreshness | undefined {
+        if (this.record.kind === 'mac') return state.freshness;
+        const said = this.remote?.state.freshness;
+        return {
+            fetchedAt: said?.fetchedAt ?? this.remoteAt,
+            refreshing: false,
+            failed: !this.reachable || (said?.failed ?? false),
+        };
     }
 
     private publish(): void {

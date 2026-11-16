@@ -274,22 +274,31 @@ test('landing it now: an approved PR waits its turn, any other is held until it 
 
 // ── The slice ──
 
-test('a Not landed read is kept, and a failed one keeps the last good read', () => {
+test('a Not landed read is kept with when it was read, and a failed one keeps the last good read and says it failed', () => {
     /* Given */
     const read = mergeManagerReducer(initialMergeManagerState, {
         type: 'mergeManagerNotLandedLoaded',
         pullRequests: [open(10, 1)],
+        fetchedAt: 5_000,
+        failed: false,
     });
 
     /* When */
-    const failed = mergeManagerReducer(read, {type: 'mergeManagerNotLandedLoaded', pullRequests: null});
+    const failed = mergeManagerReducer(read, {
+        type: 'mergeManagerNotLandedLoaded',
+        pullRequests: null,
+        fetchedAt: null,
+        failed: true,
+    });
 
     /* Then */
     assert.deepEqual(
         read.notLanded?.map((pr) => pr.number),
         [10],
     );
-    assert.equal(failed, read);
+    assert.deepEqual([read.notLandedFetchedAt, read.notLandedFailed], [5_000, false]);
+    assert.equal(failed.notLanded, read.notLanded);
+    assert.deepEqual([failed.notLandedFetchedAt, failed.notLandedFailed], [5_000, true]);
 });
 
 test('View all closes the side view, a chip filters, and asking for the page again shows the lanes', () => {

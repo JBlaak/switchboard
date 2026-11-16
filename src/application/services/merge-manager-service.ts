@@ -41,6 +41,12 @@
  * aside as Fixing is folded in again at once, so its errand starts in the
  * same poll.
  *
+ * **Freshness.** The state says when the lanes were last read from GitHub
+ * (`LaneFreshness`): the oldest of each shown lane's latest good read and the
+ * queued-PR search's, whether a poll is under way, and whether the last poll
+ * failed to read anything it asked for. So a poll pushes as it starts and
+ * as it ends, even when the lanes did not change.
+ *
  * Nothing here notifies: the Merge manager's page, its figure and the Dock
  * show what happened (#439, #440). Whoever needs to act on a PR merging or
  * going to Needs you hears it through `onTransitions` (#440): the Dock's one
@@ -65,6 +71,7 @@ import type {
     LandedFacts,
     LandedPullRequest,
     LandedView,
+    LaneFreshness,
     LaneKind,
     LaneRead,
     MergeManagerState,
@@ -115,6 +122,12 @@ export class MergeManagerService {
     private readonly rules = new Map<string, TrunkRules>();
     /** What the last read said of each landed PR beyond its stage, for the page (#439). */
     private readonly facts = new Map<string, LandedFacts>();
+    /** When each repository's lane (by lower-case `owner/repo`) was last read well. */
+    private readonly readAt = new Map<string, number>();
+    /** When the queued-PR search last answered; null before it first did. */
+    private queuedAt: number | null = null;
+    /** The last poll could not read something it asked for. */
+    private pollFailed = false;
     private interval: TimerHandle | null = null;
     private polling: Promise<void> | null = null;
     /** A poll asked for while one ran: run once more after it. */
@@ -192,14 +205,20 @@ export class MergeManagerService {
             return this.polling;
         }
         this.polling = this.pollAll()
-            .catch((err) => this.deps.log.error('[merge-manager] polling failed:', (err as Error).message))
+            .catch((err) => {
+                this.pollFailed = true;
+                this.deps.log.error('[merge-manager] polling failed:', (err as Error).message);
+            })
             .finally(() => {
                 this.polling = null;
+                this.publish();
                 if (this.again) {
                     this.again = false;
                     void this.poll();
                 }
             });
+        // Updating…
+        this.publish();
         return this.polling;
     }
 
@@ -211,9 +230,31 @@ export class MergeManagerService {
         this.followers.push(fn);
     }
 
-    /** Every lane with a landed PR, and how many need you. */
+    /** Every lane with a landed PR, how many need you, and how fresh the lanes are. */
     public state(): MergeManagerState {
-        return mergeManagerState([...this.landed.values()], this.rules, {facts: this.facts});
+        return {
+            ...mergeManagerState([...this.landed.values()], this.rules, {facts: this.facts}),
+            freshness: this.freshness(),
+        };
+    }
+
+    /**
+     * How fresh the lanes are. Each repository's lane is read at its own
+     * moment, so `fetchedAt` is the oldest of the latest good reads of the
+     * lanes still read (those with an unmerged PR) and of the queued-PR
+     * search; a lane never read well yet is left out, and `failed` says so.
+     */
+    private freshness(): LaneFreshness {
+        const read = new Set<string>();
+        for (const pr of this.landed.values()) if (pr.stage.kind !== 'merged') read.add(pr.repository.toLowerCase());
+        const times = [this.queuedAt, ...[...read].map((id) => this.readAt.get(id) ?? null)].filter(
+            (at): at is number => at !== null,
+        );
+        return {
+            fetchedAt: times.length === 0 ? null : Math.min(...times),
+            refreshing: this.polling !== null,
+            failed: this.pollFailed,
+        };
     }
 
     /** A landed PR, or null when it is not landed. */
@@ -327,8 +368,13 @@ export class MergeManagerService {
     // ── Polling ──
 
     private async pollAll(): Promise<void> {
+        let failed = false;
         const queued = await this.deps.github.queuedPullRequests().catch(() => null);
-        if (!queued) this.deps.log.warn('[merge-manager] your queued pull requests not read');
+        if (queued) this.queuedAt = this.deps.clock.now();
+        else {
+            failed = true;
+            this.deps.log.warn('[merge-manager] your queued pull requests not read');
+        }
 
         const repositories = new Map<string, {repository: string; queued: number[]}>();
         const add = (repository: string, number: number | null): void => {
@@ -343,6 +389,7 @@ export class MergeManagerService {
         for (const {repository, queued: labelled} of repositories.values()) {
             const kind = await this.laneKind(repository);
             if (!kind) {
+                failed = true;
                 this.deps.log.warn(`[merge-manager] lane kind of ${repository} not read`);
                 continue;
             }
@@ -350,6 +397,7 @@ export class MergeManagerService {
             const read = await this.read(repository, kind === 'queue' ? labelled : []);
             if (read === undefined) continue;
             if (!read) {
+                failed = true;
                 this.deps.log.warn(`[merge-manager] lane of ${repository} not read`);
                 continue;
             }
@@ -359,7 +407,8 @@ export class MergeManagerService {
 
         const now = this.deps.clock.now();
         this.commit([], expiredMerged([...this.landed.values()], now));
-        this.publish();
+        // Pushed as the poll ends (`poll`), Updating… over.
+        this.pollFailed = failed;
     }
 
     /**
@@ -371,7 +420,10 @@ export class MergeManagerService {
         for (const pr of this.inRepository(repository)) if (pr.stage.kind !== 'merged') numbers.add(pr.number);
         if (numbers.size === 0) return undefined;
         const read = await this.deps.github.laneRead(repository, [...numbers]).catch(() => null);
-        if (read) this.rules.set(repository.toLowerCase(), read.rules);
+        if (read) {
+            this.rules.set(repository.toLowerCase(), read.rules);
+            this.readAt.set(repository.toLowerCase(), this.deps.clock.now());
+        }
         return read;
     }
 

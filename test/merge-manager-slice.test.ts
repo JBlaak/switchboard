@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import {
     initialMergeManagerState,
     landBusy,
+    lanesChanged,
     mergeManagerReducer,
     needsYouCount,
     rekeyMergeManager,
     type MergeManagerSliceState,
 } from '../src/renderer/state/merge-manager-slice';
 import {landedView, mergeManagerState} from '../src/domain/merge-manager/landed';
-import {landedKey} from '../src/domain/merge-manager/model';
+import {landedKey, type MergeManagerState} from '../src/domain/merge-manager/model';
 import {HEAD, REPO, landedPr} from './support/merge-manager-fixtures';
 
 test('a push replaces the lanes, and the Needs you count follows it', () => {
@@ -146,4 +147,38 @@ test('a re-keyed session keeps its PRs for Land it', () => {
 
     /* Then */
     assert.deepEqual(Object.keys(next.sessionPullRequests), ['new']);
+});
+
+test('a push keeps how fresh the lanes are, and one that only says that is no change to the lanes', () => {
+    /* Given */
+    const lanes = mergeManagerState([landedPr(1, 30, 'switchboard', HEAD)], new Map());
+    const updating = {...lanes, freshness: {fetchedAt: 1_000, refreshing: true, failed: false}};
+    const read = {...lanes, freshness: {fetchedAt: 61_000, refreshing: false, failed: false}};
+    const moved = {
+        ...mergeManagerState(
+            [landedPr(1, 30, 'switchboard', {kind: 'needsYou', reason: {kind: 'unresolved-thread'}})],
+            new Map(),
+        ),
+        freshness: read.freshness,
+    };
+
+    /* When */
+    const next = mergeManagerReducer(initialMergeManagerState, {type: 'mergeManagerChanged', state: read});
+
+    /* Then */
+    assert.deepEqual(next.state.freshness, {fetchedAt: 61_000, refreshing: false, failed: false});
+    assert.equal(lanesChanged(updating, read), false);
+    assert.equal(lanesChanged(read, moved), true);
+});
+
+test("each push of a VM's lanes is news, as it always was", () => {
+    /* Given */
+    const merging = {kind: 'vm', vm: {key: 'k', name: 'devbox'}} as unknown as MergeManagerState['merging'];
+    const state = {...mergeManagerState([], new Map()), merging};
+
+    /* When */
+    const changed = lanesChanged(state, state);
+
+    /* Then */
+    assert.equal(changed, true);
 });

@@ -26,6 +26,7 @@ import {getState} from '../../state/app-store';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
 import {SceneFigure} from '../bug-manager/ManagerFigure';
+import {Freshness} from '../shared/Freshness';
 import {mergeFigureOf, type MergeFigure} from '../../../domain/merge-manager/figure';
 import {ordinal} from '../../../domain/merge-manager/stage-words';
 import {
@@ -100,6 +101,26 @@ export function MergeManagerPage(): JSX.Element | null {
     const view = useStore((state) => state.mergeManager.page.view);
     if (!open) return null;
     return view === 'notLanded' ? <NotLandedPage /> : <MergeManagerView />;
+}
+
+/**
+ * "Updated 3m ago · open PRs 1m ago": when the lanes were read (the oldest
+ * lane's read, `LaneFreshness`) and Not landed's open PRs. These reads are
+ * never held back for GitHub's budget, so no "Paused" line.
+ */
+function MergeFreshness(): JSX.Element | null {
+    const lanes = useStore((state) => state.mergeManager.state.freshness);
+    const openAt = useStore((state) => state.mergeManager.notLandedFetchedAt);
+    const openFailed = useStore((state) => state.mergeManager.notLandedFailed);
+    return (
+        <Freshness
+            fetchedAt={lanes?.fetchedAt ?? null}
+            refreshing={lanes?.refreshing}
+            failed={lanes?.failed || openFailed}
+            parts={[{label: 'open PRs', at: openAt}]}
+            showHeld={false}
+        />
+    );
 }
 
 function sameFigure(a: MergeFigure, b: MergeFigure): boolean {
@@ -240,6 +261,7 @@ function MergeManagerView(): JSX.Element {
                                     </span>
                                 )}
                             </span>
+                            <MergeFreshness />
                         </div>
                     </div>
                     <MergingHostPill />

@@ -157,3 +157,37 @@ test('with nothing landed the page shows the Merge manager large and how to land
     await expect(manager.getByRole('heading', {name: 'Nothing to land yet'})).toBeVisible();
     await expect(manager.locator('.mm-empty-figure .patch-manager')).toHaveCSS('width', '180px');
 });
+
+test('the header says when the lanes and your open PRs were last read from GitHub, and when a read failed', async ({
+    page,
+    api,
+}) => {
+    /* Given: the lanes read 3½ min ago, the open PRs 1½ min ago (the page's clock is the fixture's) */
+    const lanes = mergeManagerState(
+        [landedPr(1300, 'Stop the login redirect loop', 50, {kind: 'head', step: 'checks'})],
+        new Map(),
+    );
+    const readAt = FIXTURE_NOW - 3.5 * 60_000;
+    api.answer('mergeManagerNotLanded', {pullRequests: [], fetchedAt: FIXTURE_NOW - 1.5 * 60_000, failed: false});
+    await api.emit('onMergeManagerChanged', {
+        ...lanes,
+        freshness: {fetchedAt: readAt, refreshing: false, failed: false},
+    });
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+
+    /* When */
+    await page.keyboard.press('Meta+Shift+KeyL');
+
+    /* Then */
+    const freshness = mergePage(page).getByTestId('freshness');
+    await expect(freshness).toHaveText('Updated 3m ago · open PRs 1m ago');
+
+    /* When: the next poll could not read a lane */
+    await api.emit('onMergeManagerChanged', {
+        ...lanes,
+        freshness: {fetchedAt: readAt, refreshing: false, failed: true},
+    });
+
+    /* Then */
+    await expect(freshness).toHaveText('Updated 3m ago · open PRs 1m ago · Couldn’t refresh');
+});

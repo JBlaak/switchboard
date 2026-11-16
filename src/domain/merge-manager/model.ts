@@ -245,6 +245,23 @@ export interface MergeManagerState {
      * lanes these are then. Absent means this Mac (main adds it as it pushes).
      */
     readonly merging?: MergingHostView;
+    /** How fresh the lanes are, for the page's "Updated 3m ago" line; absent until main says. */
+    readonly freshness?: LaneFreshness;
+}
+
+/**
+ * When the lanes were last read from GitHub. The lanes are read per
+ * repository, one after another, so `fetchedAt` is the oldest of their
+ * latest good reads (and of the queued-PR search): every lane shown is at
+ * least that fresh.
+ */
+export interface LaneFreshness {
+    /** The oldest latest good read of a lane shown, or of the queued-PR search; null when none was read yet. */
+    readonly fetchedAt: number | null;
+    /** A poll is under way. */
+    readonly refreshing: boolean;
+    /** Something the last poll read could not be read (a lane, its kind, the queued PRs, or the VM that merges). */
+    readonly failed: boolean;
 }
 
 export const EMPTY_MERGE_MANAGER_STATE: MergeManagerState = {lanes: [], needsYou: 0};

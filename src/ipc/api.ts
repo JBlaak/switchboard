@@ -6,7 +6,7 @@
  * rather than a runtime `undefined`. The main process registers handlers named
  * from the same channel table, so the two sides cannot drift apart silently.
  */
-import type {OpenPullRequest} from '../domain/merge-manager/not-landed';
+import type {NotLandedRead} from '../domain/merge-manager/not-landed';
 import type {
     MergingBringBackResult,
     HandOffResult,
@@ -289,8 +289,8 @@ export interface SwitchboardApi {
     mergeManagerTryAgain(repository: string, number: number, note: string | null): Promise<TryAgainResult>;
     /** What the Merge manager's page shows besides the lanes (#439): CI saved this week, the errands, the checkouts. */
     mergeManagerPage(): Promise<MergeManagerPageFacts>;
-    /** Your open PRs in the projects Switchboard knows, lanes or not (Not landed); null when `gh` could not say. */
-    mergeManagerNotLanded(): Promise<OpenPullRequest[] | null>;
+    /** Your open PRs in the projects Switchboard knows, lanes or not (Not landed), and when GitHub was last read for them. */
+    mergeManagerNotLanded(): Promise<NotLandedRead>;
     /** Hand merging off to a VM (#442), the one offered first when none is named. */
     mergeManagerHandOff(vmKey?: string): Promise<HandOffResult>;
     /** Bring merging back from the VM: it finishes its step and stops its errands. */

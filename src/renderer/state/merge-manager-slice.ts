@@ -66,8 +66,17 @@ export type MergeManagerEvent =
     | {type: 'mergeManagerTryAgainAnswered'; key: string; result: {ok: true} | {ok: false; reason: string}}
     /** What came of an action on the page, said once under its header; null puts it away. */
     | {type: 'mergeManagerPageNoticed'; notice: string | null}
-    /** Your open PRs as main read them for Not landed; null when `gh` could not say (the last good read is kept). */
-    | {type: 'mergeManagerNotLandedLoaded'; pullRequests: readonly OpenPullRequest[] | null}
+    /**
+     * Your open PRs as main read them for Not landed; null when `gh` could not
+     * say (the last good read is kept), with when GitHub was last read well
+     * for them and whether the latest read failed.
+     */
+    | {
+          type: 'mergeManagerNotLandedLoaded';
+          pullRequests: readonly OpenPullRequest[] | null;
+          fetchedAt: number | null;
+          failed: boolean;
+      }
     /** View all (the Not landed page), or back to the lanes (Esc, its back button). */
     | {type: 'mergeManagerViewChanged'; view: MergeManagerView}
     /** A project chip on the Not landed page; null is All. */
@@ -120,6 +129,10 @@ export interface MergeManagerSliceState {
     readonly page: MergeManagerPageState;
     /** Your open PRs, lanes or not, as main last read them (Not landed); null until the first good read. */
     readonly notLanded: readonly OpenPullRequest[] | null;
+    /** When GitHub was last read well for `notLanded`; null until then. */
+    readonly notLandedFetchedAt: number | null;
+    /** The latest Not landed read failed, so `notLanded` is older. */
+    readonly notLandedFailed: boolean;
 }
 
 export const initialMergeManagerState: MergeManagerSliceState = {
@@ -139,6 +152,8 @@ export const initialMergeManagerState: MergeManagerSliceState = {
         repository: null,
     },
     notLanded: null,
+    notLandedFetchedAt: null,
+    notLandedFailed: false,
 };
 
 export function mergeManagerReducer(state: MergeManagerSliceState, event: RendererEvent): MergeManagerSliceState {
@@ -161,7 +176,12 @@ export function mergeManagerReducer(state: MergeManagerSliceState, event: Render
         case 'landToastClosed':
             return state.toast?.id === event.id ? {...state, toast: null} : state;
         case 'mergeManagerNotLandedLoaded':
-            return event.pullRequests === null ? state : {...state, notLanded: event.pullRequests};
+            return {
+                ...state,
+                notLanded: event.pullRequests ?? state.notLanded,
+                notLandedFetchedAt: event.fetchedAt ?? state.notLandedFetchedAt,
+                notLandedFailed: event.failed,
+            };
         default: {
             const page = pageReducer(state.page, event);
             return page === state.page ? state : {...state, page};
@@ -254,6 +274,14 @@ function closesToast(toast: LandToast | null, event: Extract<MergeManagerEvent, 
 /** How many landed PRs need you. */
 export function needsYouCount(state: MergeManagerSliceState): number {
     return state.state.needsYou;
+}
+
+/** Whether a push is news to the page: a VM's always, this Mac's when it says more than how fresh the lanes are. */
+export function lanesChanged(before: MergeManagerState, after: MergeManagerState): boolean {
+    if (after.merging?.kind === 'vm') return true;
+    const {freshness: _before, ...was} = before;
+    const {freshness: _after, ...is} = after;
+    return JSON.stringify(was) !== JSON.stringify(is);
 }
 
 /** Whether a Land it or Unland is under way for a PR. */
