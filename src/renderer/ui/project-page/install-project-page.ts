@@ -43,6 +43,7 @@ import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {pulseSessionRow} from '../session-list/pulse';
 import {loadProjectTasks, tasksRequest} from './project-tasks';
 import {recentPlansIn, withRecentPlan} from './recent-plans';
+import {setWatchedInterval} from '../../lib/watched-interval';
 
 /** How often an open project page asks for its overview again (#167: 60 s, while it is open). */
 export const OVERVIEW_POLL_MS = 60_000;
@@ -72,33 +73,33 @@ export function installProjectPage(): () => void {
     });
 
     let polling: string | null = null;
-    let poll: ReturnType<typeof setInterval> | null = null;
+    let stopPoll: (() => void) | null = null;
     let tasksFor: string | null = null;
-    let tasksPoll: ReturnType<typeof setInterval> | null = null;
+    let stopTasksPoll: (() => void) | null = null;
     let settling: ReturnType<typeof setTimeout> | null = null;
     let jobsFor: string | null = null;
-    let jobsPoll: ReturnType<typeof setInterval> | null = null;
+    let stopJobsPoll: (() => void) | null = null;
 
     const followJobs = (state: RendererState): void => {
         const repository = ciJobQueueRequest(state);
         if (repository === jobsFor) return;
         jobsFor = repository;
-        if (jobsPoll) clearInterval(jobsPoll);
-        jobsPoll = null;
+        stopJobsPoll?.();
+        stopJobsPoll = null;
         if (!repository) return;
         void loadCiJobQueue(repository);
-        jobsPoll = setInterval(() => void loadCiJobQueue(repository), OVERVIEW_POLL_MS);
+        stopJobsPoll = setWatchedInterval(() => void loadCiJobQueue(repository), OVERVIEW_POLL_MS);
     };
 
     const followTasks = (state: RendererState): void => {
         const projectPath = tasksRequest(state);
         if (projectPath === tasksFor) return;
         tasksFor = projectPath;
-        if (tasksPoll) clearInterval(tasksPoll);
-        tasksPoll = null;
+        stopTasksPoll?.();
+        stopTasksPoll = null;
         if (!projectPath) return;
         void loadProjectTasks(projectPath);
-        tasksPoll = setInterval(() => void loadProjectTasks(projectPath), OVERVIEW_POLL_MS);
+        stopTasksPoll = setWatchedInterval(() => void loadProjectTasks(projectPath), OVERVIEW_POLL_MS);
     };
 
     const tasksChangedSoon = (): void => {
@@ -115,14 +116,14 @@ export function installProjectPage(): () => void {
         const key = request ? [request.projectPath, request.closed, request.merged].join('\0') : null;
         if (key === polling) return;
         polling = key;
-        if (poll) clearInterval(poll);
-        poll = null;
+        stopPoll?.();
+        stopPoll = null;
         if (!request) return;
         const load = (): void => {
             void loadProjectOverview(request.projectPath, request.closed, request.merged);
         };
         load();
-        poll = setInterval(load, OVERVIEW_POLL_MS);
+        stopPoll = setWatchedInterval(load, OVERVIEW_POLL_MS);
     };
 
     const unsubscribe = store.subscribe((state, previous, event) => {
@@ -191,9 +192,9 @@ export function installProjectPage(): () => void {
     });
 
     return () => {
-        if (poll) clearInterval(poll);
-        if (tasksPoll) clearInterval(tasksPoll);
-        if (jobsPoll) clearInterval(jobsPoll);
+        stopPoll?.();
+        stopTasksPoll?.();
+        stopJobsPoll?.();
         if (settling) clearTimeout(settling);
         unsubscribe();
     };
