@@ -160,6 +160,7 @@ export const INVOKE = {
     // The project page (#172)
     projectOverview: 'project:overview',
     projectCleanWorktrees: 'project:clean-worktrees',
+    projectForgetPlans: 'project:forget-plans',
     // The merge queue's buttons and errands (#315)
     queueNudge: 'queue:nudge',
     queueForgetNudge: 'queue:forget-nudge',

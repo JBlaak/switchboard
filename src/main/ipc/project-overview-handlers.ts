@@ -1,7 +1,8 @@
 /**
  * The project page (#172): everything it shows that main knows, in one answer.
  * Reads, but for Clean, which removes the superfluous worktrees; the GitHub
- * part is kept for 30 s in main. Asked with `plans: false`, the answer comes
+ * part is kept for 30 s in main (its plans for 5 minutes, unless an explicit
+ * reload forgets them first). Asked with `plans: false`, the answer comes
  * without the plans, which take longest.
  */
 import {INVOKE} from '../../ipc/channels';
@@ -17,6 +18,9 @@ export function registerProjectOverviewHandlers(ipc: IpcRegistrar, app: Containe
                 merged: options?.merged === true,
                 plans: options?.plans !== false,
             }),
+    );
+    ipc.handle(INVOKE.projectForgetPlans, (projectPath: string) =>
+        app.projectOverview.forgetPlans(String(projectPath)),
     );
     ipc.handle(INVOKE.projectCleanWorktrees, (projectPath: string) =>
         app.projectOverview.cleanWorktrees(String(projectPath)),
