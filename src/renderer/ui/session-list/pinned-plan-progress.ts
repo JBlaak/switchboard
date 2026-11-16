@@ -2,16 +2,15 @@
  * Pinned plans' progress, for their rows in the session list: a row follows
  * its plan while it is on screen. The plan's stored copy shows at once (see
  * `stored-plans`), main is asked for the plan then, and again every
- * `PINNED_PLAN_POLL_MS` while any row follows one.
+ * `PINNED_PLAN_POLL_MS` while any row follows one. Each live read is
+ * recorded, answered or failed, for the row's freshness (`pinned-plan-freshness`).
  */
 import {dispatch} from '../../state/app-store';
 import {issueKeyString} from '../../../domain/plan/model';
 import type {IssueKey} from '../../../domain/plan/model';
 import {storePlans, storedPlan} from '../session-work/plan/stored-plans';
 import {setWatchedInterval} from '../../lib/watched-interval';
-
-/** How often the followed plans are asked for again: a sidebar glance, not the plan view's minute. */
-export const PINNED_PLAN_POLL_MS = 5 * 60_000;
+import {PINNED_PLAN_POLL_MS} from './pinned-plan-freshness';
 
 /** `owner/repo#n` → the plan and how many rows follow it. */
 const followed = new Map<string, {issue: IssueKey; rows: number}>();
@@ -51,11 +50,15 @@ async function load(issue: IssueKey): Promise<void> {
     asking.add(planKey);
     try {
         const plan = await window.api.plan(issue.repository, issue.number);
-        if (!plan) return;
-        dispatch({type: 'planProgressLoaded', plans: [plan]});
+        if (!plan) {
+            dispatch({type: 'planProgressFailed', plan: issue});
+            return;
+        }
+        dispatch({type: 'planProgressLoaded', plans: [plan], fetchedAt: Date.now()});
         storePlans([plan]);
     } catch {
-        // The last progress stays on screen; the next poll asks again.
+        // The last progress stays on screen, marked; the next poll asks again.
+        dispatch({type: 'planProgressFailed', plan: issue});
     } finally {
         asking.delete(planKey);
     }

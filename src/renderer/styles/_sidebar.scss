@@ -876,6 +876,13 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     flex-shrink: 0;
 }
 
+/* Out of date (pinned-plan-freshness): a missed read, a failed one, or a held
+   budget. The whole line fades, inks and all, so it reads as an old picture
+   rather than a different state; its tooltip says why. */
+.pinned-plan-progress.is-stale {
+    opacity: 0.45;
+}
+
 /* ---- Working agents badge ----
    How many subagents a session has working (OSC 7501 child records), as one
    more piece of the meta line: a robot glyph and a count on a lavender pill,

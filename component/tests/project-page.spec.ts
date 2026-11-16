@@ -310,6 +310,45 @@ test.describe('plans and issues', () => {
         await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'false');
     });
 
+    test('a pinned plan’s progress looks as ever while fresh, and dims with why on hover while GitHub’s budget is held', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        const progress = sidebar(page)
+            .locator('.pinned-plan-item')
+            .filter({hasText: 'Login rework'})
+            .getByTestId('pinned-plan-progress');
+        await rowProjectLink(page, S.loginFix).click();
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+        await planPage.getByTestId('plan-page-pin').click();
+        await expect(progress).toHaveText(/Level 2 of 3/);
+        await expect(progress).not.toHaveClass(/\bis-stale\b/);
+        await expect(progress).not.toHaveAttribute('title');
+        const until = Date.now() + 20 * 60_000;
+        // In the page's timezone, which need not be this process's.
+        const clock = await page.evaluate((ms) => {
+            const at = new Date(ms);
+            return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+        }, until);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', until);
+
+        /* Then */
+        await expect(progress).toHaveClass(/\bis-stale\b/);
+        await expect(progress).toHaveAttribute('title', new RegExp(`Paused: GitHub budget low until ${clock}$`));
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', null);
+
+        /* Then */
+        await expect(progress).not.toHaveClass(/\bis-stale\b/);
+        await expect(progress).not.toHaveAttribute('title');
+    });
+
     test('a pinned plan’s project name opens the project page, as a session row’s does', async ({page}) => {
         /* Given */
         const planPage = page.getByRole('region', {name: /^Plan in /});

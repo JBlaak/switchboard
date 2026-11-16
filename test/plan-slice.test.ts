@@ -375,3 +375,44 @@ test('a load with the same progress changes nothing', () => {
     /* Then */
     assert.equal(next.plan, state.plan);
 });
+
+test('a pinned plan’s stored copy records no read, so its row counts as refreshing', () => {
+    /* When */
+    const state = run(initialRendererState(), {type: 'planProgressLoaded', plans: [diamond()]});
+
+    /* Then */
+    assert.equal(state.plan.progressReads['acme/app#1'], undefined);
+});
+
+test('a pinned plan’s live read records when it answered', () => {
+    /* When */
+    const state = run(initialRendererState(), {type: 'planProgressLoaded', plans: [diamond()], fetchedAt: 1_000});
+
+    /* Then */
+    assert.deepEqual(state.plan.progressReads['acme/app#1'], {fetchedAt: 1_000, failed: false});
+});
+
+test('a failed read keeps when the last one answered and marks it failed, until the next answers', () => {
+    /* Given */
+    const answered = run(initialRendererState(), {type: 'planProgressLoaded', plans: [diamond()], fetchedAt: 1_000});
+
+    /* When */
+    const failed = run(answered, {type: 'planProgressFailed', plan: key(1)});
+    const again = run(failed, {type: 'planProgressLoaded', plans: [diamond()], fetchedAt: 2_000});
+
+    /* Then */
+    assert.deepEqual(failed.plan.progressReads['acme/app#1'], {fetchedAt: 1_000, failed: true});
+    assert.deepEqual(again.plan.progressReads['acme/app#1'], {fetchedAt: 2_000, failed: false});
+});
+
+test('a first read that fails is marked failed with no answer yet, and failing again changes nothing', () => {
+    /* Given */
+    const failed = run(initialRendererState(), {type: 'planProgressFailed', plan: key(1)});
+
+    /* When */
+    const again = run(failed, {type: 'planProgressFailed', plan: key(1)});
+
+    /* Then */
+    assert.deepEqual(failed.plan.progressReads['acme/app#1'], {fetchedAt: null, failed: true});
+    assert.equal(again.plan, failed.plan);
+});

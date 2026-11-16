@@ -4,7 +4,8 @@
  * opens the project page (⌘-click GitHub), as on a session row.
  *
  * It has no sessions of its own, so none of a session row's live state or
- * buttons; the title is the one stored when it was pinned.
+ * buttons; the title is the one stored when it was pinned. Progress that is
+ * out of date is dimmed, with why in its tooltip (`pinned-plan-freshness`).
  */
 import {projectLabel} from '../../features/sessions/project-label';
 import {projectPlan} from '../../state/main-area-slice';
@@ -17,6 +18,8 @@ import {useEffect, type JSX} from 'react';
 import {issueKeyString} from '../../../domain/plan/model';
 import {progressCounts, type PlanProgress} from '../../../domain/plan/plan-progress';
 import {followPinnedPlan} from './pinned-plan-progress';
+import {pinnedPlanStaleText} from './pinned-plan-freshness';
+import {FRESHNESS_SEPARATOR} from '../shared/freshness-text';
 import type {SessionListPlan} from '../../state/session-list-layout';
 
 export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
@@ -28,7 +31,11 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
         );
     });
     const cursor = useStore((s) => s.sessionList.cursor === id);
-    const progress = useStore((s) => s.plan.progress[issueKeyString({repository, number})]);
+    const planKey = issueKeyString({repository, number});
+    const progress = useStore((s) => s.plan.progress[planKey]);
+    const stale = useStore((s) =>
+        pinnedPlanStaleText(s.plan.progressReads[planKey], s.sessionList.now || Date.now(), s.github.heldUntil),
+    );
     useEffect(() => followPinnedPlan({repository, number}), [repository, number]);
 
     return (
@@ -61,7 +68,7 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
                             <span className="session-time">{'#' + number}</span>
                         </span>
                     </div>
-                    {progress && <PinnedPlanProgress progress={progress} />}
+                    {progress && <PinnedPlanProgress progress={progress} stale={stale} />}
                 </div>
             </div>
         </div>
@@ -71,16 +78,20 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
 /**
  * The plan's level, a bar with one segment per level sized by its issues
  * coloured like the plan view's nodes (closed in purple, with a PR in orange,
- * ready to start in green, blocked in gray), and closed / all issues.
+ * ready to start in green, blocked in gray), and closed / all issues. When
+ * `stale` says why it is out of date, the whole line dims and says so on hover.
  */
-function PinnedPlanProgress({progress}: {progress: PlanProgress}): JSX.Element {
+function PinnedPlanProgress({progress, stale}: {progress: PlanProgress; stale: string | null}): JSX.Element {
     const {done, total} = progressCounts(progress);
     const level =
         progress.current === null
             ? 'Cleared'
             : 'Level ' + progress.current + (progress.levels.length > 1 ? ' of ' + progress.levels.length : '');
     return (
-        <div className="pinned-plan-progress" data-testid="pinned-plan-progress">
+        <div
+            className={'pinned-plan-progress' + (stale ? ' is-stale' : '')}
+            data-testid="pinned-plan-progress"
+            title={stale ?? undefined}>
             <span className={'pinned-plan-level' + (progress.current === null ? ' is-cleared' : '')}>{level}</span>
             <span className="pinned-plan-bar" aria-hidden="true">
                 {progress.levels.map((l, i) => (
@@ -91,7 +102,9 @@ function PinnedPlanProgress({progress}: {progress: PlanProgress}): JSX.Element {
                     </span>
                 ))}
             </span>
-            <span className="pinned-plan-count" title={done + ' of ' + total + ' issues closed'}>
+            <span
+                className="pinned-plan-count"
+                title={done + ' of ' + total + ' issues closed' + (stale ? FRESHNESS_SEPARATOR + stale : '')}>
                 {done + '/' + total}
             </span>
         </div>
