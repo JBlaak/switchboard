@@ -78,7 +78,7 @@ import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
-import {systemClock, type Clock} from '../../application/ports/clock';
+import {systemClock, type Clock, type Timers} from '../../application/ports/clock';
 import type {Logger} from '../../application/ports/logger';
 import {BUDGET_ALIAS, GraphqlBudget, toBudgetAnswer, withBudget} from './graphql-budget';
 import type {
@@ -114,6 +114,11 @@ export interface GhCliOptions {
     log?: Pick<Logger, 'info'>;
     /** Defaults to the system clock. */
     clock?: Clock;
+    /**
+     * For noticing the GraphQL budget's hold lifting by its time passing
+     * (`onBudgetHeld`). Without them, it is noticed with the next answer.
+     */
+    timers?: Timers;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -168,7 +173,21 @@ export class GhCli implements GitHubCli {
 
     constructor(options: GhCliOptions = {}) {
         this.run = options.run ?? defaultGhRunner(options.env);
-        this.budget = new GraphqlBudget({clock: options.clock ?? systemClock, log: options.log ?? {info: () => {}}});
+        this.budget = new GraphqlBudget({
+            clock: options.clock ?? systemClock,
+            log: options.log ?? {info: () => {}},
+            timers: options.timers,
+        });
+    }
+
+    /** Until when expensive GraphQL reads are held back for the budget, or null when they are not. */
+    public budgetHeldUntil(): number | null {
+        return this.budget.heldUntil();
+    }
+
+    /** Call `listener` each time the budget's hold starts, moves or lifts (null). Answers the unsubscribe. */
+    public onBudgetHeld(listener: (until: number | null) => void): () => void {
+        return this.budget.onHeldChanged(listener);
     }
 
     public async available(): Promise<GitHubAvailability> {

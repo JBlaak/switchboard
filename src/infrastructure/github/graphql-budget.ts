@@ -17,9 +17,13 @@
  * two budgets at random (one spent, one fresh), so the last answer always
  * wins: a fresh one lifts the hold, a spent one sets it again.
  *
- * Pure apart from its clock and log, both injected.
+ * Whoever shows the hold listens (`onHeldChanged`): told when it starts, moves
+ * to another time, or lifts — by an answer, or by its time passing, which a
+ * timer at that time notices when `timers` is given.
+ *
+ * Pure apart from its clock, timers and log, all injected.
  */
-import type {Clock} from '../../application/ports/clock';
+import type {Clock, TimerHandle, Timers} from '../../application/ports/clock';
 import type {Logger} from '../../application/ports/logger';
 
 /** Fewer points left than this (10% of 5,000) and expensive reads wait for the reset. */
@@ -66,11 +70,30 @@ export class GraphqlBudget {
     private pausedUntil: number | null = null;
     /** The hold last logged, so it is logged once per reset window. */
     private loggedHold: number | null = null;
+    private readonly timers: Timers | null;
+    private readonly listeners = new Set<(until: number | null) => void>();
+    /** The hold the listeners were last told about. */
+    private toldHeld: number | null = null;
+    /** Fires when the told hold's time passes, to tell that it lifted. */
+    private liftTimer: TimerHandle | null = null;
 
-    constructor(deps: {clock: Clock; log: Pick<Logger, 'info'>}) {
+    /** Without `timers`, a hold lifting by its time passing is told only with the next answer. */
+    constructor(deps: {clock: Clock; log: Pick<Logger, 'info'>; timers?: Timers}) {
         this.clock = deps.clock;
         this.log = deps.log;
+        this.timers = deps.timers ?? null;
         this.windowStart = deps.clock.now();
+    }
+
+    /**
+     * Call `listener` with `heldUntil()` each time it changes: a time when a
+     * hold starts or moves, null when it lifts. Answers the unsubscribe.
+     */
+    public onHeldChanged(listener: (until: number | null) => void): () => void {
+        this.listeners.add(listener);
+        return () => {
+            this.listeners.delete(listener);
+        };
     }
 
     /**
@@ -106,6 +129,7 @@ export class GraphqlBudget {
             this.resetAt = budget.resetAt;
             this.pausedUntil = null;
         }
+        this.tellHeld();
         this.maybeSummarise();
     }
 
@@ -115,6 +139,7 @@ export class GraphqlBudget {
         spend.calls++;
         spend.refused++;
         this.pausedUntil = this.clock.now() + RATE_LIMITED_PAUSE_MS;
+        this.tellHeld();
         this.maybeSummarise();
     }
 
@@ -125,6 +150,29 @@ export class GraphqlBudget {
         if (this.remaining !== null && this.resetAt !== null && this.remaining < BUDGET_RESERVE && now < this.resetAt)
             return this.resetAt;
         return null;
+    }
+
+    /** Tell the listeners when the hold changed, and watch for it lifting by its time. */
+    private tellHeld(): void {
+        const until = this.heldUntil();
+        const changed = until !== this.toldHeld;
+        // A timer woken a moment early finds the same hold: it looks again at its time.
+        if (changed || this.liftTimer === null) {
+            this.timers?.clearTimeout(this.liftTimer);
+            this.liftTimer = null;
+            if (until !== null && this.timers) {
+                this.liftTimer = this.timers.setTimeout(
+                    () => {
+                        this.liftTimer = null;
+                        this.tellHeld();
+                    },
+                    Math.max(0, until - this.clock.now()),
+                );
+            }
+        }
+        if (!changed) return;
+        this.toldHeld = until;
+        for (const listener of this.listeners) listener(until);
     }
 
     private spend(label: string): LabelSpend {

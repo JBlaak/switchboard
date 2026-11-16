@@ -334,6 +334,8 @@ export interface Container {
     readonly vmRegistry: VmRegistry;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
+    /** Until when expensive GitHub reads are held back for the GraphQL budget, or null when they are not. */
+    githubHeldUntil(): number | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
     prepareQuickAsk(): void;
 
@@ -940,7 +942,9 @@ export function buildContainer(): Container {
     });
 
     const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
-    const github = new GhCli({run: ghRun, log});
+    const github = new GhCli({run: ghRun, log, timers});
+    // Every GitHub-backed view's freshness line says when its reads are paused.
+    github.onBudgetHeld((until) => renderer.githubBudgetHeld(until));
     const vmLocation = {
         live: (id: string) => {
             const session = registry.find(id)?.session;
@@ -1722,6 +1726,7 @@ export function buildContainer(): Container {
 
     const container: Container = {
         log,
+        githubHeldUntil: () => github.budgetHeldUntil(),
         paths,
         settings,
         repository,

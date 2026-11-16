@@ -1,0 +1,52 @@
+/* ========== FRESHNESS ==========
+   The one quiet line every GitHub-backed view has under its header: how old
+   its data is, and a spinner, "Couldn't refresh" or "Paused: GitHub budget
+   low until 14:20" after it (ui/shared/Freshness.tsx). The project page's
+   "Updated 2m ago" look (`.pp-updated`). */
+
+.freshness {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    color: var(--sb-text-dimmest);
+}
+
+.freshness-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+
+    &.is-failed {
+        color: var(--sb-warning-text);
+    }
+
+    &.is-held {
+        font-style: italic;
+    }
+}
+
+.freshness-spinner {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: freshness-spin 0.9s linear infinite;
+    animation-play-state: var(--loop-state, running);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .freshness-spinner {
+        animation: none;
+        border-top-color: currentColor;
+        opacity: 0.6;
+    }
+}
+
+@keyframes freshness-spin {
+    to {
+        rotate: 360deg;
+    }
+}

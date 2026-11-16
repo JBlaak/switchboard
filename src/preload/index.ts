@@ -128,6 +128,7 @@ const api: SwitchboardApi = {
         ipcRenderer.invoke(INVOKE.issueManagerStarted, key, branch, sessionId),
     issueManagerStopWork: (key, unassign) => ipcRenderer.invoke(INVOKE.issueManagerStopWork, key, unassign),
     mergeManagerState: () => ipcRenderer.invoke(INVOKE.mergeManagerState),
+    githubHeldUntil: () => ipcRenderer.invoke(INVOKE.githubHeldUntil),
     mergeManagerLand: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerLand, repository, number),
     mergeManagerUnland: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerUnland, repository, number),
     mergeManagerTryAgain: (repository, number, note) =>
@@ -311,6 +312,7 @@ const api: SwitchboardApi = {
     onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
     onInboxChanged: (cb) => subscribe(EVENT.inboxChanged, (_e, summary) => cb(summary)),
     onMergeManagerChanged: (cb) => subscribe(EVENT.mergeManagerChanged, (_e, state) => cb(state)),
+    onGithubBudgetHeld: (cb) => subscribe(EVENT.githubBudgetHeld, (_e, until) => cb(until)),
     onAgentInstallProgress: (cb) =>
         subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),
     onHandoffProgress: (cb) => subscribe(EVENT.handoffProgress, (_e, localPath, line) => cb(localPath, line)),

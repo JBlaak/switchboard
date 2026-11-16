@@ -279,6 +279,8 @@ export interface SwitchboardApi {
     issueManagerStopWork(key: string, unassign: boolean): Promise<{item: InboxItem | null; warning?: string}>;
     /** The Merge manager's lanes (#434), as `onMergeManagerChanged` pushes them. */
     mergeManagerState(): Promise<MergeManagerState>;
+    /** Until when expensive GitHub reads are held back for the GraphQL budget, or null; changes come as `onGithubBudgetHeld`. */
+    githubHeldUntil(): Promise<number | null>;
     /** Land your own open, non-draft PR: it joins its repository's lane. */
     mergeManagerLand(repository: string, number: number): Promise<LandResult>;
     /** Unland a PR: it leaves its lane without merging. */
@@ -726,6 +728,8 @@ export interface SwitchboardApi {
     onInboxChanged(cb: (summary: InboxSummary) => void): Unsubscribe;
     /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
     onMergeManagerChanged(cb: (state: MergeManagerState) => void): Unsubscribe;
+    /** Expensive GitHub reads are held back until this time for the GraphQL budget, or no longer (null). */
+    onGithubBudgetHeld(cb: (until: number | null) => void): Unsubscribe;
     /** One line of an agent install's progress, for the project whose host it is. */
     onAgentInstallProgress(cb: (projectPath: string, line: string) => void): Unsubscribe;
     /** One line of a hand-off's progress, for the local project being handed off. */

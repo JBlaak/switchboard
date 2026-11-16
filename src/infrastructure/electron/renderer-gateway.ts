@@ -195,6 +195,10 @@ export class ElectronRendererGateway implements RendererGateway {
         this.send(EVENT.mergeManagerChanged, state);
     }
 
+    public githubBudgetHeld(until: number | null): void {
+        this.send(EVENT.githubBudgetHeld, until);
+    }
+
     private sendWhenReady(channel: string, ...args: unknown[]): void {
         const window = this.getWindow();
         // A reload or a new window says it is ready again.
