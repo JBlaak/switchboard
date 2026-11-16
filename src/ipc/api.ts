@@ -438,6 +438,11 @@ export interface SwitchboardApi {
      * kept. Nothing for an ssh project.
      */
     projectCleanWorktrees(projectPath: string): Promise<WorktreeCleanResult>;
+    /**
+     * Drop the project's held plans and GitHub reads, so the next overview
+     * reads them afresh: for an explicit reload, not the minute poll.
+     */
+    projectForgetPlans(projectPath: string): Promise<void>;
 
     // ── The merge queue's buttons and errands (#315) ──
     // Nudge and a new Fix answer a first prompt; the renderer starts the session

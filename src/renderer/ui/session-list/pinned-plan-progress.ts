@@ -8,6 +8,7 @@ import {dispatch} from '../../state/app-store';
 import {issueKeyString} from '../../../domain/plan/model';
 import type {IssueKey} from '../../../domain/plan/model';
 import {storePlans, storedPlan} from '../session-work/plan/stored-plans';
+import {setWatchedInterval} from '../../lib/watched-interval';
 
 /** How often the followed plans are asked for again: a sidebar glance, not the plan view's minute. */
 export const PINNED_PLAN_POLL_MS = 5 * 60_000;
@@ -16,7 +17,7 @@ export const PINNED_PLAN_POLL_MS = 5 * 60_000;
 const followed = new Map<string, {issue: IssueKey; rows: number}>();
 /** Plans being asked for right now, so a poll never stacks on a slow answer. */
 const asking = new Set<string>();
-let poll: ReturnType<typeof setInterval> | null = null;
+let stopPoll: (() => void) | null = null;
 
 /** Follow a pinned plan's progress while its row is on screen. Answers the unfollow. */
 export function followPinnedPlan(issue: IssueKey): () => void {
@@ -30,16 +31,16 @@ export function followPinnedPlan(issue: IssueKey): () => void {
         if (stored) dispatch({type: 'planProgressLoaded', plans: [stored]});
         void load(issue);
     }
-    poll ??= setInterval(() => {
+    stopPoll ??= setWatchedInterval(() => {
         for (const {issue: next} of followed.values()) void load(next);
     }, PINNED_PLAN_POLL_MS);
 
     return () => {
         const entry = followed.get(planKey);
         if (entry && --entry.rows === 0) followed.delete(planKey);
-        if (followed.size === 0 && poll) {
-            clearInterval(poll);
-            poll = null;
+        if (followed.size === 0 && stopPoll) {
+            stopPoll();
+            stopPoll = null;
         }
     };
 }

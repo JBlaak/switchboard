@@ -78,6 +78,9 @@ import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
+import {systemClock, type Clock} from '../../application/ports/clock';
+import type {Logger} from '../../application/ports/logger';
+import {BUDGET_ALIAS, GraphqlBudget, toBudgetAnswer, withBudget} from './graphql-budget';
 import type {
     DiffSide,
     IssueRef,
@@ -107,6 +110,10 @@ export interface GhCliOptions {
      * get the login shell's PATH, so the caller passes one that finds `gh`.
      */
     env?: NodeJS.ProcessEnv;
+    /** Where the GraphQL budget logs its points summary and its holds. Defaults to nowhere. */
+    log?: Pick<Logger, 'info'>;
+    /** Defaults to the system clock. */
+    clock?: Clock;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -157,9 +164,11 @@ function isAuthFailure(result: GhResult): boolean {
 
 export class GhCli implements GitHubCli {
     private readonly run: GhRunner;
+    private readonly budget: GraphqlBudget;
 
     constructor(options: GhCliOptions = {}) {
         this.run = options.run ?? defaultGhRunner(options.env);
+        this.budget = new GraphqlBudget({clock: options.clock ?? systemClock, log: options.log ?? {info: () => {}}});
     }
 
     public async available(): Promise<GitHubAvailability> {
@@ -175,7 +184,7 @@ export class GhCli implements GitHubCli {
         if (!parts) return null;
         if (wanted.length === 0) return [];
 
-        const data = await this.graphql(pullRequestsQuery(wanted), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('pullRequests', pullRequestsQuery(wanted), {owner: parts[1], name: parts[2]});
         if (!data) return null;
         const viewer = typeof data.viewer?.login === 'string' ? data.viewer.login : '';
         const repository = data.repository;
@@ -222,7 +231,7 @@ export class GhCli implements GitHubCli {
                 `i${number}: issueOrPullRequest(number: ${number}) { __typename ... on Issue { number title state url } }`,
         );
         const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields.join(' ')} } }`;
-        const data = await this.graphql(query, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('issues', query, {owner: parts[1], name: parts[2]});
         if (!data?.repository) return null;
 
         const found: IssueStatus[] = [];
@@ -246,13 +255,13 @@ export class GhCli implements GitHubCli {
     public async plan(repo: string, number: number): Promise<Plan | null> {
         const parts = REPO.exec(repo);
         if (!parts || validNumbers([number]).length === 0) return null;
-        const data = await this.graphql(planQuery(number), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('plan', planQuery(number), {owner: parts[1], name: parts[2]});
         return data ? toPlan(data, repo) : null;
     }
 
     public async plansIn(repo: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
         if (!REPO.test(repo)) return null;
-        const data = await this.graphql(PLANS_QUERY, {search: plansSearch(repo, options.closed === true)});
+        const data = await this.graphql('plansIn', PLANS_QUERY, {search: plansSearch(repo, options.closed === true)});
         return data ? toPlanSummaries(data, repo) : null;
     }
 
@@ -266,7 +275,7 @@ export class GhCli implements GitHubCli {
             return true;
         });
         if (wanted.length === 0) return [];
-        const data = await this.graphql(plansOfQuery(wanted), {});
+        const data = await this.graphql('plansOf', plansOfQuery(wanted), {});
         return data ? toPlansOf(data, wanted) : null;
     }
 
@@ -275,7 +284,7 @@ export class GhCli implements GitHubCli {
         const parts = REPO.exec(repo);
         if (!parts) return null;
         if (wanted.length === 0) return [];
-        const data = await this.graphql(closingIssuesQuery(wanted), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('closingIssues', closingIssuesQuery(wanted), {owner: parts[1], name: parts[2]});
         return data ? toClosingIssues(data, repo, wanted) : null;
     }
 
@@ -284,28 +293,35 @@ export class GhCli implements GitHubCli {
     public async issuesIn(repo: string, options: {closed: boolean}): Promise<RepositoryIssue[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(issuesQuery(options.closed === true), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('issuesIn', issuesQuery(options.closed === true), {
+            owner: parts[1],
+            name: parts[2],
+        });
         return data ? toRepositoryIssues(data, repo) : null;
     }
 
     public async latestTag(repo: string): Promise<{at: string | null} | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(LATEST_TAG_QUERY, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('latestTag', LATEST_TAG_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toLatestTag(data) : null;
     }
 
     public async pullRequestForBranch(repo: string, branch: string): Promise<{pr: BranchPullRequest | null} | null> {
         const parts = REPO.exec(repo);
         if (!parts || !branch) return null;
-        const data = await this.graphql(BRANCH_PULL_REQUEST_QUERY, {owner: parts[1], name: parts[2], branch});
+        const data = await this.graphql('pullRequestForBranch', BRANCH_PULL_REQUEST_QUERY, {
+            owner: parts[1],
+            name: parts[2],
+            branch,
+        });
         return data ? toBranchPullRequest(data) : null;
     }
 
     public async recentTags(repo: string): Promise<{name: string; at: string}[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(RECENT_TAGS_QUERY, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('recentTags', RECENT_TAGS_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toTags(data) : null;
     }
 
@@ -321,14 +337,14 @@ export class GhCli implements GitHubCli {
     public async inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(INBOX_ISSUES_QUERY, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('inboxIssuesIn', INBOX_ISSUES_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toInboxIssues(data, repo) : null;
     }
 
     public async issueThread(repo: string, number: number): Promise<IssueThread | null> {
         const parts = REPO.exec(repo);
         if (!parts || !Number.isSafeInteger(number) || number < 1) return null;
-        const data = await this.graphqlWith(ISSUE_THREAD_QUERY, [
+        const data = await this.graphqlWith('issueThread', ISSUE_THREAD_QUERY, [
             ['-f', 'owner', parts[1]],
             ['-f', 'name', parts[2]],
             ['-F', 'number', String(number)],
@@ -357,7 +373,7 @@ export class GhCli implements GitHubCli {
     public async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(pullRequestsInQuery(options.merged === true), {
+        const data = await this.graphql('pullRequestsIn', pullRequestsInQuery(options.merged === true), {
             owner: parts[1],
             name: parts[2],
         });
@@ -378,12 +394,12 @@ export class GhCli implements GitHubCli {
     // ── The Merge manager (#434): the queries and their mapping are in `gh-lanes.ts` ──
 
     public async queuedPullRequests(): Promise<{repository: string; number: number}[] | null> {
-        const data = await this.graphql(QUEUED_PULL_REQUESTS_QUERY, {search: QUEUED_SEARCH});
+        const data = await this.graphql('queuedPullRequests', QUEUED_PULL_REQUESTS_QUERY, {search: QUEUED_SEARCH});
         return data ? toQueuedPullRequests(data) : null;
     }
 
     public async openPullRequests(): Promise<OpenPullRequest[] | null> {
-        const data = await this.graphql(OPEN_PULL_REQUESTS_QUERY, {search: OPEN_SEARCH});
+        const data = await this.graphql('openPullRequests', OPEN_PULL_REQUESTS_QUERY, {search: OPEN_SEARCH});
         return data ? toOpenPullRequests(data) : null;
     }
 
@@ -391,14 +407,14 @@ export class GhCli implements GitHubCli {
         const parts = REPO.exec(repo);
         if (!parts) return null;
         const wanted = validNumbers(numbers);
-        const data = await this.graphql(laneQuery(wanted), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('laneRead', laneQuery(wanted), {owner: parts[1], name: parts[2]});
         return data ? toLaneRead(data, repo, wanted) : null;
     }
 
     public async workflowFiles(repo: string): Promise<WorkflowFile[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.graphql(WORKFLOWS_QUERY, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql('workflowFiles', WORKFLOWS_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toWorkflowFiles(data) : null;
     }
 
@@ -624,9 +640,13 @@ export class GhCli implements GitHubCli {
      * that does not exist is a NOT_FOUND error next to everyone else's data —
      * and `gh` exits 1 for that, so a failed exit with `data` in it is still an
      * answer.
+     *
+     * `label` names the read (its method) for the GraphQL budget: what it cost,
+     * and whether it may be sent while the budget runs low.
      */
-    private async graphql(query: string, variables: Record<string, string>): Promise<any | null> {
+    private async graphql(label: string, query: string, variables: Record<string, string>): Promise<any | null> {
         return this.graphqlWith(
+            label,
             query,
             Object.entries(variables).map(([key, value]) => ['-f', key, value] as const),
         );
@@ -634,18 +654,46 @@ export class GhCli implements GitHubCli {
 
     /** `graphql` with typed variables: `-F` makes a number an Int. */
     private async graphqlWith(
+        label: string,
         query: string,
         variables: ReadonlyArray<readonly ['-f' | '-F', string, string]>,
     ): Promise<any | null> {
-        const args = ['api', 'graphql', '-f', 'query=' + query];
+        return (await this.graphqlAnswer(label, query, variables)).data;
+    }
+
+    /**
+     * `graphqlWith`'s `data`, and whether GitHub refused the query for the
+     * rate limit: then it answers no data, only a `RATE_LIMIT` error.
+     *
+     * The query also asks for the budget (`rateLimit`), which is recorded and
+     * taken out of the data. An expensive read is not sent at all while the
+     * budget is held back; it answers no data, as a failed read does.
+     */
+    private async graphqlAnswer(
+        label: string,
+        query: string,
+        variables: ReadonlyArray<readonly ['-f' | '-F', string, string]>,
+    ): Promise<{data: any | null; rateLimited: boolean}> {
+        if (!this.budget.allows(label)) return {data: null, rateLimited: false};
+        const args = ['api', 'graphql', '-f', 'query=' + withBudget(query)];
         for (const [flag, key, value] of variables) args.push(flag, `${key}=${value}`);
         const result = await this.run(args);
-        if (result.missing || isAuthFailure(result)) return null;
+        if (result.missing || isAuthFailure(result)) return {data: null, rateLimited: false};
         try {
-            const body = JSON.parse(result.stdout) as {data?: unknown};
-            return body.data && typeof body.data === 'object' ? body.data : null;
+            const body = JSON.parse(result.stdout) as {data?: any; errors?: unknown};
+            const data = body.data && typeof body.data === 'object' ? body.data : null;
+            const rateLimited =
+                data === null &&
+                Array.isArray(body.errors) &&
+                body.errors.some((error: any) => error?.type === 'RATE_LIMIT');
+            if (rateLimited) this.budget.rateLimited(label);
+            else if (data) {
+                this.budget.answered(label, toBudgetAnswer(data[BUDGET_ALIAS]));
+                delete data[BUDGET_ALIAS];
+            }
+            return {data, rateLimited};
         } catch {
-            return null;
+            return {data: null, rateLimited: false};
         }
     }
 }

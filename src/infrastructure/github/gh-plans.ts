@@ -25,15 +25,30 @@ import {AUTOMERGE_CONTEXT, QUEUE_LABELS} from '../../domain/project/merge-queue'
 import type {PullRequestCloses} from '../../application/ports/github-cli';
 import {toAutomergeStatus} from './gh-overview';
 
-/** Sub-issues per plan: the first 100, unpaged. */
-export const SUB_ISSUES = 100;
+/**
+ * Sub-issues per plan: the first 40, unpaged. GitHub charges a query by what
+ * it could return, so each one asked for costs whether or not the plan has
+ * it; plans so far have had at most a dozen or so.
+ */
+export const SUB_ISSUES = 40;
 
 /**
- * Plans per repository. GitHub refuses a query that could touch more than
- * 500,000 nodes before running it; 50 issues × 100 sub-issues × 20 blockers
- * stays well under, so the 50 most recently updated are asked for.
+ * Plans per repository: the 20 most recently updated. GitHub charges
+ * `PLANS_QUERY` about a point per 100 sub-issues it could read, so
+ * 20 plans × 40 sub-issues keeps it under 10 points. It also refuses a query
+ * that could touch more than 500,000 nodes; 20 × 40 × 20 blockers stays well
+ * under.
  */
-export const PLANS_PER_REPOSITORY = 50;
+export const PLANS_PER_REPOSITORY = 20;
+
+/** Blockers read per plan issue: the first 20. */
+export const BLOCKERS_PER_ISSUE = 20;
+
+/**
+ * Closing PRs read per plan issue: the first 5. Each one's labels and last
+ * commit are charged on every sub-issue, so this weighs most in `planQuery`.
+ */
+export const CLOSING_PULL_REQUESTS_PER_ISSUE = 5;
 
 const LABELS = 'labels(first: 20) { nodes { name } }';
 
@@ -44,8 +59,8 @@ const PLAN_ISSUE_FIELDS = `number title state stateReason updatedAt body
           repository { nameWithOwner }
           ${LABELS}
           assignees(first: 1) { totalCount }
-          blockedBy(first: 50) { nodes { ${BLOCKER_FIELDS} } }
-          closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
+          blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { ${BLOCKER_FIELDS} } }
+          closedByPullRequestsReferences(first: ${CLOSING_PULL_REQUESTS_PER_ISSUE}, includeClosedPrs: true) {
             nodes { number state isDraft additions deletions headRefName baseRefName
               ${LABELS}
               commits(last: 1) { nodes { commit { status { context(name: "${AUTOMERGE_CONTEXT}") { state description } } } } }
@@ -130,12 +145,12 @@ export const PLANS_QUERY = `query($search: String!) {
         repository { nameWithOwner }
         ${LABELS}
         parent { number }
-        blockedBy(first: 20) { nodes { number repository { nameWithOwner } } }
+        blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { number repository { nameWithOwner } } }
         subIssues(first: ${SUB_ISSUES}) {
           nodes {
             number state stateReason
             repository { nameWithOwner }
-            blockedBy(first: 20) { nodes { number repository { nameWithOwner } } }
+            blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { number repository { nameWithOwner } } }
           }
         }
       }

@@ -940,7 +940,7 @@ export function buildContainer(): Container {
     });
 
     const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
-    const github = new GhCli({run: ghRun});
+    const github = new GhCli({run: ghRun, log});
     const vmLocation = {
         live: (id: string) => {
             const session = registry.find(id)?.session;

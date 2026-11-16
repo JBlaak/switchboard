@@ -2,7 +2,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {PlanService} from '../src/application/services/plan-service';
-import {ProjectOverviewService, type RunningSession} from '../src/application/services/project-overview-service';
+import {
+    OVERVIEW_PLANS_MS,
+    ProjectOverviewService,
+    type RunningSession,
+} from '../src/application/services/project-overview-service';
 import type {GitHubAvailability} from '../src/application/ports/github-cli';
 import type {GitWrite} from '../src/application/ports/git-workspace';
 import type {Plan, PlanIssue, PlanSummary} from '../src/domain/plan/model';
@@ -362,7 +366,7 @@ test('a second call within 30 s does not touch gh', async () => {
     assert.equal(answered(answer.github).stale, false);
 });
 
-test('a call after 30 s reads GitHub again', async () => {
+test('a call after 30 s reads the issues and PRs again, but not the plans', async () => {
     /* Given */
     const {service, calls, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
     await service.overview(PROJECT);
@@ -373,8 +377,164 @@ test('a call after 30 s reads GitHub again', async () => {
     const answer = await service.overview(PROJECT);
 
     /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'pullRequestsIn']);
+    const github = answered(answer.github);
+    assert.equal(github.fetchedAt, 1_030_000);
+    assert.deepEqual(
+        github.plans.map((row) => row.plan.number),
+        [112],
+    );
+});
+
+test('a poll a minute later, within five minutes, asks GitHub for the PRs and issues but not the plans', async () => {
+    /* Given */
+    const {world, service, calls, advance} = setUp({
+        summaries: [summary(112)],
+        plans: [plan(112, [planIssue(113)])],
+        pullRequests: [pullRequest(119, [113])],
+    });
+    await service.overview(PROJECT);
+    calls.length = 0;
+    world.pullRequests = [pullRequest(119, [113]), pullRequest(120, [])];
+
+    /* When */
+    advance(OVERVIEW_PLANS_MS - 1);
+    const answer = await service.overview(PROJECT);
+
+    /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'pullRequestsIn']);
+    const github = answered(answer.github);
+    assert.equal(github.stale, false);
+    assert.deepEqual(
+        github.plans.map((row) => row.plan.number),
+        [112],
+    );
+    assert.deepEqual(github.pullRequests.map((row) => [row.pullRequest.number, row.plan?.number ?? null]).sort(), [
+        [119, 112],
+        [120, null],
+    ]);
+});
+
+test('after five minutes the plans are asked of GitHub again', async () => {
+    /* Given */
+    const {world, service, calls, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT);
+    calls.length = 0;
+    world.summaries = [summary(112), summary(130)];
+    world.plans = [plan(112, [planIssue(113)]), plan(130, [planIssue(131)])];
+
+    /* When */
+    advance(OVERVIEW_PLANS_MS);
+    const answer = await service.overview(PROJECT);
+
+    /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'plan #112', 'plan #130', 'plansIn', 'pullRequestsIn']);
+    assert.deepEqual(
+        answered(answer.github)
+            .plans.map((row) => row.plan.number)
+            .sort(),
+        [112, 130],
+    );
+});
+
+test('closed plans are kept apart from the open ones: Show closed asks for its own', async () => {
+    /* Given */
+    const {service, calls, advance} = setUp({
+        summaries: [summary(112), summary(90, 'closed')],
+        plans: [plan(112, [planIssue(113)]), plan(90, [planIssue(91, 'closed')])],
+    });
+    await service.overview(PROJECT);
+    calls.length = 0;
+
+    /* When */
+    advance(60_000);
+    await service.overview(PROJECT, {closed: true});
+
+    /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'plan #112', 'plan #90', 'plansIn', 'pullRequestsIn']);
+});
+
+test('forgetting the plans, as an explicit reload does, asks GitHub for them again on the next call', async () => {
+    /* Given */
+    const {world, service, calls, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT);
+    calls.length = 0;
+    world.summaries = [summary(112), summary(130)];
+    world.plans = [plan(112, [planIssue(113)]), plan(130, [planIssue(131)])];
+
+    /* When */
+    advance(60_000);
+    await service.forgetPlans(PROJECT);
+    const answer = await service.overview(PROJECT);
+
+    /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'plan #112', 'plan #130', 'plansIn', 'pullRequestsIn']);
+    assert.deepEqual(
+        answered(answer.github)
+            .plans.map((row) => row.plan.number)
+            .sort(),
+        [112, 130],
+    );
+});
+
+test('forgetting the plans within 30 s reads the issues and PRs afresh too', async () => {
+    /* Given */
+    const {service, calls, advance} = setUp({summaries: [], issues: [issue(150)]});
+    await service.overview(PROJECT);
+    calls.length = 0;
+
+    /* When */
+    advance(1_000);
+    await service.forgetPlans(PROJECT);
+    const answer = await service.overview(PROJECT);
+
+    /* Then */
+    // The plans themselves come from PlanService's own 30 s cache, which the Plan tab shares.
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'pullRequestsIn']);
+    assert.equal(answered(answer.github).fetchedAt, 1_001_000);
+});
+
+test('a failed plan read is not kept: the next poll asks for the plans again, and serves the last good answer meanwhile', async () => {
+    /* Given */
+    const {world, service, calls, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT);
+    advance(OVERVIEW_PLANS_MS);
+    const missing = world.plans;
+    world.plans = [];
+    const failed = await service.overview(PROJECT);
+    world.plans = missing;
+    calls.length = 0;
+
+    /* When */
+    advance(60_000);
+    const answer = await service.overview(PROJECT);
+
+    /* Then */
+    const stale = answered(failed.github);
+    assert.equal(stale.stale, true);
+    assert.equal(stale.fetchedAt, 1_000_000);
     assert.deepEqual([...calls].sort(), ['issuesIn', 'plan #112', 'plansIn', 'pullRequestsIn']);
-    assert.equal(answered(answer.github).fetchedAt, 1_030_000);
+    const github = answered(answer.github);
+    assert.equal(github.stale, false);
+    assert.deepEqual(
+        github.plans.map((row) => row.plan.number),
+        [112],
+    );
+});
+
+test('asked twice at once after five minutes, the plans are read once for both', async () => {
+    /* Given */
+    const {service, calls, advance} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT);
+    advance(OVERVIEW_PLANS_MS);
+    calls.length = 0;
+
+    /* When */
+    await Promise.all([service.overview(PROJECT, {merged: false}), service.overview(PROJECT, {merged: true})]);
+
+    /* Then */
+    assert.equal(calls.filter((call) => call === 'plansIn').length, 1);
+    assert.equal(calls.filter((call) => call === 'plan #112').length, 1);
 });
 
 test('a failed refresh serves the previous answer as stale, with when it was fetched', async () => {
