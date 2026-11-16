@@ -14,6 +14,7 @@ import {workTabOf} from '../../../state/session-work-slice';
 import type {RendererState} from '../../../state/root';
 import {loadPlanView, seedPlanView} from './load';
 import {installLevelsSeen} from './levels-seen';
+import {setWatchedInterval} from '../../../lib/watched-interval';
 
 /** How often an open plan view asks again (W4). */
 export const PLAN_POLL_MS = 60_000;
@@ -26,7 +27,7 @@ export function sessionWorkOwner(sessionId: string): string {
 /** Start following the plan view. Answers a teardown. */
 export function installPlan(): () => void {
     const stopLevelsSeen = installLevelsSeen();
-    let poll: ReturnType<typeof setInterval> | null = null;
+    let stopPoll: (() => void) | null = null;
 
     const follow = (state: RendererState, previous: RendererState): void => {
         // The Plan tab: open while the page shows it, closed otherwise.
@@ -48,13 +49,13 @@ export function installPlan(): () => void {
         const wasKey = was ? was.owner + '\0' + planSourceKey(was.source) : null;
         if (key === wasKey) return;
 
-        if (poll) clearInterval(poll);
-        poll = null;
+        stopPoll?.();
+        stopPoll = null;
         if (!view) return;
         // A plan opened before shows its stored copy at once; main's answer replaces it.
         if (!view.answer) seedPlanView(view);
         void loadPlanView(view);
-        poll = setInterval(() => {
+        stopPoll = setWatchedInterval(() => {
             const current = store.getState().plan.view;
             if (current) void loadPlanView(current);
         }, PLAN_POLL_MS);
@@ -63,7 +64,7 @@ export function installPlan(): () => void {
     const unsubscribe = store.subscribe(follow);
 
     return () => {
-        if (poll) clearInterval(poll);
+        stopPoll?.();
         unsubscribe();
         stopLevelsSeen();
     };
