@@ -28,7 +28,7 @@ import {
 } from '../lib/shortcut-keys';
 import {toggleMergeManager} from '../ui/merge-manager/page-actions';
 import {toggleBugPage} from '../ui/bug-manager/page-actions';
-import {sendSavedPromptOnScreen} from '../ui/session-tray/actions';
+import {trayKeyOnScreen} from '../ui/session-tray/actions';
 import {undoArchive} from '../ui/archive-undo/actions';
 import {toggleTasksPage} from '../ui/tasks-page/actions';
 import {toggleIssueManager} from '../ui/issue-manager/actions';
@@ -105,11 +105,11 @@ export function installShortcuts(): void {
             toggleBugPage();
         }
 
-        // Cmd+1…9 sends the session on screen its saved prompt on that key (#343).
+        // Cmd+1…9 sends the session on screen its saved prompt on that key (#343), or opens its PR on that key.
         const promptKey = savedPromptKey(e);
         if (promptKey !== null) {
             e.preventDefault();
-            void sendSavedPromptOnScreen(promptKey);
+            void trayKeyOnScreen(promptKey);
         }
 
         // Cmd+N, or N outside the terminal and text fields, starts a quick session.
