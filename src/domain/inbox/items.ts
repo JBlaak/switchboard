@@ -29,6 +29,7 @@
 import type {TrendingThresholds} from '../bugsnag/connection';
 import {bugSignals} from './signals';
 import {triageErrands} from './triage';
+import {NO_INBOX_FRESHNESS, type InboxFreshness} from './freshness';
 import {inboxKey, isUrgent, managerOf, sourceOf} from './model';
 import type {
     BugFacts,
@@ -276,17 +277,19 @@ export function managerCounts(items: readonly InboxItem[], manager: InboxManager
 /**
  * Both managers' counts, which are set up, and the Bug manager's triage
  * errands for the Errands shelf (`triageErrands`): a stopped one leaves it
- * once its session is `gone` (archived).
+ * once its session is `gone` (archived), and how fresh each manager is.
  */
 export function inboxSummary(
     items: readonly InboxItem[],
     configured: ConfiguredManagers,
     gone?: (sessionId: string) => boolean,
+    freshness: InboxFreshness = NO_INBOX_FRESHNESS,
 ): InboxSummary {
     return {
         bug: managerCounts(items, 'bug'),
         issue: managerCounts(items, 'issue'),
         configured,
         triaging: triageErrands(items, gone),
+        freshness,
     };
 }

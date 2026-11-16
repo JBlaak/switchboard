@@ -137,6 +137,10 @@ test("a project's first poll lists its open errors unread and counts them", asyn
             issue: {unread: 0, urgent: 0},
             configured: {bug: true, issue: false},
             triaging: [],
+            freshness: {
+                bug: {fetchedAt: NOW, refreshing: false, failed: false},
+                issue: {fetchedAt: null, refreshing: false, failed: false},
+            },
         },
     ]);
 });
@@ -417,20 +421,25 @@ test('an action on a key the inbox does not hold answers null and writes nothing
     assert.equal(store.writes, 0);
 });
 
-test('a poll that changes nothing writes nothing and pushes nothing', async () => {
+test('a poll that changes nothing writes nothing and pushes only that it was reading', async () => {
     /* Given */
     const {inbox, world, store, renderer} = setup();
     world.errors[PROJECT] = [{error: bugsnagError('a')}];
     await inbox.poll();
     const writes = store.writes;
-    const pushes = renderer.only('inboxChanged').length;
+    const pushes = renderer.only('inboxChanged');
 
     /* When */
     await inbox.poll();
 
     /* Then */
+    const after = renderer.only('inboxChanged').slice(pushes.length);
     assert.equal(store.writes, writes);
-    assert.equal(renderer.only('inboxChanged').length, pushes);
+    assert.deepEqual(
+        after.map((push) => (push[1] as InboxSummary).freshness.bug.refreshing),
+        [true, false],
+    );
+    assert.deepEqual(after.at(-1), pushes.at(-1));
 });
 
 // ── Which managers are set up (#416) ──
@@ -525,4 +534,105 @@ test('a triage on a bug is pushed to the shelf, and a stopped one leaves it once
         [['t1', true]],
     );
     assert.deepEqual((renderer.only('inboxChanged').at(-1)![1] as InboxSummary).triaging, []);
+});
+
+// ── Freshness: when each manager's sources last answered ──
+
+test("the Bug manager is fresh as of its oldest project's last answer", async () => {
+    /* Given */
+    const OTHER = 'other-api';
+    const {inbox, world} = setup({
+        bugsnag: {
+            projects: [
+                {id: PROJECT, name: 'Connect API', optedIn: true, localProject: LOCAL},
+                {id: OTHER, name: 'Other API', optedIn: true, localProject: null},
+            ],
+            trending: THRESHOLDS,
+        },
+    });
+    await inbox.poll();
+    world.now = NOW + HOUR;
+    world.failing.add(OTHER);
+
+    /* When */
+    await inbox.poll();
+
+    /* Then */
+    assert.deepEqual(inbox.freshness().bug, {fetchedAt: NOW, refreshing: false, failed: true});
+});
+
+test('a source that answers again clears the failure and moves the time on', async () => {
+    /* Given */
+    const {inbox, world} = setup();
+    world.failing.add(PROJECT);
+    await inbox.poll();
+    const failed = inbox.freshness().bug;
+    world.failing.delete(PROJECT);
+    world.now = NOW + HOUR;
+
+    /* When */
+    await inbox.poll();
+
+    /* Then */
+    assert.deepEqual(failed, {fetchedAt: null, refreshing: false, failed: true});
+    assert.deepEqual(inbox.freshness().bug, {fetchedAt: NOW + HOUR, refreshing: false, failed: false});
+});
+
+test('a project no longer opted in stops counting', async () => {
+    /* Given */
+    const {inbox, world} = setup();
+    world.failing.add(PROJECT);
+    await inbox.poll();
+
+    /* When */
+    world.bugsnag = {...world.bugsnag, projects: []};
+    await inbox.poll();
+
+    /* Then */
+    assert.deepEqual(inbox.freshness().bug, {fetchedAt: null, refreshing: false, failed: false});
+});
+
+test('the Bug manager is refreshing while Bugsnag is being read, and says so to the renderer', async () => {
+    /* Given */
+    const {inbox, renderer} = setup();
+
+    /* When */
+    await inbox.poll();
+
+    /* Then */
+    const bug = renderer.only('inboxChanged').map((push) => (push[1] as InboxSummary).freshness.bug);
+    assert.deepEqual(bug[0], {fetchedAt: null, refreshing: true, failed: false});
+    assert.deepEqual(bug.at(-1), {fetchedAt: NOW, refreshing: false, failed: false});
+});
+
+test("the Issue manager counts its watched repositories' issues and the started issues' PRs, oldest first", async () => {
+    /* Given */
+    const {inbox, world} = setup({watched: {[LOCAL]: REPO}});
+    world.issues[REPO] = {viewer: ME, issues: [], complete: true};
+    await inbox.poll();
+    world.now = NOW + HOUR;
+
+    /* When */
+    inbox.sourcesReading('pull-requests');
+    const reading = inbox.freshness().issue;
+    inbox.sourcesRead('pull-requests', new Map([[REPO, true]]));
+
+    /* Then */
+    assert.deepEqual(reading, {fetchedAt: NOW, refreshing: true, failed: false});
+    assert.deepEqual(inbox.freshness().issue, {fetchedAt: NOW, refreshing: false, failed: false});
+});
+
+test('a repository whose issues GitHub did not answer marks the Issue manager failed, its time kept', async () => {
+    /* Given */
+    const {inbox, world} = setup({watched: {[LOCAL]: REPO}});
+    world.issues[REPO] = {viewer: ME, issues: [], complete: true};
+    await inbox.poll();
+    world.issues[REPO] = null;
+    world.now = NOW + HOUR;
+
+    /* When */
+    await inbox.poll();
+
+    /* Then */
+    assert.deepEqual(inbox.freshness().issue, {fetchedAt: NOW, refreshing: false, failed: true});
 });

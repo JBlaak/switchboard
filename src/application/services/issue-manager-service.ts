@@ -17,7 +17,8 @@
  * **Following.** Every two minutes while issues are in progress, each of
  * their repositories' PRs are read once: the PR that closes an issue gives
  * its stage (PR · CI, CI failing, Ready, Queue), and a merged one puts it
- * under Done ("Closed by #n").
+ * under Done ("Closed by #n"). Each round's reads are told to the inbox
+ * (`pull-requests`), so the page's "Updated …" line counts them.
  */
 import {
     POLISH_TIMEOUT_MS,
@@ -53,7 +54,16 @@ export type IssueStartPrepared =
 export interface IssueManagerServiceDeps {
     inbox: Pick<
         InboxService,
-        'item' | 'list' | 'startWork' | 'setWork' | 'setStage' | 'finish' | 'returnToInbox' | 'projectFor'
+        | 'item'
+        | 'list'
+        | 'startWork'
+        | 'setWork'
+        | 'setStage'
+        | 'finish'
+        | 'returnToInbox'
+        | 'projectFor'
+        | 'sourcesReading'
+        | 'sourcesRead'
     >;
     github: Pick<GitHubCli, IssueManagerCalls | 'pullRequestsIn'>;
     issueSessions: Pick<IssueSessionService, 'prepareLooseIssueWorktree'>;
@@ -235,23 +245,34 @@ export class IssueManagerService {
     private async followAll(): Promise<void> {
         const started = this.deps.inbox.list('issue').filter((item) => item.state.kind === 'inProgress');
         const repositories = new Set(started.map((item) => item.source));
-        for (const repository of repositories) {
-            const pullRequests = await this.deps.github.pullRequestsIn(repository, {merged: true});
-            if (!pullRequests) {
-                this.deps.log.warn(`[issue-manager] PRs of ${repository} not read`);
-                continue;
-            }
-            for (const item of started) {
-                if (item.source !== repository || item.facts.kind !== 'issue') continue;
-                const found = issueWorkStage(pullRequests, item.facts);
-                if (!found) continue;
-                const work = item.work ?? {branch: '', sessionId: null, pullRequest: null};
-                if (work.pullRequest !== found.pullRequest) {
-                    this.deps.inbox.setWork(item.key, {...work, pullRequest: found.pullRequest});
+        const results = new Map<string, boolean>();
+        if (repositories.size === 0) {
+            this.deps.inbox.sourcesRead('pull-requests', results);
+            return;
+        }
+        this.deps.inbox.sourcesReading('pull-requests');
+        try {
+            for (const repository of repositories) {
+                const pullRequests = await this.deps.github.pullRequestsIn(repository, {merged: true});
+                results.set(repository, pullRequests !== null);
+                if (!pullRequests) {
+                    this.deps.log.warn(`[issue-manager] PRs of ${repository} not read`);
+                    continue;
                 }
-                if (found.stage === 'merged') this.deps.inbox.finish(item.key);
-                else this.deps.inbox.setStage(item.key, found.stage);
+                for (const item of started) {
+                    if (item.source !== repository || item.facts.kind !== 'issue') continue;
+                    const found = issueWorkStage(pullRequests, item.facts);
+                    if (!found) continue;
+                    const work = item.work ?? {branch: '', sessionId: null, pullRequest: null};
+                    if (work.pullRequest !== found.pullRequest) {
+                        this.deps.inbox.setWork(item.key, {...work, pullRequest: found.pullRequest});
+                    }
+                    if (found.stage === 'merged') this.deps.inbox.finish(item.key);
+                    else this.deps.inbox.setStage(item.key, found.stage);
+                }
             }
+        } finally {
+            this.deps.inbox.sourcesRead('pull-requests', results);
         }
     }
 

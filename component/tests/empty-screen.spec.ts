@@ -25,6 +25,7 @@ import {FIXTURE_NOW} from '../../e2e/support/fixture-home';
 import {captured} from '../fixtures/captured';
 import type {Page} from '@playwright/test';
 import type {InboxSummary} from '../../src/domain/inbox/model';
+import {NO_INBOX_FRESHNESS} from '../../src/domain/inbox/freshness';
 import type {LandedView, LaneStage, MergeManagerState} from '../../src/domain/merge-manager/model';
 
 /** What the empty screen and the settings page ask main for, besides what a test says. */
@@ -211,6 +212,7 @@ function summary(bug: [number, number], issue: number): InboxSummary {
         issue: {unread: issue, urgent: 0},
         configured: {bug: true, issue: true},
         triaging: [],
+        freshness: NO_INBOX_FRESHNESS,
     };
 }
 
@@ -347,6 +349,7 @@ test.describe('managers', () => {
                     issue: {unread: 0, urgent: 0},
                     configured: {bug: false, issue: true},
                     triaging: [],
+                    freshness: NO_INBOX_FRESHNESS,
                 },
             },
         });

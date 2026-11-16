@@ -2,7 +2,8 @@
  * The managers' inbox (#413), renderer side: both managers' unread and urgent
  * counts and which of them are set up, as main pushed them last
  * (`inboxChanged`), for the managers on the empty screen (#416), and the bugs
- * being triaged, for the Errands shelf. The pages ask main for the items
+ * being triaged, for the Errands shelf, and how fresh each manager's items
+ * are, for its page's "Updated …" line. The pages ask main for the items
  * themselves.
  */
 import {
@@ -12,6 +13,7 @@ import {
     type ManagerCounts,
     type TriageErrandView,
 } from '../../domain/inbox/model';
+import {sameFreshness, type ManagerFreshness} from '../../domain/inbox/freshness';
 import type {RendererEvent} from './events';
 
 export interface InboxSliceState {
@@ -25,7 +27,8 @@ export function inboxReducer(state: InboxSliceState, event: RendererEvent): Inbo
     const {summary} = event;
     const same = (manager: InboxManager): boolean =>
         sameCounts(state.summary[manager], summary[manager]) &&
-        state.summary.configured[manager] === summary.configured[manager];
+        state.summary.configured[manager] === summary.configured[manager] &&
+        sameFreshness(state.summary.freshness[manager], summary.freshness[manager]);
     return same('bug') && same('issue') && sameTriaging(state.summary.triaging, summary.triaging) ? state : {summary};
 }
 
@@ -49,6 +52,11 @@ function sameCounts(a: ManagerCounts, b: ManagerCounts): boolean {
 /** A manager's counts. */
 export function managerCountsOf(state: InboxSliceState, manager: InboxManager): ManagerCounts {
     return state.summary[manager];
+}
+
+/** How fresh a manager's items are, as main pushed it last. */
+export function managerFreshnessOf(state: InboxSliceState, manager: InboxManager): ManagerFreshness {
+    return state.summary.freshness[manager];
 }
 
 /** Matches `ManagerState` in @jblaak/patch. */
