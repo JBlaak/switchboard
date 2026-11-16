@@ -6,7 +6,8 @@
  * - **When.** Only for a landed PR at Fixing: in a Switchboard lane the head
  *   that failed out on a conflict or a failed required check (`stages.ts` sets
  *   it aside on that commit); in a queue lane one the queue failed
- *   (`automerge:failed`) on a conflict or a check. Everything else that stops
+ *   (`automerge:failed`) on a conflict or a check, or one with a failed
+ *   check on its head commit while it waits or is held. Everything else that stops
  *   a PR (requested changes, threads, a refused merge) is Needs you, which no
  *   errand answers. One errand per PR at a time; a PR whose errand stopped
  *   stays Needs you until something clears it.

@@ -106,6 +106,57 @@ test('a queue PR an errand gave up on needs you until a new commit lands', () =>
     assert.deepEqual(pushed, {kind: 'fixing', cause: 'checks'});
 });
 
+test('a queue PR held or waiting with a failed check is fixing its checks before the queue fails it', () => {
+    /* Given */
+    const failed = [
+        {name: 'Tests', state: 'failed' as const, startedAt: NOW - MIN},
+        {name: 'Translations', state: 'passed' as const, startedAt: NOW - MIN},
+    ];
+    const held = queued('Waits for a review by @reviewer', {checks: failed});
+    const waiting = queued('Number 2 in the merge queue', {checks: failed});
+
+    /* When */
+    const stages = [held, waiting].map((read) => queueLaneStage(read, null, NOW));
+
+    /* Then */
+    assert.deepEqual(stages, [
+        {kind: 'fixing', cause: 'checks'},
+        {kind: 'fixing', cause: 'checks'},
+    ]);
+});
+
+test('a cancelled queue check is passed over, and a newer run of a failed check decides', () => {
+    /* Given */
+    const held = 'Waits for a review by @reviewer';
+    const cancelled = queued(held, {checks: [{name: 'Tests', state: 'cancelled', startedAt: NOW}]});
+    const failedThenCancelled = queued(held, {
+        checks: [
+            {name: 'Tests', state: 'failed', startedAt: NOW - 2 * MIN},
+            {name: 'Tests', state: 'cancelled', startedAt: NOW - MIN},
+        ],
+    });
+    const failedThenPassed = queued(held, {
+        checks: [
+            {name: 'Tests', state: 'failed', startedAt: NOW - 2 * MIN},
+            {name: 'Tests', state: 'passed', startedAt: NOW - MIN},
+        ],
+    });
+    const failedThenRerunning = queued(held, {
+        checks: [
+            {name: 'Tests', state: 'failed', startedAt: NOW - 2 * MIN},
+            {name: 'Tests', state: 'queued', startedAt: null},
+        ],
+    });
+
+    /* When */
+    const stages = [cancelled, failedThenCancelled, failedThenPassed, failedThenRerunning].map(
+        (read) => queueLaneStage(read, null, NOW).kind,
+    );
+
+    /* Then */
+    assert.deepEqual(stages, ['held', 'fixing', 'held', 'held']);
+});
+
 // ── Switchboard lane ──
 
 function lane(entries: LaneEntry[], rules = RULES) {

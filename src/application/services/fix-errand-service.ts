@@ -237,7 +237,7 @@ export class FixErrandService {
             headOid: read.headOid,
             worktree,
             failingChecks: failing,
-            queueReason: pr.lane === 'queue' ? (read.automerge?.description ?? null) : null,
+            queueReason: pr.lane === 'queue' && read.automerge?.state === 'failure' ? read.automerge.description : null,
             oldBaseTip: cause === 'conflict' && read.baseRef === trunk ? (pr.stackBaseTip ?? null) : null,
             earlier: earlierErrands(this.errands(), pr.key),
             userNote,
