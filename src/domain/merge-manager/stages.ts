@@ -8,7 +8,10 @@
  * is waiting, "Waits for an approval / a review" is held, as is a PR stacked
  * on a branch that has not merged. `automerge:failed` is Fixing for a failed
  * check or a conflict, which a fix errand can mend, and Needs you for
- * requested changes, a thread or a refused merge.
+ * requested changes, a thread or a refused merge. A check that failed on the
+ * head commit is Fixing too, before the queue gets to it: a PR held for a
+ * review or waiting its turn would otherwise sit red until it is the head.
+ * Cancelled checks don't count; the queue cancels runs itself.
  *
  * **Switchboard lane.** In land order. A PR is, in this order of precedence:
  *
@@ -62,6 +65,7 @@ export function queueLaneStage(read: LanePullRequestRead, setAside: SetAside | n
         const reason = status?.kind === 'failed' ? status.reason : 'Failed in the merge queue';
         return failedStage(reason);
     }
+    if (failedCheck(read)) return {kind: 'fixing', cause: 'checks'};
     if (!status) return waiting(read, null);
     switch (status.kind) {
         case 'head':
@@ -96,6 +100,28 @@ function failedStage(reason: string): LaneStage {
         case 'other':
             return {kind: 'needsYou', reason: {kind: 'merge-refused', reason}};
     }
+}
+
+/**
+ * Whether a check failed on the head commit: a check whose latest run
+ * failed. A run the queue cancelled is passed over, so an older failure of
+ * the same check still counts, and a newer pass clears it.
+ */
+function failedCheck(read: LanePullRequestRead): boolean {
+    const latest = new Map<string, LanePullRequestRead['checks'][number]>();
+    for (const check of read.checks) {
+        if (check.state === 'cancelled') continue;
+        const seen = latest.get(check.name);
+        if (!seen || isNewer(check, seen)) latest.set(check.name, check);
+    }
+    return [...latest.values()].some((check) => check.state === 'failed');
+}
+
+/** A run that has not started yet (no start time) is the newest. */
+function isNewer(check: LanePullRequestRead['checks'][number], than: LanePullRequestRead['checks'][number]): boolean {
+    if (check.startedAt === null) return true;
+    if (than.startedAt === null) return false;
+    return check.startedAt >= than.startedAt;
 }
 
 /**
