@@ -167,3 +167,21 @@ export function ageInWords(ms: number): string {
 function plural(count: number, noun: string): string {
     return count + ' ' + noun + (count === 1 ? '' : 's');
 }
+
+/** How far apart the plans' read and the page's may be before the header names the plans' own age. */
+export const PLANS_AGE_SHOWN_AFTER_MS = 60_000;
+
+/**
+ * The header's freshness parts after "Updated …": "plans 4m ago" when the
+ * plans, kept longer than the PRs and issues, were read more than a minute
+ * apart from them, so a fresh page just says "Updated just now". None when
+ * either time is unknown, as on an answer without plans.
+ */
+export function plansFreshnessParts(
+    fetchedAt: number | null,
+    plansFetchedAt: number | null | undefined,
+): {label: string; at: number}[] {
+    if (fetchedAt === null || plansFetchedAt === null || plansFetchedAt === undefined) return [];
+    if (Math.abs(fetchedAt - plansFetchedAt) <= PLANS_AGE_SHOWN_AFTER_MS) return [];
+    return [{label: 'plans', at: plansFetchedAt}];
+}

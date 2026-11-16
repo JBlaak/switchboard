@@ -465,6 +465,23 @@ test.describe('plans and issues', () => {
         await expect(freshness).not.toContainText('Paused');
     });
 
+    test('the header says how old the plans are when they were read minutes before the rest', async ({page}) => {
+        /* Given */
+        const overview = acmeOverview();
+        if (!overview.github?.ok) throw new Error('acmeOverview has no GitHub part');
+        overviews.set({
+            [P.acmeApi]: {...overview, github: {...overview.github, plansFetchedAt: Date.now() - 4 * 60_000}},
+        });
+
+        /* When */
+        await rowProjectLink(page, S.loginFix).click();
+
+        /* Then */
+        // The ages follow the harness's session-list clock, so only the part itself is asserted here;
+        // its words are freshnessLine's, tested in node.
+        await expect(projectPage(page).getByTestId('freshness')).toHaveText(/^Updated .+ · plans .+$/);
+    });
+
     test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({page}) => {
         /* Given */
         await rowProjectLink(page, S.loginFix).click();

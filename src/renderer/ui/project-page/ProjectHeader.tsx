@@ -28,7 +28,7 @@ import {readProjectBlob, setWatchIssues} from './settings-actions';
 import {projectLabel} from '../../features/sessions/project-label';
 import {useStore} from '../use-store';
 import {Freshness} from '../shared/Freshness';
-import {opensGitHub, remoteHost} from './page-state';
+import {opensGitHub, plansFreshnessParts, remoteHost} from './page-state';
 import {remoteBadge} from '../../features/sessions/remote-badge';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {CopyOriginLink, HandOffButton} from './HandoffSections';
@@ -74,17 +74,28 @@ function HeaderFacts({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
-/** "Updated 2m ago": when GitHub's part of the page was read; refreshing while it is the stored answer. */
+/**
+ * "Updated 2m ago": when GitHub's part of the page was read, then "· plans 4m
+ * ago" when the plans, kept longer, are older than that; refreshing while it
+ * is the stored answer.
+ */
 function UpdatedAt({projectPath}: {projectPath: string}): JSX.Element | null {
-    const fetchedAt = useStore((state) => {
+    const github = useStore((state) => {
         const overview = state.projectPage.overview;
-        return overview?.projectPath === projectPath && overview.github?.ok ? overview.github.fetchedAt : null;
+        return overview?.projectPath === projectPath && overview.github?.ok ? overview.github : null;
     });
     const updating = useStore(
         (state) =>
             state.projectPage.overview?.projectPath === projectPath && state.projectPage.overviewFrom?.stored === true,
     );
-    return <Freshness fetchedAt={fetchedAt} refreshing={updating} />;
+    const fetchedAt = github?.fetchedAt ?? null;
+    return (
+        <Freshness
+            fetchedAt={fetchedAt}
+            parts={plansFreshnessParts(fetchedAt, github?.plansFetchedAt)}
+            refreshing={updating}
+        />
+    );
 }
 
 /** VM (#276), as the Projects modal badges the project; an ssh project's header stays as it was. */

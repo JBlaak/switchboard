@@ -116,6 +116,8 @@ export interface ProjectOverviewServiceDeps {
 /** What `gh` answered for a repository, before it is grouped. */
 interface GitHubReads {
     fetchedAt: number;
+    /** When the plans were read, which can be before `fetchedAt`; null without plans. */
+    plansFetchedAt: number | null;
     plans: OverviewPlanSource[];
     issues: ProjectIssue[];
     /** Open ones, merged ones when asked for, and the ones merged or closed most recently. */
@@ -124,6 +126,12 @@ interface GitHubReads {
     queue: QueueReads | null;
     /** A Switchboard lane's CI run durations (#441), for its estimate; null in any other repository. */
     lane: {ciRunDurationsMs: number[]} | null;
+}
+
+/** A project's plans as read, and when: kept for OVERVIEW_PLANS_MS, so older than the reads around them. */
+interface PlanSources {
+    fetchedAt: number;
+    sources: OverviewPlanSource[];
 }
 
 /** A merge queue's reads: everything `mergeQueue` takes but the time. */
@@ -143,7 +151,7 @@ export class ProjectOverviewService {
      * OVERVIEW_PLANS_MS; a failed read is dropped once it lands, so the next
      * poll asks again.
      */
-    private readonly plans = new Map<string, {at: number; sources: Promise<OverviewPlanSource[] | null>}>();
+    private readonly plans = new Map<string, {at: number; sources: Promise<PlanSources | null>}>();
 
     private readonly deps: ProjectOverviewServiceDeps;
 
@@ -278,6 +286,7 @@ export class ProjectOverviewService {
             ok: true,
             fetchedAt: reads.fetchedAt,
             stale: fresh === null,
+            ...(reads.plansFetchedAt === null ? {} : {plansFetchedAt: reads.plansFetchedAt}),
             plansPending: !withPlans,
             mergeQueue: reads.queue ? mergeQueue({...reads.queue, now: this.deps.clock.now()}) : null,
             switchboardLane: reads.lane ? {runMs: medianRunMs(reads.lane.ciRunDurationsMs)} : null,
@@ -306,7 +315,8 @@ export class ProjectOverviewService {
 
         return {
             fetchedAt,
-            plans: sources,
+            plansFetchedAt: sources.fetchedAt,
+            plans: sources.sources,
             issues: issues.map((issue) => projectIssue(issue, repository)),
             pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),
             queue: pullRequests.queue,
@@ -315,17 +325,18 @@ export class ProjectOverviewService {
     }
 
     /** The plans kept for the repository while younger than OVERVIEW_PLANS_MS, or a new read of them. */
-    private planSources(
-        projectPath: string,
-        repository: string,
-        closed: boolean,
-    ): Promise<OverviewPlanSource[] | null> {
+    private planSources(projectPath: string, repository: string, closed: boolean): Promise<PlanSources | null> {
         const key = `${repository}:${closed ? 'closed' : 'open'}`;
         const now = this.deps.clock.now();
         const hit = this.plans.get(key);
         if (hit && now - hit.at < OVERVIEW_PLANS_MS) return hit.sources;
 
-        const entry = {at: now, sources: this.readPlanSources(projectPath, closed).catch(() => null)};
+        const entry = {
+            at: now,
+            sources: this.readPlanSources(projectPath, closed)
+                .then((sources) => (sources ? {fetchedAt: now, sources} : null))
+                .catch(() => null),
+        };
         this.plans.set(key, entry);
         void entry.sources.then((sources) => {
             if (sources === null && this.plans.get(key) === entry) this.plans.delete(key);
@@ -361,6 +372,7 @@ export class ProjectOverviewService {
         if (!issues || !pullRequests) return null;
         return {
             fetchedAt,
+            plansFetchedAt: null,
             plans: [],
             issues: issues.map((issue) => projectIssue(issue, repository)),
             pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),

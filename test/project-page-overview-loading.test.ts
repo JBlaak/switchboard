@@ -26,7 +26,7 @@ import {
     pullRequestRows,
     pullRequestsViewOf,
 } from '../src/renderer/ui/project-page/page-rows';
-import {githubPart} from '../src/renderer/ui/project-page/page-state';
+import {githubPart, plansFreshnessParts} from '../src/renderer/ui/project-page/page-state';
 import {groupOverview} from '../src/domain/plan/project-overview';
 import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
@@ -475,4 +475,77 @@ test('a VM project’s full, fresh answer is stored, even one that still says re
 
     /* Then */
     assert.deepEqual(storable, [true, true, false]);
+});
+
+// ── How old the plans are, beside the page's own read ──
+
+/** The full answer with its plans read at `plansFetchedAt`. */
+function withPlansFetchedAt(o: ProjectOverview, plansFetchedAt: number): ProjectOverview {
+    assert.ok(o.github?.ok);
+    return {...o, github: {...o.github, plansFetchedAt}};
+}
+
+function plansFetchedAtOf(state: RendererState): number | undefined {
+    const github = state.projectPage.overview?.github;
+    assert.ok(github?.ok);
+    return github.plansFetchedAt;
+}
+
+test('the header names the plans’ age when they were read more than a minute before the rest', () => {
+    /* Given */
+    const fetchedAt = NOW;
+
+    /* When */
+    const parts = plansFreshnessParts(fetchedAt, NOW - 4 * 60_000);
+
+    /* Then */
+    assert.deepEqual(parts, [{label: 'plans', at: NOW - 4 * 60_000}]);
+});
+
+test('the header leaves the plans’ age out when they were read within a minute of the rest', () => {
+    /* Given */
+    const fetchedAt = NOW;
+
+    /* When */
+    const parts = [plansFreshnessParts(fetchedAt, NOW), plansFreshnessParts(fetchedAt, NOW - 60_000)];
+
+    /* Then */
+    assert.deepEqual(parts, [[], []]);
+});
+
+test('the header leaves the plans’ age out when either read time is unknown', () => {
+    /* Given */
+    const unknown = [
+        [null, NOW],
+        [NOW, undefined],
+        [NOW, null],
+    ] as const;
+
+    /* When */
+    const parts = unknown.map(([fetchedAt, plansFetchedAt]) => plansFreshnessParts(fetchedAt, plansFetchedAt));
+
+    /* Then */
+    assert.deepEqual(parts, [[], [], []]);
+});
+
+test('an answer without plans landing after the full one keeps the full one’s plans read time', () => {
+    /* Given */
+    const state = run(opened(), answered(withPlansFetchedAt(overview(), 500), true));
+
+    /* When */
+    const next = run(state, answered(overview(false), false));
+
+    /* Then */
+    assert.equal(plansFetchedAtOf(next), 500);
+});
+
+test('an answer without plans over the stored one keeps the stored plans read time', () => {
+    /* Given */
+    const state = opened(stored(withPlansFetchedAt(overview(), 500)));
+
+    /* When */
+    const next = run(state, answered(overview(false), false));
+
+    /* Then */
+    assert.equal(plansFetchedAtOf(next), 500);
 });
