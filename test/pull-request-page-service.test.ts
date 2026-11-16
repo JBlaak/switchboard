@@ -67,7 +67,7 @@ function setup({
     prs = [prStatus()] as PullRequestStatus[] | null,
     diff = DIFF as string | null,
 } = {}) {
-    const world = {gh, prs, diff, statusCalls: 0, diffCalls: 0};
+    const world = {gh, prs, diff, statusCalls: 0, diffCalls: 0, now: Date.UTC(2026, 10, 10, 12, 0, 0)};
     const pushed: SessionWorkSnapshot[] = [];
     const timers = manualTimers();
     const service = new PullRequestPageService({
@@ -89,7 +89,7 @@ function setup({
             },
         },
         renderer: {sessionWorkSnapshot: (snapshot) => pushed.push(snapshot)},
-        clock: {now: () => Date.UTC(2026, 10, 10, 12, 0, 0)},
+        clock: {now: () => world.now},
         timers,
         log: silentLog,
     });
@@ -364,4 +364,59 @@ test('your review on a PR page can be submitted', async () => {
     /* Then */
     assert.deepEqual(plain, {ok: true});
     assert.deepEqual(submitted, ['PRR_1']);
+});
+
+// ── How fresh the PR's status is ──
+
+test("the PR page says when GitHub was last read for the PR's status", async () => {
+    /* Given */
+    const {service, world} = setup();
+
+    /* When */
+    const snapshot = await service.open(PAGE);
+
+    /* Then */
+    assert.deepEqual(snapshot?.pullRequestsRead, {fetchedAt: world.now, failed: false});
+});
+
+test('a failed ask on the PR page keeps the last status and says it could not refresh', async () => {
+    /* Given */
+    const {service, world, pushed} = setup();
+    await service.open(PAGE);
+    const readAt = world.now;
+    world.now += 60_000;
+    world.prs = null;
+
+    /* When */
+    await service.refreshGitHub(PAGE);
+
+    /* Then */
+    const last = pushed.at(-1)!;
+    assert.deepEqual(last.pullRequestsRead, {fetchedAt: readAt, failed: true});
+    const item = last.items[0];
+    assert.equal(item.error, undefined);
+    assert.equal(item.kind === 'pr' && item.pr.title, 'Rename things');
+});
+
+test('a PR page whose first ask fails has no time to show', async () => {
+    /* Given */
+    const {service} = setup({prs: null});
+
+    /* When */
+    const snapshot = await service.open(PAGE);
+
+    /* Then */
+    assert.deepEqual(snapshot?.pullRequestsRead, {fetchedAt: null, failed: true});
+    assert.match(snapshot?.items[0].error ?? '', /GitHub did not answer/);
+});
+
+test('a PR page without gh says nothing about how fresh the PR is', async () => {
+    /* Given */
+    const {service} = setup({gh: 'missing'});
+
+    /* When */
+    const snapshot = await service.open(PAGE);
+
+    /* Then */
+    assert.equal(snapshot?.pullRequestsRead, undefined);
 });

@@ -206,6 +206,18 @@ export interface SessionWorkDiff {
 /** Whether `gh` can be asked anything: installed, and signed in to github.com (D9). */
 export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
 
+/**
+ * How fresh what GitHub said about some PRs is: when it was last read in
+ * full, and whether the latest read failed (what shows is then that older
+ * read's).
+ */
+export interface GitHubRead {
+    /** Epoch ms of the last read that answered for every PR; null when none has. */
+    fetchedAt: number | null;
+    /** The latest read failed for at least one PR. */
+    failed: boolean;
+}
+
 /** What the open page knows about its session beyond its items. */
 export interface WorkPageContext {
     /** `owner/name`; '' when the session's repository is not on GitHub. */
@@ -231,6 +243,8 @@ export interface SessionWorkSnapshot {
     gh: GitHubAvailability;
     /** ISO-8601: when this snapshot was assembled. */
     updatedAt: string;
+    /** How fresh its PRs' status and checks are; absent when it has no PR `gh` was asked about. */
+    pullRequestsRead?: GitHubRead;
 }
 
 /** Which side of a diff a line, or a comment on it, belongs to — GitHub's names. */

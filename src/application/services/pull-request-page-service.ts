@@ -8,7 +8,9 @@
  * `gh` again every minute while it is open, like a session's page.
  *
  * Its item is marked as in another repository: there is no checkout of it
- * here. Only one such page is open at a time.
+ * here. Only one such page is open at a time. When an ask fails after one
+ * answered, the page keeps that answer and says how old it is
+ * (`pullRequestsRead`).
  */
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {workItemKey} from '../../domain/session-work/items';
@@ -16,6 +18,7 @@ import {pullRequestPageRef, pullRequestUrl, type PullRequestRef} from '../../dom
 import type {
     FileDiff,
     GitHubAvailability,
+    GitHubRead,
     PullRequestStatus,
     SessionWorkDiff,
     SessionWorkItem,
@@ -43,6 +46,8 @@ interface Page {
     readonly ref: PullRequestRef;
     gh: GitHubAvailability;
     item: SessionWorkItem;
+    /** How fresh the item's status is; null until `gh` was asked about it. */
+    read: GitHubRead | null;
     poll: TimerHandle | null;
     building: Promise<void> | null;
     again: boolean;
@@ -87,6 +92,7 @@ export class PullRequestPageService {
             ref,
             gh: 'missing',
             item: bareItem(ref),
+            read: null,
             poll: null,
             building: null,
             again: false,
@@ -203,21 +209,35 @@ export class PullRequestPageService {
         const gh = await github.available();
         if (page.closed) return;
         let item: SessionWorkItem;
+        let read: GitHubRead | null = null;
         if (gh !== 'ok') {
             item = {...bareItem(page.ref), error: unavailableReason(gh)};
         } else {
             const statuses = await github.pullRequests(page.ref.repository, [page.ref.number]);
             if (page.closed) return;
             const pr = statuses?.find((status) => status.number === page.ref.number);
-            item = pr
-                ? pullRequestItem(page.ref, pr)
-                : {
-                      ...bareItem(page.ref),
-                      error: statuses === null ? 'GitHub did not answer for this PR' : 'GitHub does not know this PR',
-                  };
+            const lastRead = page.read?.fetchedAt ?? null;
+            if (statuses === null && lastRead !== null) {
+                // A failed ask keeps the last answer, marked as old.
+                item = page.item;
+                read = {fetchedAt: lastRead, failed: true};
+            } else {
+                item = pr
+                    ? pullRequestItem(page.ref, pr)
+                    : {
+                          ...bareItem(page.ref),
+                          error:
+                              statuses === null ? 'GitHub did not answer for this PR' : 'GitHub does not know this PR',
+                      };
+                read =
+                    statuses === null
+                        ? {fetchedAt: null, failed: true}
+                        : {fetchedAt: this.deps.clock.now(), failed: false};
+            }
         }
         page.gh = gh;
         page.item = item;
+        page.read = read;
         this.publish(page);
     }
 
@@ -227,7 +247,8 @@ export class PullRequestPageService {
         const item: SessionWorkItem = error ? {...page.item, error} : page.item;
         const items = [item];
         const footprint = {worktrees: 0, branches: 0};
-        const key = JSON.stringify({gh: page.gh, items});
+        const pullRequestsRead = page.read;
+        const key = JSON.stringify({gh: page.gh, items, pullRequestsRead});
         if (key === page.lastKey && page.last) return;
         page.lastKey = key;
         page.last = {
@@ -237,6 +258,7 @@ export class PullRequestPageService {
             footprint,
             gh: page.gh,
             updatedAt: new Date(this.deps.clock.now()).toISOString(),
+            ...(pullRequestsRead ? {pullRequestsRead} : {}),
         };
         this.deps.renderer.sessionWorkSnapshot(page.last);
     }

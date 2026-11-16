@@ -14,7 +14,9 @@
  *
  * Errors belong to the item they happened to. A PR whose status `gh` could not
  * fetch, or whose diff could not be had, says so on that item; the rest of the
- * page carries on.
+ * page carries on. A PR `gh` answered for before keeps that answer when a
+ * later ask fails, and the snapshot says how fresh its PRs' status is
+ * (`pullRequestsRead`), so the page can say it could not refresh.
  */
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {imageFormatOf, imagePaths, type ImageFormat} from '../../domain/session-work/image';
@@ -27,6 +29,7 @@ import type {SessionPullRequest} from '../../domain/session/session';
 import type {
     FileDiff,
     GitHubAvailability,
+    GitHubRead,
     IssueRef,
     IssueStatus,
     LineStats,
@@ -116,8 +119,12 @@ interface GitHubFacts {
     availability: GitHubAvailability;
     /** The PR URLs these answers are for; a new PR link asks again. */
     prKey: string;
-    /** Per repository; null where the request failed. */
+    /** Per repository; the last good answer where a later ask failed, null where none was had. */
     pullRequests: Map<string, PullRequestStatus[] | null>;
+    /** The repositories whose PRs the latest ask failed for. */
+    failedRepositories: Set<string>;
+    /** How fresh `pullRequests` is; null when no PR was asked about. */
+    pullRequestsRead: GitHubRead | null;
     /** The mentions these answers are for. */
     issueKey: string;
     /** Per repository; null where the request failed. */
@@ -513,7 +520,8 @@ export class SessionWorkService {
             return error ? {...item, error} : item;
         });
         const {footprint} = page;
-        const key = JSON.stringify({gh, items, footprint});
+        const pullRequestsRead = gh === 'ok' ? (page.github?.pullRequestsRead ?? null) : null;
+        const key = JSON.stringify({gh, items, footprint, pullRequestsRead});
         if (key === page.lastKey && page.last) return;
         page.lastKey = key;
         page.last = {
@@ -523,6 +531,7 @@ export class SessionWorkService {
             footprint,
             gh,
             updatedAt: new Date(this.deps.clock.now()).toISOString(),
+            ...(pullRequestsRead ? {pullRequestsRead} : {}),
         };
         this.deps.renderer.sessionWorkSnapshot(page.last);
     }
@@ -626,16 +635,37 @@ export class SessionWorkService {
 
         const availability = askAgain || !known ? await github.available() : known.availability;
         if (availability !== 'ok') {
-            page.github = {availability, prKey, pullRequests: new Map(), issueKey, issues: new Map()};
+            page.github = {
+                availability,
+                prKey,
+                pullRequests: new Map(),
+                failedRepositories: new Set(),
+                pullRequestsRead: null,
+                issueKey,
+                issues: new Map(),
+            };
             return page.github;
         }
 
-        let prs = known?.pullRequests ?? new Map<string, PullRequestStatus[] | null>();
-        if (askAgain || known?.availability !== 'ok' || known.prKey !== prKey) {
+        const good = known?.availability === 'ok' ? known : null;
+        let prs = good?.pullRequests ?? new Map<string, PullRequestStatus[] | null>();
+        let failedRepositories = good?.failedRepositories ?? new Set<string>();
+        let pullRequestsRead = good?.pullRequestsRead ?? null;
+        if (askAgain || !good || good.prKey !== prKey) {
             prs = new Map();
-            for (const [repo, numbers] of byRepository(pullRequests, repository)) {
-                prs.set(repo, await github.pullRequests(repo, numbers));
+            failedRepositories = new Set();
+            const repositories = byRepository(pullRequests, repository);
+            for (const [repo, numbers] of repositories) {
+                const answer = await github.pullRequests(repo, numbers);
+                if (answer === null) failedRepositories.add(repo);
+                // A failed ask keeps the last good answer, so the page still shows it, marked as old.
+                prs.set(repo, answer ?? good?.pullRequests.get(repo) ?? null);
             }
+            const failed = failedRepositories.size > 0;
+            pullRequestsRead =
+                repositories.size === 0
+                    ? null
+                    : {fetchedAt: failed ? (pullRequestsRead?.fetchedAt ?? null) : this.deps.clock.now(), failed};
         }
         let issues = known?.issues ?? new Map<string, IssueStatus[] | null>();
         if (askAgain || known?.availability !== 'ok' || known.issueKey !== issueKey) {
@@ -644,7 +674,15 @@ export class SessionWorkService {
                 issues.set(repo, await github.issues(repo, numbers));
             }
         }
-        page.github = {availability, prKey, pullRequests: prs, issueKey, issues};
+        page.github = {
+            availability,
+            prKey,
+            pullRequests: prs,
+            failedRepositories,
+            pullRequestsRead,
+            issueKey,
+            issues,
+        };
         return page.github;
     }
 
@@ -806,6 +844,11 @@ function pullRequestError(item: WorkItem, github: GitHubFacts, repository: strin
     const repo = item.pr.repository || repository;
     const answer = github.pullRequests.get(repo);
     if (answer === null) return 'GitHub did not answer for this PR';
-    if (answer && !answer.some((pr) => pr.number === item.pr.number)) return 'GitHub does not know this PR';
+    if (answer && !answer.some((pr) => pr.number === item.pr.number)) {
+        // A kept answer from before this PR was linked does not know it yet.
+        return github.failedRepositories.has(repo)
+            ? 'GitHub did not answer for this PR'
+            : 'GitHub does not know this PR';
+    }
     return undefined;
 }
