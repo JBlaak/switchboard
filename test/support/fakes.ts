@@ -232,6 +232,7 @@ export function fakeRenderer(): FakeRenderer {
         sessionTaskChanged: record('sessionTaskChanged'),
         inboxChanged: record('inboxChanged'),
         mergeManagerChanged: record('mergeManagerChanged'),
+        githubBudgetHeld: record('githubBudgetHeld'),
     };
 }
 

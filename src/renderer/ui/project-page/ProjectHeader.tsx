@@ -27,7 +27,7 @@ import {resolveWatchIssues} from '../../../domain/settings/inbox-settings';
 import {readProjectBlob, setWatchIssues} from './settings-actions';
 import {projectLabel} from '../../features/sessions/project-label';
 import {useStore} from '../use-store';
-import {formatDate} from '../../lib/format';
+import {Freshness} from '../shared/Freshness';
 import {opensGitHub, remoteHost} from './page-state';
 import {remoteBadge} from '../../features/sessions/remote-badge';
 import {isVmProjectIn} from '../../state/agent-host-slice';
@@ -74,7 +74,7 @@ function HeaderFacts({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
-/** "Updated 2m ago": when GitHub's part of the page was read; "· Updating…" while it is the stored answer. */
+/** "Updated 2m ago": when GitHub's part of the page was read; refreshing while it is the stored answer. */
 function UpdatedAt({projectPath}: {projectPath: string}): JSX.Element | null {
     const fetchedAt = useStore((state) => {
         const overview = state.projectPage.overview;
@@ -84,15 +84,7 @@ function UpdatedAt({projectPath}: {projectPath: string}): JSX.Element | null {
         (state) =>
             state.projectPage.overview?.projectPath === projectPath && state.projectPage.overviewFrom?.stored === true,
     );
-    const now = useStore((state) => state.sessionList.now) || Date.now();
-    if (fetchedAt === null && !updating) return null;
-    return (
-        <span className="pp-updated">
-            {fetchedAt !== null && 'Updated ' + formatDate(new Date(fetchedAt), Math.max(now, fetchedAt))}
-            {fetchedAt !== null && updating && ' · '}
-            {updating && 'Updating…'}
-        </span>
-    );
+    return <Freshness fetchedAt={fetchedAt} refreshing={updating} />;
 }
 
 /** VM (#276), as the Projects modal badges the project; an ssh project's header stays as it was. */

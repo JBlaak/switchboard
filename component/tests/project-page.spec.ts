@@ -398,6 +398,34 @@ test.describe('plans and issues', () => {
         await expect(pinnedRow).toBeVisible();
     });
 
+    test('the header says how fresh GitHub’s part is, and that its reads are paused while the budget is held', async ({
+        page,
+        api,
+    }) => {
+        /* Given */
+        await rowProjectLink(page, S.loginFix).click();
+        const freshness = projectPage(page).getByTestId('freshness');
+        await expect(freshness).toHaveText(/^Updated /);
+        const until = Date.now() + 20 * 60_000;
+        // In the page's timezone, which need not be this process's.
+        const clock = await page.evaluate((ms) => {
+            const at = new Date(ms);
+            return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+        }, until);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', until);
+
+        /* Then */
+        await expect(freshness).toContainText(`Paused: GitHub budget low until ${clock}`);
+
+        /* When */
+        await api.emit('onGithubBudgetHeld', null);
+
+        /* Then */
+        await expect(freshness).not.toContainText('Paused');
+    });
+
     test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({page}) => {
         /* Given */
         await rowProjectLink(page, S.loginFix).click();

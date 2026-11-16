@@ -226,6 +226,11 @@ export class PhoneEventTee implements RendererGateway {
         this.inner.mergeManagerChanged(state);
         this.phones()?.errandsChanged();
     }
+
+    // The freshness lines are the Mac's alone.
+    public githubBudgetHeld(until: number | null): void {
+        this.inner.githubBudgetHeld(until);
+    }
 }
 
 export interface PhoneAccessDeps extends Omit<

@@ -50,6 +50,7 @@ export const DEFAULT_ANSWERS: Answers = {
     vmHosts: [],
     inboxSummary: EMPTY_INBOX_SUMMARY,
     mergeManagerState: EMPTY_MERGE_MANAGER_STATE,
+    githubHeldUntil: null,
     warmAskRoute: undefined,
 
     // A session on screen: its tray and its header's reads

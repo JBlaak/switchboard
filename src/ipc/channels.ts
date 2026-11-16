@@ -247,6 +247,9 @@ export const INVOKE = {
     workspaceOpenInEditor: 'workspace:open-in-editor',
     workspaceRevealInFinder: 'workspace:reveal-in-finder',
     workspaceShellHere: 'workspace:shell-here',
+
+    // GitHub's GraphQL budget: until when expensive reads are held back
+    githubHeldUntil: 'github:held-until',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -305,6 +308,7 @@ export const EVENT = {
     sessionHandoffPhase: 'session-handoff:phase',
     sessionBringBackPhase: 'session-bring-back:phase',
     vmHostsChanged: 'vm-registry:changed',
+    githubBudgetHeld: 'github:budget-held',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

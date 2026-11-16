@@ -44,6 +44,7 @@ import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import {installMergeManager} from '../ui/merge-manager/install-merge-manager';
 import {installMergeManagerPage} from '../ui/merge-manager/install-merge-manager-page';
 import {installBugPage} from '../ui/bug-manager/install-bug-page';
+import {installGithubBudget} from '../ui/shared/install-github-budget';
 import {installLoopPause} from '../lib/motion/loops';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
@@ -78,6 +79,7 @@ export function bootstrap(): void {
     installMergeManager();
     installMergeManagerPage();
     installBugPage();
+    installGithubBudget();
     followColorSchemeInTerminals();
     installTerminalProbe();
     // The surfaces that have moved to React portal out of it.
