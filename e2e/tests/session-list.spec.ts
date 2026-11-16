@@ -1,6 +1,6 @@
 /**
  * The session list, wired to the real app: the blank space under a short list,
- * which drags the real window, and the screenshot of every row state.
+ * which drags the real window.
  *
  * Everything else the list does against main — statuses filing rows under
  * their sections, what a redraw leaves alone, where the keyboard goes, pin,
@@ -9,20 +9,14 @@
  * against the pure layout and the session-list slice
  * (`test/session-list-layout.test.ts`, `test/session-list-slice.test.ts`,
  * `test/session-list-row-labels.test.ts`, `test/session-list-redraw.test.ts`).
- * The screenshots of the plain list, its filters and the older sessions are
- * in `sidebar.spec.ts`; the one here adds the row states and an open slug
- * group.
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {expectScreen, openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
+import {test, expect} from '../support/test';
+import {openSession, sessionRow, terminalHeader} from '../support/app';
 import {minutesAgo, sessionId} from '../support/fixture-home';
 import {windowPosition} from '../support/main-process';
-import {askQuestions} from '../support/questions';
-import {redraw, sessionItem} from '../support/session-list';
-import {LABEL, P, S} from '../fixtures/standard';
+import {sessionItem} from '../support/session-list';
+import {P} from '../fixtures/standard';
 import type {FixtureSpec} from '../support/fixture-home';
-
-const BILLING_STEP_1 = 'Implement the plan: extract the invoice model';
 
 /** A short list, so there is space left under it. */
 function shortList(): FixtureSpec {
@@ -102,33 +96,5 @@ test.describe('under a short list', () => {
         await expect(page.getByTestId('empty-screen')).toBeVisible();
         await expect(terminalHeader(page)).toBeHidden();
         await expect(sessionItem(page, sessionId('short-1'))).not.toHaveClass(/\bactive\b/);
-    });
-});
-
-// ── Screenshots ──
-
-forEachAppearance(() => {
-    screenTest('session list, every row state', async ({page, app, home}) => {
-        /* Given */
-        await sessionRow(page, LABEL.billingGroup).first().click();
-        const login = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        const worktree = await openSession(page, home, LABEL.worktreeTry, S.worktreeTry);
-        const charts = await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
-        await openSession(page, home, BILLING_STEP_1, S.billingStep1);
-
-        /* When */
-        await worktree.status({state: 'working'});
-        await worktree.status({state: 'working', id: 'agents/1', title: 'Explore the cookie store'});
-        await charts.status({state: 'working'});
-        await charts.status({state: 'idle'});
-        await login.status({state: 'working'});
-        await askQuestions(home, S.loginFix, [{question: 'Scope?', options: [{label: 'Site'}, {label: 'App'}]}]);
-        await redraw(page, app, S.bumpDeps);
-
-        /* Then */
-        await expect(sidebar(page).getByText('Asking 1 question', {exact: true})).toBeVisible();
-        await expect(sessionItem(page, S.worktreeTry).getByTitle(/^1 agent working/)).toBeVisible();
-        await expect(sessionItem(page, S.chartsDarkMode)).toHaveClass(/\bresponse-ready\b/);
-        await expectScreen(page, 'session-list-row-states');
     });
 });

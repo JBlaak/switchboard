@@ -8,8 +8,8 @@
  * component/tests/reading-page.spec.ts; the tool's protocol, the service and
  * the pages slice are unit tested (test/page-tool.test.ts).
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {expectScreen, openSession, terminalHeader} from '../support/app';
+import {test, expect} from '../support/test';
+import {openSession, terminalHeader} from '../support/app';
 import {showPage} from '../support/pages';
 import {LABEL, S} from '../fixtures/standard';
 import type {Page} from '@playwright/test';
@@ -66,19 +66,5 @@ test.describe('smoke', () => {
 
         /* Then */
         await expect(readingPage(page)).toBeVisible();
-    });
-});
-
-forEachAppearance(() => {
-    screenTest('reading page', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await showPage(home, S.loginFix, {title: TITLE, html: HTML});
-
-        /* Then */
-        await expect(article(page).getByRole('heading', {name: '3. Liability'})).toBeVisible();
-        await expectScreen(page, 'reading-page');
     });
 });

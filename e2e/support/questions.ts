@@ -132,54 +132,6 @@ export function option(page: Page, label: string | RegExp): Locator {
     return questionPanel(page).getByRole('button', {name: label});
 }
 
-/** One Web Animation the page started, as `recordAnimations` saw it. */
-export interface RecordedAnimation {
-    /** The animated element's tag and classes, e.g. `div.qp-q`. */
-    target: string;
-    duration: number;
-    delay: number;
-    /** `performance.now()` when it was started. */
-    at: number;
-}
-
-/**
- * Start recording every `Element.animate` call in the window.
- *
- * The panel's motion runs through the Web Animations API and is over in a few
- * hundred milliseconds, too quick to catch by polling `getAnimations()`; this
- * notes each one as it starts instead. The targets are named by tag and
- * class because an animated element is often an anonymous wrapper with no
- * role; the classes are only read back, never used to find anything.
- */
-export async function recordAnimations(page: Page): Promise<void> {
-    await page.evaluate(() => {
-        const w = window as unknown as {__animations: unknown[]};
-        w.__animations = [];
-        const original = Element.prototype.animate;
-        Element.prototype.animate = function (this: Element, keyframes, options) {
-            const timing = typeof options === 'number' ? {duration: options} : (options ?? {});
-            const classes = this.getAttribute('class') ?? '';
-            w.__animations.push({
-                target: [this.tagName.toLowerCase(), ...classes.split(/\s+/).filter(Boolean)].join('.'),
-                duration: Number(timing.duration ?? 0),
-                delay: Number(timing.delay ?? 0),
-                at: performance.now(),
-            });
-            return original.call(this, keyframes, options);
-        };
-    });
-}
-
-/** The animations recorded so far, oldest first; `clear` empties the record. */
-export async function recordedAnimations(page: Page, {clear = false} = {}): Promise<RecordedAnimation[]> {
-    return await page.evaluate((clear) => {
-        const w = window as unknown as {__animations: RecordedAnimation[]};
-        const list = [...w.__animations];
-        if (clear) w.__animations.length = 0;
-        return list;
-    }, clear);
-}
-
 /** Where the keyboard is: in the question sheet, in a terminal, or elsewhere. */
 export async function focusIsIn(page: Page): Promise<'panel' | 'terminal' | 'other'> {
     return await page.evaluate(() => {

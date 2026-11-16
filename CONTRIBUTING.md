@@ -27,17 +27,11 @@ CLI or network is needed.
 ```bash
 npm run test:e2e                          # build, then run the whole suite
 npm run test:e2e -- e2e/tests/sidebar.spec.ts --grep "pinned"
-npm run test:e2e -- --update-snapshots    # rewrite the screenshot baselines
 ```
 
 The windows stay hidden and never take focus, so you can keep working while it
 runs. `SB_E2E_HEADED=1` shows them, for watching a test.
-`SB_E2E_SKIP_SCREENSHOTS=1` runs every functional assertion but skips the
-pixel comparisons, and runs the tests that cover both colour schemes in light
-only, since dark repeats light's assertions for its own baselines. CI does that:
-the baselines are rendered on a developer's Mac, and a runner's macOS version
-and GPU draw text differently enough to fail them. Run the screenshots locally
-before you push.
+The e2e suite has no screenshot tests: it checks behaviour, not pixels.
 
 **On Linux** the suite runs too, for developing on a Linux box (tested on
 Ubuntu 24.04). Electron needs its GTK and NSS libraries, and the windows need a
@@ -59,16 +53,6 @@ after changing `src/`; `npm run test:e2e` does that and then passes its
 arguments on, so `xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:e2e`
 works as well.
 
-**Baselines** live in `e2e/tests/__screenshots__/<spec>/<name>-<light|dark>-<platform>.png`,
-one per surface and colour scheme and per platform: `-darwin` from a Mac,
-`-linux` from Xvfb. A run only compares against its own platform's, so a
-visual change needs both updated, each on its own platform; if you can only
-render one, say so in the PR. The Linux ones are drawn with the fonts the
-packages above bring in (DejaVu for the terminal); a box with more fonts
-installed may draw a stray glyph differently. Update them only for an intended
-visual change, look at every changed image before committing it, and say in
-the PR why it changed. A port that needs a baseline updated has changed the UI.
-
 **Fixture sessions** are built in code, not committed as JSONL.
 `e2e/fixtures/standard.ts` is the shared fixture: add a session there as one
 object (a stable id from `sessionId('name')`, a prompt, a time such as
@@ -80,11 +64,9 @@ a different world passes its own spec with `test.use({ fixture: … })`.
 **The helpers** are in `e2e/support/`: `fakeClaude(home, id)` and
 `fakeSsh(home, id)` script the fake CLIs (titles, busy/idle, OSC 7501, OSC 9
 notifications, output, transcript lines, a fork, an exit code),
-`askQuestions` posts an AskUserQuestion to the session's hook,
-`pushRemoteStatus` puts the connection card in any phase, and
-`expectScreen` takes a whole-window screenshot. The host-facing channels
-(usage, updates, sleep, the folder picker, the browser) answer from stubs a
-test sets with `test.use({ stubs: … })` or `setHostStub`, and
+and `askQuestions` posts an AskUserQuestion to the session's hook. The
+host-facing channels (usage, updates, sleep, the folder picker, the browser)
+answer from stubs a test sets with `test.use({ stubs: … })` or `setHostStub`, and
 `hostStubCalls` counts what the renderer asked for. A test about timing
 passes `test.use({ fakeTimers: true })` and jumps the renderer's clock with
 `page.clock.fastForward`.
@@ -99,11 +81,6 @@ side effect in the main process, or a journey across main and renderer. Each
 test launches the app, so a few fuller journeys beat many small checks. Find
 elements by role, label or text, and add a `data-testid` only where nothing
 accessible identifies the element.
-
-**Screenshot-only tests** are declared with `screenTest` instead of `test`:
-on CI, where comparisons are skipped, they are skipped before the app
-launches. Use it only when everything else the test asserts is proven by
-another test.
 
 ## Component tests
 

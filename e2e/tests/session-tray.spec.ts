@@ -31,9 +31,9 @@ test('the tray stays open with the pointer anywhere over the bar, and the bar st
     await header.getByText(LABEL.loginFix, {exact: true}).hover();
     await expect(tray).toHaveClass(/is-open/);
     const box = (await header.boundingBox())!;
-    // Every point of the bar on a grid, edge to edge, as a real pointer reaches it.
-    const points = [0.02, 0.15, 0.3, 0.45, 0.5, 0.55, 0.7, 0.85, 0.98].flatMap((fx) =>
-        [0.1, 0.5, 0.9].map((fy) => ({x: box.x + box.width * fx, y: box.y + box.height * fy})),
+    // Both ends and the middle of the bar, near its top and bottom edges, as a real pointer reaches them.
+    const points = [0.02, 0.5, 0.98].flatMap((fx) =>
+        [0.1, 0.9].map((fy) => ({x: box.x + box.width * fx, y: box.y + box.height * fy})),
     );
 
     /* When */

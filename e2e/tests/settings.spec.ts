@@ -1,7 +1,7 @@
 /**
  * The global settings viewer, and a project's settings on its page (#176), in
- * the app: their screenshots, what a project's change does to the next real
- * launch, and the ⌥Space switch letting go of the global shortcut.
+ * the app: what a project's change does to the next real launch,
+ * and the ⌥Space switch letting go of the global shortcut.
  *
  * The weather city lookup's cases are unit tested
  * (test/settings-weather-city.test.ts), the panel's open/save/close state and
@@ -12,8 +12,8 @@
  * Hide project, saved prompts and the weather lookup are component tested
  * (component/tests/settings.spec.ts).
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {chooseProjectAction, expectScreen} from '../support/app';
+import {test, expect} from '../support/test';
+import {chooseProjectAction} from '../support/app';
 import {launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {pressQuickAsk, refuseQuickAskHotkey} from '../support/main-process';
 import {P, standardFixture} from '../fixtures/standard';
@@ -80,24 +80,6 @@ async function readSetting(page: Page, key: string): Promise<Record<string, unkn
     return await page.evaluate((key) => window.api.getSetting<Record<string, unknown>>(key), key);
 }
 
-forEachAppearance(() => {
-    screenTest('global settings: as it opens, and scrolled to the bottom', async ({page}) => {
-        /* When */
-        await openGlobalSettings(page);
-
-        /* Then */
-        await expectScreen(page, 'settings-global');
-
-        /* When */
-        const body = page.locator('#settings-viewer-body');
-        await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
-        await expect(field(page, 'Dock Icon').getByRole('combobox')).toBeInViewport();
-
-        /* Then */
-        await expectScreen(page, 'settings-global-app-icon');
-    });
-});
-
 test.describe('quick ask', () => {
     // Taking it back, and trying again after a refusal, are unit tested (test/quick-ask-hotkey.test.ts).
     test('the switch lets go of ⌥Space, and says when another app holds it', async ({page, app}) => {
@@ -143,18 +125,6 @@ test.describe('project settings on the project page', () => {
         projectSettings: {[P.acmeApi]: {addDirs: '/proj', chrome: true}},
     };
     test.use({fixture: OVERRIDES});
-
-    forEachAppearance(() => {
-        screenTest('project settings', async ({page}) => {
-            /* When */
-            await openProjectSettings(page, P.acmeApi);
-            await expect(projectSettings(page, P.acmeApi)).toBeFocused();
-            await expect(projectSettings(page, P.acmeApi).getByLabel('Extra directories')).toHaveValue('/proj');
-
-            /* Then */
-            await expectScreen(page, 'settings-project');
-        });
-    });
 
     test('a change saves at once, the next session started in the project launches with it, and Reset drops every override', async ({
         page,

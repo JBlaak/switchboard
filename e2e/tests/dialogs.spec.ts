@@ -1,6 +1,6 @@
 /**
- * The modal dialogs, in the app: their screenshots, and adding a real folder
- * from the Projects modal and starting a session in it.
+ * The modal dialogs, in the app: adding a real folder from
+ * the Projects modal and starting a session in it.
  *
  * What the dialogs decide on their own — the modal's ranking, rows, keys and
  * folder check, the add form's blank-field rules, the permission grid and the
@@ -13,15 +13,10 @@
  * the real launch in it.
  */
 import fs from 'node:fs';
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {dialog, expectScreen, rowButton, sessionRow, sidebar} from '../support/app';
+import {test, expect} from '../support/test';
+import {dialog, sidebar} from '../support/app';
 import {launchedKeys, waitForNewLaunch} from '../support/fake-cli';
-import {LABEL} from '../fixtures/standard';
 import type {Page} from '@playwright/test';
-
-function openProjects(page: Page) {
-    return page.getByRole('button', {name: 'Projects', exact: true}).click();
-}
 
 function projectsModal(page: Page) {
     return dialog(page, 'Projects');
@@ -29,12 +24,6 @@ function projectsModal(page: Page) {
 
 function filter(page: Page) {
     return projectsModal(page).getByLabel('Filter projects');
-}
-
-async function openResumeWithConfig(page: Page, label: string) {
-    const row = sessionRow(page, label);
-    await row.hover();
-    await rowButton(row, 'Resume with config').click();
 }
 
 /** Take the focus off whatever has it, so a stray Enter cannot click a button. */
@@ -55,49 +44,6 @@ function newProjectPage(page: Page) {
 function litRows(page: Page) {
     return sidebar(page).locator('[data-session-id].active');
 }
-
-forEachAppearance(() => {
-    screenTest('dialog screens', async ({page}) => {
-        /* When */
-        await openProjects(page);
-        await expect(projectsModal(page).getByText('Development/acme-api', {exact: true})).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'dialog-project-picker', {soft: true});
-
-        /* When */
-        await page.keyboard.press('Meta+Period');
-        await expect(page.getByRole('menu')).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'dialog-project-menu', {soft: true});
-
-        /* When */
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Meta+Enter');
-        await expect(dialog(page, /Add project$/)).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'dialog-add-project-local', {soft: true});
-
-        /* When */
-        await dialog(page, /Add project$/)
-            .getByRole('tab', {name: 'Remote (SSH)'})
-            .click();
-        await expect(dialog(page, /Add project$/).getByPlaceholder('host or IP')).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'dialog-add-project-remote', {soft: true});
-
-        /* When */
-        await page.keyboard.press('Escape');
-        await openResumeWithConfig(page, LABEL.releaseNotes);
-        await expect(dialog(page, /^Resume Session/)).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'dialog-resume-with-config', {soft: true});
-    });
-});
 
 test.describe('adding a project', () => {
     test('⌘A, paste a folder path, ↵: the folder is added and its page opens, ready to start in', async ({

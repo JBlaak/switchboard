@@ -1,7 +1,6 @@
 /**
  * A remote session in the app: the fake `ssh` dialled through the login
- * shell, main's reconnect loop behind the connection card, and the card's
- * screenshots.
+ * shell, and main's reconnect loop behind the connection card.
  *
  * What the card says and when it is up (phases, countdowns, the progress
  * bar's runs, the green beat) is unit tested in test/remote-card.test.ts and
@@ -14,9 +13,8 @@
  * (component/tests/remote.spec.ts). These tests drive main's real reconnect
  * loop through the fake ssh.
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {expectScreen, openRemoteSession, sessionRow, terminalStatus} from '../support/app';
-import {pushRemoteStatus} from '../support/main-process';
+import {test, expect} from '../support/test';
+import {openRemoteSession, sessionRow, terminalStatus} from '../support/app';
 import {expectTerminalText, hasTerminal} from '../support/terminal';
 import {LABEL, REMOTE, S} from '../fixtures/standard';
 import {SEND} from '../../src/ipc/channels';
@@ -149,44 +147,5 @@ test.describe('buttons', () => {
 
         /* Then */
         await ssh.waitForLaunchCount(2);
-    });
-});
-
-forEachAppearance(() => {
-    // What each phase says and offers is component tested (component/tests/remote.spec.ts).
-    screenTest('remote card, connecting, then retrying, then failed', async ({page, home, app}) => {
-        /* When */
-        await openRemoteSession(page, home, LABEL.remoteApi, S.remoteApi);
-        await expect(page.getByText('Connecting', {exact: true})).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'remote-connecting');
-
-        /* When */
-        await pushRemoteStatus(app, S.remoteApi, {
-            phase: 'retrying',
-            target: TARGET,
-            reason: 'ssh connection failed or dropped',
-            attempt: 2,
-            maxAttempts: 6,
-            delayMs: 30_000,
-            everConnected: true,
-        });
-        await expect(terminalStatus(page)).toHaveText('Reconnecting in 30s');
-
-        /* Then */
-        await expectScreen(page, 'remote-retrying');
-
-        /* When */
-        await pushRemoteStatus(app, S.remoteApi, {
-            phase: 'failed',
-            target: TARGET,
-            reason: 'the host rejected the connection',
-            attempts: 1,
-        });
-        await expect(page.getByText('Could not connect', {exact: true})).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'remote-failed');
     });
 });

@@ -5,7 +5,7 @@
  * ```ts
  * import { test, expect } from '../support/test';
  *
- * test.use({ fixture: standardFixture(), appearance: 'dark' });
+ * test.use({ fixture: standardFixture() });
  *
  * test('shows the pinned session', async ({ page }) => {
  *   await expect(page.getByText(LABEL.releaseNotes)).toBeVisible();
@@ -23,7 +23,7 @@ import {test as base, expect} from '@playwright/test';
 import type {ElectronApplication, Page} from '@playwright/test';
 import {fixtureHome} from './fixture-home';
 import {launchApp, mainWindow} from './launch';
-import {SCREENSHOTS_SKIPPED, waitForIndex} from './app';
+import {waitForIndex} from './app';
 import {standardFixture} from '../fixtures/standard';
 import type {FixtureHome, FixtureSpec} from './fixture-home';
 import type {HostStubs} from './main-process';
@@ -31,8 +31,6 @@ import type {HostStubs} from './main-process';
 export interface HarnessOptions {
     /** What the fixture home holds. Defaults to the standard fixture. */
     fixture: FixtureSpec;
-    /** The app's own appearance setting, so both schemes are the app's real ones. */
-    appearance: 'light' | 'dark';
     /** Overrides for the host stubs (usage, updates, sleep, folder picker). */
     stubs: Partial<HostStubs>;
     /**
@@ -51,12 +49,11 @@ export interface HarnessFixtures {
 
 export const test = base.extend<HarnessOptions & HarnessFixtures>({
     fixture: [standardFixture(), {option: true}],
-    appearance: ['light', {option: true}],
     stubs: [{}, {option: true}],
     fakeTimers: [false, {option: true}],
 
-    home: async ({fixture, appearance}, use) => {
-        const home = fixtureHome({...fixture, settings: {...fixture.settings, appearance}});
+    home: async ({fixture}, use) => {
+        const home = fixtureHome(fixture);
         await use(home);
         home.dispose();
     },
@@ -79,39 +76,3 @@ export const test = base.extend<HarnessOptions & HarnessFixtures>({
 });
 
 export {expect};
-
-/**
- * Run the enclosed tests once per colour scheme, named "… (light)" / "… (dark)".
- *
- * The second scheme is there for its screenshot baselines; its functional
- * assertions are the first one's again. So with screenshots skipped (as on CI)
- * only light runs, which saves a launch and a run for each of these tests.
- */
-export function forEachAppearance(define: (appearance: 'light' | 'dark') => void): void {
-    const appearances = SCREENSHOTS_SKIPPED ? (['light'] as const) : (['light', 'dark'] as const);
-    for (const appearance of appearances) {
-        test.describe(appearance, () => {
-            test.use({appearance});
-            define(appearance);
-        });
-    }
-}
-
-/** A test's body, as `test(title, details, body)` takes it. */
-type TestBody = Parameters<typeof test>[2];
-
-/**
- * A test that is there for its screenshots: what it asserts besides them only
- * waits for the screen to settle, and is proven by another test.
- *
- * With screenshots skipped (as on CI) it is registered as skipped, so it never
- * launches the app for a comparison that would not run. A test with assertions
- * of its own stays a plain `test`, with `expectScreen` skipping just the pixels.
- */
-export function screenTest(title: string, body: TestBody): void {
-    test.describe(() => {
-        // A describe-level skip is decided before any fixture, so no launch.
-        test.skip(SCREENSHOTS_SKIPPED, 'screenshots only, and screenshots are skipped');
-        test(title, {}, body);
-    });
-}

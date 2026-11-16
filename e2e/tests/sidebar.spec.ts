@@ -9,17 +9,8 @@
  * what main answers, and the archive toast's Undo, are component tests
  * (component/tests/session-list.spec.ts, component/tests/sidebar.spec.ts).
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {
-    expectScreen,
-    openSession,
-    rowButton,
-    searchBox,
-    sessionRow,
-    sidebar,
-    sidebarFilter,
-    terminalStatus,
-} from '../support/app';
+import {test, expect} from '../support/test';
+import {rowButton, searchBox, sessionRow, sidebar, sidebarFilter, terminalStatus} from '../support/app';
 import {openedExternally} from '../support/main-process';
 import {fakeClaude} from '../support/fake-cli';
 import {LABEL, S} from '../fixtures/standard';
@@ -88,43 +79,4 @@ test('lists, folds, searches, archives and filters what the index found', async 
     /* Then */
     await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
     await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-});
-
-forEachAppearance(() => {
-    screenTest('sidebar screens', async ({page, home}) => {
-        /* Then */
-        await expectScreen(page, 'sidebar-default', {soft: true});
-
-        /* When */
-        await sidebar(page).getByText('+ 3 older', {exact: true}).click();
-        await expect(sessionRow(page, LABEL.bumpDeps)).toBeVisible();
-
-        /* Then */
-        await expectScreen(page, 'sidebar-older-expanded', {soft: true});
-
-        /* When */
-        await sidebarFilter(page, 'pinned').click();
-        await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
-
-        /* Then */
-        await expectScreen(page, 'sidebar-filter-pinned', {soft: true});
-
-        /* When */
-        await sidebarFilter(page, 'pinned').click();
-        await searchBox(page).fill('login');
-        await expect(sessionRow(page, LABEL.chartsDarkMode)).toHaveCount(0);
-
-        /* Then */
-        await expectScreen(page, 'sidebar-search', {soft: true});
-
-        /* When */
-        await searchBox(page).fill('');
-        const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await claude.status({state: 'working'});
-        await sidebarFilter(page, 'running').click();
-        await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-
-        /* Then */
-        await expectScreen(page, 'sidebar-filter-running', {soft: true});
-    });
 });

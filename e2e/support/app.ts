@@ -1,6 +1,6 @@
 /**
  * Small, UI-level steps most specs share: waiting for the first index,
- * opening a session, taking a screenshot.
+ * opening a session.
  *
  * Elements are found by role, label or visible text, never by the vanilla
  * renderer's ids and classes, so these keep working while the renderer is
@@ -9,7 +9,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {expect, test} from '@playwright/test';
+import {expect} from '@playwright/test';
 import type {ElectronApplication, Locator, Page} from '@playwright/test';
 import {EVENT} from '../../src/ipc/channels';
 import {fakeClaude, fakeSsh} from './fake-cli';
@@ -199,7 +199,7 @@ export function dialog(page: Page, title: string | RegExp): Locator {
  *
  * The terminal itself is drawn on a canvas (xterm's WebGL renderer), so its
  * text is not in the DOM: assert on what the fake recorded (`input()`), on the
- * header, or with a screenshot.
+ * header.
  */
 export async function openSession(page: Page, home: FixtureHome, label: string, sessionId: string): Promise<FakeCli> {
     await sessionRow(page, label).first().click();
@@ -231,55 +231,4 @@ export async function openRemoteSession(
     const ssh = fakeSsh(home, sessionId);
     await ssh.launched();
     return ssh;
-}
-
-// ── Screenshots ──
-
-/**
- * Set SB_E2E_SKIP_SCREENSHOTS=1 to run every functional assertion but skip
- * the pixel comparisons — for a machine whose fonts or GPU render differently
- * from the one the baselines were made on (CI does this; see CONTRIBUTING.md).
- */
-export const SCREENSHOTS_SKIPPED = !!process.env.SB_E2E_SKIP_SCREENSHOTS;
-
-/**
- * Regions that change between otherwise identical runs, painted over in every
- * screenshot.
- *
- * Kept short on purpose: the clock is frozen and the ids are stable, so what
- * is left is the app's own version number (in global settings), which moves
- * with every release.
- */
-export function volatileRegions(page: Page): Locator[] {
-    return [page.getByText(/^v\d+\.\d+\.\d+/)];
-}
-
-/**
- * Compare the whole window against `<name>-<scheme>-<platform>.png`.
- *
- * Whole-window rather than per-element, so the comparison does not depend on
- * how the markup is divided up — the thing a renderer port changes. The
- * scheme (`light`/`dark`) is read off the page rather than passed in, so a
- * baseline can never be filed under the wrong one. The pointer is parked in a
- * corner first so no hover state or tooltip leaks in.
- *
- * `soft` records a mismatch and carries on, for a test that walks several
- * screens in one launch: every screen is still compared, not just the ones
- * before the first that differs.
- */
-export async function expectScreen(
-    page: Page,
-    name: string,
-    {mask = [] as Locator[], soft = false} = {},
-): Promise<void> {
-    const scheme = await page.evaluate(() => (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-    const file = `${name}-${scheme}.png`;
-    if (SCREENSHOTS_SKIPPED) {
-        test.info().annotations.push({type: 'screenshot skipped', description: file});
-        return;
-    }
-    await page.mouse.move(1279, 799);
-    await (soft ? expect.soft(page) : expect(page)).toHaveScreenshot(file, {
-        mask: [...volatileRegions(page), ...mask],
-    });
 }

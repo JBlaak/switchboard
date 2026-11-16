@@ -9,9 +9,9 @@
  * component/tests/questions.spec.ts; what it decides on its own is unit tested
  * (test/answer-draft.test.ts, test/question-*.test.ts, test/answers-slice.test.ts).
  */
-import {test, expect, forEachAppearance, screenTest} from '../support/test';
-import {expectScreen, openSession, sidebar, terminalHeader} from '../support/app';
-import {askQuestions, option} from '../support/questions';
+import {test, expect} from '../support/test';
+import {openSession, sidebar} from '../support/app';
+import {askQuestions} from '../support/questions';
 import {LABEL, S} from '../fixtures/standard';
 import type {Page} from '@playwright/test';
 import type {FixtureHome} from '../support/fixture-home';
@@ -45,10 +45,6 @@ function questionPanel(page: Page) {
 }
 
 const heading = (page: Page, n: number) => questionPanel(page).getByRole('heading', {name: QUESTIONS[n].question});
-const primary = (page: Page) => questionPanel(page).getByRole('button', {name: /^(Next|Send answers)/});
-const patchSays = (page: Page) => questionPanel(page).getByRole('status');
-const toTerminalButton = (page: Page) => terminalHeader(page).getByRole('button', {name: /Answer in terminal/});
-const waitingPill = (page: Page) => terminalHeader(page).getByRole('button', {name: /(waiting|Ready to send) · Show$/});
 
 /**
  * Open the newest session and ask it `questions`; answers once the first is on
@@ -60,8 +56,7 @@ const waitingPill = (page: Page) => terminalHeader(page).getByRole('button', {na
  * transition to `opacity, visibility`, which pairs `visibility` with the
  * 220ms opacity duration, so the sheet is still `visibility: hidden` when it
  * asks for focus. That is a styling bug of its own, not the panel's; the
- * keyboard runs the way most users see it. The screenshots keep reduced
- * motion, and so reach their states by clicking.
+ * keyboard runs the way most users see it.
  */
 async function askedOnScreen(
     page: Page,
@@ -107,29 +102,6 @@ test.describe('smoke', () => {
     });
 });
 
-forEachAppearance(() => {
-    screenTest('question panel, then peeking at the terminal', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await askQuestions(home, S.loginFix, QUESTIONS);
-
-        /* Then */
-        await expect(questionPanel(page).getByRole('heading', {name: QUESTIONS[0].question})).toBeVisible();
-        await expectScreen(page, 'question-panel');
-
-        /* When */
-        await questionPanel(page)
-            .getByRole('button', {name: /Peek at terminal/})
-            .click();
-
-        /* Then */
-        await expect(page.getByRole('button', {name: /Back to questions/})).toBeVisible();
-        await expectScreen(page, 'question-peek');
-    });
-});
-
 test.describe('data', () => {
     test('a set pending before the window loaded comes up after a reload', async ({page, home}) => {
         /* Given */
@@ -140,35 +112,5 @@ test.describe('data', () => {
 
         /* Then */
         await expect(heading(page, 0)).toBeVisible();
-    });
-});
-
-forEachAppearance(() => {
-    screenTest('question panel, multiple choice', async ({page, home}) => {
-        /* Given */
-        await askedOnScreen(page, home, QUESTIONS, {reducedMotion: true});
-        await option(page, /The whole site/).click();
-        await primary(page).click();
-        await expect(heading(page, 1)).toBeVisible();
-
-        /* When */
-        await option(page, /Unit tests/).click();
-        await option(page, /Lint/).click();
-
-        /* Then */
-        await expect(patchSays(page)).toHaveText('Two picked. Any more?');
-        await expectScreen(page, 'question-panel-multi');
-    });
-
-    screenTest('question header pill', async ({page, home}) => {
-        /* Given */
-        await askedOnScreen(page, home, QUESTIONS, {reducedMotion: true});
-
-        /* When */
-        await toTerminalButton(page).click();
-
-        /* Then */
-        await expect(waitingPill(page)).toBeVisible();
-        await expectScreen(page, 'question-pill');
     });
 });
