@@ -1,10 +1,12 @@
 /**
  * What the session tray (#343) says, worked out from what it was told: the
  * Session group's numbers, each link row's meta line, which links it lists,
- * and the facts a saved prompt is filled from. Pure, so it is tested in node.
+ * the facts a saved prompt is filled from, and the ⌘ keys its PRs open
+ * with. Pure, so it is tested in node.
  */
 import type {SessionLink} from '../../../domain/session/links';
 import type {SessionStats} from '../../../domain/session/stats';
+import {SAVED_PROMPT_KEYS} from '../../../domain/settings/saved-prompts';
 import type {SavedPromptFacts} from '../../../domain/settings/saved-prompts';
 import type {StatusDot} from '../../../domain/session-work/status';
 
@@ -153,4 +155,35 @@ export function promptFacts(facts: {
         task: facts.task ?? (taskLink && taskLink.status !== null ? taskLink.title : null),
         pr: newestPullRequestUrl(facts.links),
     };
+}
+
+/**
+ * The ⌘ keys the Links group's PRs open with: numbered on from the saved
+ * prompts' keys, in the order the PRs are listed, while keys up to ⌘9 last.
+ * Keyed by the link's key.
+ */
+export function pullRequestKeys(
+    prompts: readonly {readonly key: number | null}[],
+    links: readonly SessionLink[],
+): Map<string, number> {
+    let next = 1;
+    for (const prompt of prompts) if (prompt.key !== null) next = Math.max(next, prompt.key + 1);
+    const keys = new Map<string, number>();
+    for (const link of links) {
+        if (link.kind !== 'pr') continue;
+        if (next > SAVED_PROMPT_KEYS) break;
+        keys.set(link.key, next++);
+    }
+    return keys;
+}
+
+/** The PR ⌘`key` opens, if any. */
+export function pullRequestForKey(
+    prompts: readonly {readonly key: number | null}[],
+    links: readonly SessionLink[],
+    key: number,
+): Extract<SessionLink, {kind: 'pr'}> | null {
+    const keys = pullRequestKeys(prompts, links);
+    for (const link of links) if (link.kind === 'pr' && keys.get(link.key) === key) return link;
+    return null;
 }

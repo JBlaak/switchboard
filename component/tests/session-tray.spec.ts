@@ -1,7 +1,8 @@
 /**
  * The session tray (#343): hovering the slimmed bar drops the tray over the
- * terminal without resizing it, holding ⌘ shows it, and ⌘1 types the first
- * saved prompt into the session.
+ * terminal without resizing it, holding ⌘ shows it, ⌘1 types the first
+ * saved prompt into the session, and the ⌘ keys after the prompts' open the
+ * session's PRs in the browser.
  *
  * Main is played by answering `savedPrompts` with the stored list, as its
  * settings service reads it, and the terminal's size is what the renderer
@@ -14,6 +15,7 @@ import {terminalHeader} from '../../e2e/support/app';
 import {LABEL, S} from '../../e2e/fixtures/standard';
 import {openSession, waitForInput} from '../support/running-session';
 import {parseSavedPrompts} from '../../src/domain/settings/saved-prompts';
+import type {SessionLink} from '../../src/domain/session/links';
 import type {FakeApi} from '../support/fake-api';
 import type {Answers} from '../support/default-answers';
 
@@ -74,6 +76,41 @@ test('hovering the bar opens the tray over the terminal, and ⌘1 types a saved 
     await expect(tray.getByRole('button', {name: 'Send: Where are we?'})).toContainText('Sent ✓');
     await expect(tray).not.toHaveClass(/is-open/);
     expect(size()).toEqual(sizeBefore);
+});
+
+test('the PRs take the ⌘ keys after the saved prompts, and ⌘2 opens the first in the browser', async ({page, api}) => {
+    /* Given */
+    const pr = (number: number): SessionLink => ({
+        kind: 'pr',
+        key: 'pr:https://github.com/acme/api/pull/' + number,
+        title: 'PR ' + number,
+        url: 'https://github.com/acme/api/pull/' + number,
+        repository: 'acme/api',
+        number,
+        status: {state: 'open', checks: 'passing', dot: 'green', mine: true},
+    });
+    api.answer('getSessionLinks', [pr(41), pr(40)]);
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    const tray = page.getByRole('region', {name: 'Session tools'});
+
+    /* When */
+    await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+
+    /* Then */
+    await expect(tray).toHaveClass(/is-open/);
+    await expect(tray.locator('.tray-link', {hasText: 'PR 41'})).toContainText('⌘2');
+    await expect(tray.locator('.tray-link', {hasText: 'PR 40'})).toContainText('⌘3');
+
+    /* When */
+    await page.mouse.move(600, 600);
+    await expect(tray).not.toHaveClass(/is-open/);
+    await page.keyboard.press('Meta+2');
+
+    /* Then */
+    await expect
+        .poll(() => api.callsTo('openExternal').map(([url]) => url))
+        .toEqual(['https://github.com/acme/api/pull/41']);
+    expect(api.callsTo('sendInput').some(([, data]) => String(data).includes(PROMPT))).toBe(false);
 });
 
 test('holding ⌘ shows the tray after 150 ms, letting go hides it, and a quick ⌘ shortcut never does', async ({

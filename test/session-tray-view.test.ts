@@ -10,6 +10,8 @@ import {
     contextPercent,
     linkMeta,
     promptFacts,
+    pullRequestForKey,
+    pullRequestKeys,
     runningTimeLabel,
     sessionMetaLine,
     trayLinks,
@@ -151,6 +153,16 @@ test('the tray has the four groups, the prompts with their ⌘ keys, and real bu
     assert.match(html, /aria-label="Stop session"/);
 });
 
+test('a PR row shows the ⌘ key after the prompts’ that opens it; other links have none', () => {
+    /* When */
+    const html = tray();
+
+    /* Then */
+    assert.match(html, /checks green<span class="tray-key">⌘3<\/span>/);
+    assert.equal(html.match(/<span class="tray-key">⌘3</g)?.length, 1);
+    assert.doesNotMatch(html, /⌘4/);
+});
+
 test('a sent prompt’s row says Sent ✓', () => {
     /* When */
     const html = tray({sent: 'a'});
@@ -287,4 +299,62 @@ test('a prompt is filled from the branch, the project, the task and the newest P
         task: 'Ship the tray',
         pr: 'https://github.com/acme/app/pull/9',
     });
+});
+
+// ── The PRs' ⌘ keys ──
+
+const keyed = (...keys: (number | null)[]): {key: number | null}[] => keys.map((key) => ({key}));
+
+test('PRs are numbered on after the prompts’ keys, in list order, skipping other links', () => {
+    /* Given */
+    const links = [pr(12, null), task, pr(11, null)];
+
+    /* When */
+    const keys = pullRequestKeys(keyed(1, 2), links);
+
+    /* Then */
+    assert.deepEqual(
+        [...keys],
+        [
+            ['pr:https://github.com/acme/app/pull/12', 3],
+            ['pr:https://github.com/acme/app/pull/11', 4],
+        ],
+    );
+});
+
+test('without saved prompts the PRs start at ⌘1', () => {
+    /* When */
+    const keys = pullRequestKeys([], [pr(7, null)]);
+
+    /* Then */
+    assert.deepEqual([...keys.values()], [1]);
+});
+
+test('PRs past ⌘9 get no key, and nine prompts leave none for PRs', () => {
+    /* Given */
+    const links = [pr(1, null), pr(2, null), pr(3, null)];
+
+    /* When */
+    const afterEight = pullRequestKeys(keyed(1, 2, 3, 4, 5, 6, 7, 8), links);
+    const afterNine = pullRequestKeys(keyed(1, 2, 3, 4, 5, 6, 7, 8, 9, null), links);
+
+    /* Then */
+    assert.deepEqual([...afterEight.values()], [9]);
+    assert.equal(afterNine.size, 0);
+});
+
+test('a ⌘ key finds the PR numbered on it, and nothing on a prompt’s key or past the PRs', () => {
+    /* Given */
+    const prompts = keyed(1);
+    const links = [pr(20, null), pr(19, null)];
+
+    /* When */
+    const second = pullRequestForKey(prompts, links, 3);
+    const onPrompt = pullRequestForKey(prompts, links, 1);
+    const past = pullRequestForKey(prompts, links, 4);
+
+    /* Then */
+    assert.equal(second?.number, 19);
+    assert.equal(onPrompt, null);
+    assert.equal(past, null);
 });

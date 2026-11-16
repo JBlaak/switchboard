@@ -55,7 +55,7 @@ import {
 import {toggleIssueManager} from '../../ui/issue-manager/actions';
 import {toggleBugPage} from '../../ui/bug-manager/page-actions';
 import {toggleMergeManager} from '../../ui/merge-manager/page-actions';
-import {sendSavedPromptOnScreen} from '../../ui/session-tray/actions';
+import {trayKeyOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
 import {TERMINAL_THEME} from '../terminal/terminal-themes';
@@ -274,13 +274,13 @@ function setupTerminalKeyBindings(
             return false;
         }
 
-        // Cmd+1…9: type the saved prompt on that key into this session (#343)
+        // Cmd+1…9: type the saved prompt on that key into this session (#343), or open its PR on that key
         const promptKey = savedPromptKey(e);
         if (promptKey !== null) {
             if (e.type === 'keydown') {
                 e._handled = true;
                 e.preventDefault();
-                void sendSavedPromptOnScreen(promptKey);
+                void trayKeyOnScreen(promptKey);
             }
             return false;
         }

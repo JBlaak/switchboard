@@ -1,7 +1,8 @@
 /**
  * What the session tray (#343) does outside its own markup: asking for the
  * session's stats, sending a saved prompt (a click, or ⌘1–9 from anywhere the
- * keys are not typing), and the facts a prompt is filled from.
+ * keys are not typing), opening a PR on the ⌘ keys after the prompts', and the
+ * facts a prompt is filled from.
  */
 import {dispatch, getState} from '../../state/app-store';
 import {sessionMap} from '../../state/session-store';
@@ -10,7 +11,8 @@ import {sessionStatsIn} from '../../state/session-tray-slice';
 import {projectLabel, repositoryRoot} from '../../features/sessions/project-label';
 import {savedPromptForKey} from '../../../domain/settings/saved-prompts';
 import {loadSavedPrompts, sendSavedPrompt} from './saved-prompts';
-import {promptFacts} from './tray-view';
+import {promptFacts, pullRequestForKey} from './tray-view';
+import {openLink} from '../pr-view/actions';
 import type {SessionLink} from '../../../domain/session/links';
 import type {SessionStats} from '../../../domain/session/stats';
 import type {SavedPrompt, SavedPromptFacts} from '../../../domain/settings/saved-prompts';
@@ -63,16 +65,24 @@ export function sendTrayPrompt(sessionId: string, prompt: SavedPrompt, facts: Sa
 }
 
 /**
- * ⌘`key`: send the session on screen its `key`th saved prompt, filled in from
- * what is known of it now. Nothing happens without a session on screen or a
- * prompt on that key.
+ * ⌘`key` on the session on screen: send its saved prompt on that key, filled
+ * in from what is known of it now; with no prompt there, open the PR on that
+ * key in the browser (they are numbered on after the prompts). Nothing happens
+ * without a session on screen or anything on that key.
  */
-export async function sendSavedPromptOnScreen(key: number): Promise<void> {
+export async function trayKeyOnScreen(key: number): Promise<void> {
     const sessionId = terminalOnScreen();
     if (!sessionId) return;
     const prompts = await loadSavedPrompts(projectOf(sessionId)).catch(() => []);
     const prompt = savedPromptForKey(prompts, key);
-    if (!prompt) return;
+    if (!prompt) {
+        const links = await loadSessionLinks(sessionId);
+        const pr = pullRequestForKey(prompts, links, key);
+        if (!pr || terminalOnScreen() !== sessionId) return;
+        dispatch({type: 'trayClosed'});
+        openLink(pr.url);
+        return;
+    }
     const known = sessionStatsIn(getState().sessionTray, sessionId);
     const [links, stats] = await Promise.all([
         loadSessionLinks(sessionId),

@@ -3,7 +3,8 @@
  * four tinted groups side by side, from what it is given.
  *
  * - Ask: the saved prompts with their ⌘ keys, and Edit (the Settings editor).
- * - Links: the session's PRs, issues, artifacts, latest page, Bugsnag error and task.
+ * - Links: the session's PRs, issues, artifacts, latest page, Bugsnag error and task;
+ *   the PRs with the ⌘ keys that open them, numbered on after the prompts'.
  * - Workspace: Editor, Finder, Shell here, Hand off….
  * - Session: context used with its meter, shell · running time · messages,
  *   Copy session id, Archive and Stop.
@@ -22,7 +23,7 @@ import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
 import type {HandoffHost} from '../../../application/services/project-handoff';
 import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
 import {ChipDot} from '../session-list/RowMeta';
-import {contextPercent, linkMeta, sessionMetaLine, type LinkDot, type TrayLink} from './tray-view';
+import {contextPercent, linkMeta, pullRequestKeys, sessionMetaLine, type LinkDot, type TrayLink} from './tray-view';
 import {SESSION_TRAY_ID} from './focus';
 
 /** What the tray's controls do. */
@@ -117,7 +118,11 @@ function AskGroup({prompts, sent, actions}: SessionTrayContentProps): JSX.Elemen
     );
 }
 
-function LinksGroup({links, now, actions, land}: SessionTrayContentProps): JSX.Element {
+function LinksGroup({links, prompts, now, actions, land}: SessionTrayContentProps): JSX.Element {
+    const keys = pullRequestKeys(
+        prompts,
+        links.map((row) => row.link),
+    );
     return (
         <div className="tray-card tray-links" role="group" aria-labelledby="tray-links-label" style={order(1)}>
             <div className="tray-label" id="tray-links-label">
@@ -127,6 +132,7 @@ function LinksGroup({links, now, actions, land}: SessionTrayContentProps): JSX.E
                 {links.length === 0 && <p className="tray-empty">Nothing yet</p>}
                 {links.map(({link, opens}) => {
                     const meta = linkMeta(link, now);
+                    const key = keys.get(link.key);
                     const inside = (
                         <>
                             <span className="tray-link-title">{link.title}</span>
@@ -136,6 +142,7 @@ function LinksGroup({links, now, actions, land}: SessionTrayContentProps): JSX.E
                                     {meta.chip}
                                 </span>
                                 {meta.text}
+                                {key !== undefined && <span className="tray-key">{'⌘' + key}</span>}
                             </span>
                         </>
                     );

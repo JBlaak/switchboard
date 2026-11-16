@@ -9,8 +9,8 @@
  * pointer rests on it), and asks main for the session's prompts, links,
  * stats and editor each time the tray opens.
  *
- * Holding ⌘ on its own for 150 ms shows it too, so the saved prompts' ⌘1–9
- * can be read; letting go hides it.
+ * Holding ⌘ on its own for 150 ms shows it too, so the ⌘1–9 of the saved
+ * prompts and the PRs after them can be read; letting go hides it.
  *
  * The keyboard: the bar's "hover for tools" button (and Tab on it) opens the
  * tray and moves into it; focus landing anywhere in it opens it; Esc closes it
