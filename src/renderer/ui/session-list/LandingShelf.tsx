@@ -7,7 +7,8 @@
  * user's filled, other people's in a queue lane hollow, lanes apart) and when
  * the next one merges. Hovered, a card lists each PR's wait and what merged
  * today; a row there opens it in the Merge manager. Clicked, it unfolds into
- * the same rows, which open the PR's session (or its fix errand).
+ * the same rows, which open the PR's session (or its fix errand). Both the
+ * card and the unfolded rows carry a link to the Merge manager's page.
  *
  * The colours are every place's (`stageTone`): purple merging or merged,
  * green ready, yellow in progress or needs you, grey held, red an error.
@@ -58,12 +59,15 @@ export interface LandingShelfActions {
     show(key: string): void;
     /** A shelf row: its session, or its fix errand's. */
     open(row: LandingRow): void;
+    /** The card's and the unfolded rows' link: the Merge manager's page. */
+    manager(): void;
 }
 
 const LANDING_ACTIONS: LandingShelfActions = {
     toggle: toggleLandingShelf,
     show: (key) => openMergeManager(key),
     open: (row) => void openRowSession(row.row),
+    manager: () => openMergeManager(),
 };
 
 export interface LandingShelfViewProps {
@@ -93,6 +97,7 @@ export function LandingShelfView({strip, open, now, actions}: LandingShelfViewPr
                     </div>
                     <Lanes strip={strip} onRow={(row) => actions.show(row.key)} />
                     <Merged strip={strip} now={now} onRow={(pr) => actions.show(pr.key)} />
+                    <ManagerLink onClick={actions.manager} />
                 </div>
             )}
             <button
@@ -147,6 +152,7 @@ export function LandingShelfView({strip, open, now, actions}: LandingShelfViewPr
                 <div className="landing-shelf-rows">
                     <Lanes strip={strip} onRow={actions.open} />
                     <Merged strip={strip} now={now} onRow={(pr) => actions.show(pr.key)} />
+                    <ManagerLink onClick={actions.manager} />
                 </div>
             </div>
         </section>
@@ -248,6 +254,25 @@ function Merged({
                 </button>
             ))}
         </div>
+    );
+}
+
+/** The way to the Merge manager's page, under the card's and the unfolded shelf's rows. */
+function ManagerLink({onClick}: {onClick: () => void}): JSX.Element {
+    return (
+        <button type="button" className="landing-manager-link" onClick={onClick}>
+            Open Merge manager
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                <path
+                    d="M3 2l4 3-4 3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </svg>
+        </button>
     );
 }
 

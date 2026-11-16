@@ -360,6 +360,39 @@ $pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 }
 
+// ---- The link to the Merge manager, under the rows ----
+.landing-manager-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    margin-top: 4px;
+    padding: 7px 6px 5px;
+    border: none;
+    border-top: 1px solid var(--sb-line);
+    border-radius: 0 0 7px 7px;
+    background: none;
+    font: 700 11.5px var(--sb-font-head);
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    transition: color 0.15s;
+
+    &:hover {
+        color: var(--sb-text-strong);
+    }
+    &:hover svg {
+        translate: 2px 0;
+    }
+    &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+    svg {
+        transition: translate 0.15s;
+    }
+}
+
 // ---- Unfolded: the rows ease in under the line, like the Errands shelf's ----
 .landing-shelf-body {
     display: grid;
