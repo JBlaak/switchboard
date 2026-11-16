@@ -28,7 +28,7 @@ import type {
     MergeAnswer,
     NewLineComment,
 } from '../../application/ports/github-cli';
-import type {PullRequestCloses} from '../../application/ports/github-cli';
+import {GitHubRateLimited, type PullRequestCloses} from '../../application/ports/github-cli';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import {
     PLANS_QUERY,
@@ -426,8 +426,12 @@ export class GhCli implements GitHubCli {
         const parts = REPO.exec(repo);
         if (!parts) return null;
         const wanted = validNumbers(numbers);
-        const data = await this.graphql('laneRead', laneQuery(wanted), {owner: parts[1], name: parts[2]});
-        return data ? toLaneRead(data, repo, wanted) : null;
+        const answer = await this.graphqlAnswer('laneRead', laneQuery(wanted), [
+            ['-f', 'owner', parts[1]],
+            ['-f', 'name', parts[2]],
+        ]);
+        if (answer.rateLimited) throw new GitHubRateLimited();
+        return answer.data ? toLaneRead(answer.data, repo, wanted) : null;
     }
 
     public async workflowFiles(repo: string): Promise<WorkflowFile[] | null> {
