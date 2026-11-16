@@ -182,7 +182,8 @@ export interface GitHubCli {
     /**
      * The lane read of these PRs in `repo`: the trunk, its oid and its rules,
      * and each PR with what decides its stage. A number GitHub does not know
-     * is left out. Null when unavailable.
+     * is left out. Null when unavailable; rejects with `GitHubRateLimited`
+     * when GitHub's rate limit refuses it.
      */
     laneRead(repo: string, numbers: readonly number[]): Promise<LaneRead | null>;
 
@@ -321,3 +322,15 @@ export type NewLineComment = Omit<PendingComment, 'threadId'>;
 
 /** A write went through (with what GitHub answered), or did not, with GitHub's reason. */
 export type GitHubWrite<T extends object = object> = ({ok: true} & T) | {ok: false; reason: string};
+
+/**
+ * GitHub refused a read because the user's API rate limit is used up. It is
+ * shared by everything signed in as them, so it says nothing about the PR or
+ * repository that was asked about.
+ */
+export class GitHubRateLimited extends Error {
+    constructor() {
+        super("GitHub's API rate limit is used up");
+        this.name = 'GitHubRateLimited';
+    }
+}

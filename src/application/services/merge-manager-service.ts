@@ -79,7 +79,13 @@ import type {
     TrunkRules,
 } from '../../domain/merge-manager/model';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
-import type {GitHubCli, GitHubWrite, LaneReads, QueueLabelWrites} from '../ports/github-cli';
+import {
+    GitHubRateLimited,
+    type GitHubCli,
+    type GitHubWrite,
+    type LaneReads,
+    type QueueLabelWrites,
+} from '../ports/github-cli';
 import type {LandedStore} from '../ports/landed-store';
 import type {LaneRunner} from './lane-runner';
 import type {Logger} from '../ports/logger';
@@ -87,6 +93,9 @@ import type {RendererGateway} from '../ports/renderer-gateway';
 
 /** How often the lanes are read. */
 export const MERGE_MANAGER_INTERVAL_MS = 60_000;
+
+/** Why a landing failed when GitHub's rate limit refused the lane read: nothing is wrong with the PR. */
+export const RATE_LIMITED_REASON = "GitHub's API rate limit is used up for now; try again in a few minutes";
 
 /** How long a repository's lane kind is trusted before its workflows are read again. */
 export const LANE_KIND_RECHECK_MS = 15 * 60_000;
@@ -288,6 +297,7 @@ export class MergeManagerService {
         if (!kind) return {ok: false, reason: 'GitHub could not be asked which lane it is in'};
         // The lane's other PRs too, so it is placed among them.
         const read = await this.read(repository, [number]);
+        if (read === 'rate-limited') return {ok: false, reason: RATE_LIMITED_REASON};
         const pr = read?.pullRequests.find((candidate) => candidate.number === number);
         if (!read || !pr) return {ok: false, reason: `#${number} could not be read from GitHub`};
         const known = this.landed.get(key);
@@ -396,9 +406,10 @@ export class MergeManagerService {
             // A queue label means nothing in a Switchboard lane.
             const read = await this.read(repository, kind === 'queue' ? labelled : []);
             if (read === undefined) continue;
-            if (!read) {
+            if (!read || read === 'rate-limited') {
                 failed = true;
-                this.deps.log.warn(`[merge-manager] lane of ${repository} not read`);
+                const why = read === 'rate-limited' ? `: ${RATE_LIMITED_REASON}` : '';
+                this.deps.log.warn(`[merge-manager] lane of ${repository} not read${why}`);
                 continue;
             }
             this.fold(repository, read, kind, []);
@@ -413,14 +424,20 @@ export class MergeManagerService {
 
     /**
      * One repository's lane read: its unmerged landed PRs and `extra`.
-     * Undefined when there is nothing to read; null when it could not be read.
+     * Undefined when there is nothing to read; null when it could not be read,
+     * 'rate-limited' when GitHub's rate limit refused it.
      */
-    private async read(repository: string, extra: readonly number[]): Promise<LaneRead | null | undefined> {
+    private async read(
+        repository: string,
+        extra: readonly number[],
+    ): Promise<LaneRead | 'rate-limited' | null | undefined> {
         const numbers = new Set(extra);
         for (const pr of this.inRepository(repository)) if (pr.stage.kind !== 'merged') numbers.add(pr.number);
         if (numbers.size === 0) return undefined;
-        const read = await this.deps.github.laneRead(repository, [...numbers]).catch(() => null);
-        if (read) {
+        const read = await this.deps.github
+            .laneRead(repository, [...numbers])
+            .catch((err: unknown) => (err instanceof GitHubRateLimited ? ('rate-limited' as const) : null));
+        if (read && read !== 'rate-limited') {
             this.rules.set(repository.toLowerCase(), read.rules);
             this.readAt.set(repository.toLowerCase(), this.deps.clock.now());
         }

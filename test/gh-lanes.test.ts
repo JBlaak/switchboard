@@ -18,6 +18,7 @@ import {
     toWorkflowFiles,
 } from '../src/infrastructure/github/gh-lanes';
 import {GhCli} from '../src/infrastructure/github/gh-cli';
+import {GitHubRateLimited} from '../src/application/ports/github-cli';
 
 const PR_NODE = {
     id: 'PR_kwDOAbc',
@@ -423,6 +424,32 @@ test('gh is asked the lane query with the owner and name as variables', async ()
     assert.deepEqual(asked[0].slice(-4), ['-f', 'owner=MoveLab-Studio', '-f', 'name=Connect']);
     assert.match(asked[0][3], /pr2450: pullRequest/);
     assert.doesNotMatch(asked[0][3], /pr-1/);
+});
+
+test('a lane read GitHub refuses for the rate limit rejects as rate limited; any other failure answers null', async () => {
+    /* Given */
+    // What GitHub answers once the GraphQL rate limit is used up: HTTP 200, gh exits 1.
+    const limited = JSON.stringify({
+        errors: [
+            {
+                type: 'RATE_LIMIT',
+                code: 'graphql_rate_limit',
+                message: 'API rate limit already exceeded for user ID 410113.',
+            },
+        ],
+    });
+    const rateLimited = new GhCli({run: async () => ({missing: false, code: 1, stdout: limited, stderr: ''})});
+    const broken = new GhCli({
+        run: async () => ({missing: false, code: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway'}),
+    });
+
+    /* When */
+    const limitedRead = rateLimited.laneRead('MoveLab-Studio/Connect', [2450]);
+    const brokenRead = await broken.laneRead('MoveLab-Studio/Connect', [2450]);
+
+    /* Then */
+    await assert.rejects(limitedRead, GitHubRateLimited);
+    assert.equal(brokenRead, null);
 });
 
 test('the open search finds all my open PRs newest first, and maps each to what Not landed shows', () => {

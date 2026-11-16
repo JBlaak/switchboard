@@ -7,11 +7,18 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
     LANE_KIND_RECHECK_MS,
+    RATE_LIMITED_REASON,
     MERGE_MANAGER_INTERVAL_MS,
     MergeManagerService,
     type MergeManagerServiceDeps,
 } from '../src/application/services/merge-manager-service';
-import type {GitHubCli, GitHubWrite, LaneReads, QueueLabelWrites} from '../src/application/ports/github-cli';
+import {
+    GitHubRateLimited,
+    type GitHubCli,
+    type GitHubWrite,
+    type LaneReads,
+    type QueueLabelWrites,
+} from '../src/application/ports/github-cli';
 import type {LandedStore} from '../src/application/ports/landed-store';
 import type {LandedPullRequest, LanePullRequestRead, MergeManagerState} from '../src/domain/merge-manager/model';
 import {QUEUE_LABELS} from '../src/domain/project/merge-queue';
@@ -41,6 +48,8 @@ interface World {
     queueRepos: Set<string>;
     /** Repositories GitHub cannot be asked about. */
     unreachable: Set<string>;
+    /** Repositories whose lane reads GitHub's rate limit refuses. */
+    rateLimited: Set<string>;
     /** Repositories whose label writes GitHub refuses. */
     refused: Set<string>;
     now: number;
@@ -55,6 +64,7 @@ function setup(
         prs: {},
         queueRepos: new Set([QUEUE_REPO]),
         unreachable: new Set(),
+        rateLimited: new Set(),
         refused: new Set(),
         now: NOW,
         ...world,
@@ -78,6 +88,7 @@ function setup(
         laneRead: async (repo, numbers) => {
             calls.push(`lane ${repo} ${[...numbers].sort((a, b) => a - b).join(',')}`);
             if (state.unreachable.has(repo)) return null;
+            if (state.rateLimited.has(repo)) throw new GitHubRateLimited();
             const prs = numbers.map((number) => state.prs[repo]?.[number]).filter((pr) => pr !== undefined);
             return {
                 repository: repo,
@@ -202,6 +213,33 @@ test('a label GitHub refuses fails the landing, which then lands nothing', async
     /* Then */
     assert.deepEqual(result, {ok: false, reason: 'Must have admin rights to Repository.'});
     assert.equal(service.pullRequest(QUEUE_REPO, 7), null);
+});
+
+test('a lane read GitHub\'s rate limit refuses fails the landing with that reason, and lands nothing', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[QUEUE_REPO]: {7: inQueue(7)}}});
+    await service.laneKind(QUEUE_REPO);
+    state.rateLimited.add(QUEUE_REPO);
+
+    /* When */
+    const result = await service.land(QUEUE_REPO, 7);
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: RATE_LIMITED_REASON});
+    assert.equal(service.pullRequest(QUEUE_REPO, 7), null);
+});
+
+test('a lane read GitHub cannot answer at all still fails the landing as not read', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[QUEUE_REPO]: {7: inQueue(7)}}});
+    await service.laneKind(QUEUE_REPO);
+    state.unreachable.add(QUEUE_REPO);
+
+    /* When */
+    const result = await service.land(QUEUE_REPO, 7);
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: '#7 could not be read from GitHub'});
 });
 
 test('unlanding in a queue lane takes the queue labels off; in a Switchboard lane it writes nothing', async () => {
