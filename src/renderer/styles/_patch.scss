@@ -58,121 +58,162 @@
 }
 
 /* The card's Ambilight (ui/patch/FamilyAmbilight): the card is the TV and
-   the app around it the wall. The light reaches 64px past every edge; the
-   card covers the rest, so it only shows around the card, and each light is
-   centred on the card's edge, so its brightest part shows. Along the top the
-   sky throws its haze and the sun or moon's light from its side of the
-   scene, by the scene's hour; along the bottom each figure on the floor
-   throws its body colour from under where it stands. The colours are the
-   Patch package's. Plain gradients rather than blurs, so it costs no more
-   to draw than the card's shadow. */
+   the app around it the wall. Like the real thing, it is a picture of the
+   card's edges blurred out past them, so the colours run into each other
+   along every edge and fade smoothly with the card's rounded shape, with no
+   shape of their own. Along the top the sky throws its colour, brightest
+   where its sun or moon hangs; along the bottom each figure on the floor
+   throws its body colour from under where it stands; the sides carry the
+   sky down into the floor's colours. The colours are the Patch package's
+   (`family/light.ts`, the figures' bodies).
+
+   The picture is drawn twice: a wide, soft spill reaching far onto the wall
+   and a tight, bright rim hugging the card's edge, which together read as
+   light rather than a shadow. The card covers the middle of both. */
 .placeholder-family-glow {
+    --glow-sky-top: transparent;
     --glow-sky: transparent;
     --glow-sun: transparent;
+    --glow-sun-x: 50%;
     position: absolute;
-    inset: -64px;
+    inset: 0;
     z-index: -1;
+    border-radius: var(--sb-r-panel);
     pointer-events: none;
 }
 
+/* The sky's top and horizon, and the sun's or moon's light and where it hangs. */
 .placeholder-family[data-time='morning'] .placeholder-family-glow {
-    --glow-sky: rgba(125, 104, 98, 0.55);
-    --glow-sun: rgba(246, 201, 162, 0.5);
-    --glow-sun-x: 20%;
+    --glow-sky-top: rgba(142, 114, 102, 0.55);
+    --glow-sky: rgba(142, 114, 102, 0.85);
+    --glow-sun: rgba(246, 201, 162, 0.95);
+    --glow-sun-x: 16%;
 }
 
 .placeholder-family[data-time='day'] .placeholder-family-glow {
-    --glow-sky: rgba(125, 143, 140, 0.55);
-    --glow-sun: rgba(246, 239, 214, 0.45);
-    --glow-sun-x: 25%;
+    --glow-sky-top: rgba(79, 143, 199, 0.95);
+    --glow-sky: rgba(140, 189, 224, 0.9);
+    --glow-sun: rgba(255, 243, 200, 0.95);
+    --glow-sun-x: 21%;
 }
 
 .placeholder-family[data-time='evening'] .placeholder-family-glow {
-    --glow-sky: rgba(106, 73, 68, 0.6);
-    --glow-sun: rgba(243, 154, 60, 0.55);
-    --glow-sun-x: 85%;
+    --glow-sky-top: rgba(154, 91, 75, 0.6);
+    --glow-sky: rgba(154, 91, 75, 0.9);
+    --glow-sun: rgba(243, 154, 60, 1);
+    --glow-sun-x: 82%;
 }
 
 .placeholder-family[data-time='night'] .placeholder-family-glow {
-    --glow-sky: rgba(60, 66, 84, 0.45);
-    --glow-sun: rgba(233, 229, 216, 0.22);
-    --glow-sun-x: 85%;
+    --glow-sky-top: rgba(60, 66, 84, 0.5);
+    --glow-sky: rgba(60, 66, 84, 0.6);
+    --glow-sun: rgba(233, 229, 216, 0.55);
+    --glow-sun-x: 82%;
 }
 
-.placeholder-family-glow > * {
+/* One picture of the edges: the sky over the top half, fading out above the
+   floor, with the sun and the figures on top of it. */
+.placeholder-family-glow-layer {
     position: absolute;
-    border-radius: 50%;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    opacity: var(--glow-opacity);
+    background: linear-gradient(to bottom, var(--glow-sky-top), var(--glow-sky) 34%, transparent 62%);
+
+    > * {
+        position: absolute;
+        translate: -50% 0;
+    }
 }
 
-.placeholder-family-glow-sky {
-    left: 4%;
-    right: 4%;
-    top: -46px;
-    height: 220px;
-    background: radial-gradient(closest-side, var(--glow-sky), transparent);
+/* Spread wide and soft past the card. */
+.placeholder-family-glow-layer.is-wide {
+    filter: blur(56px) saturate(1.4);
+    transform: scale(1.08, 1.2);
+    --glow-opacity: 0.9;
+}
+
+/* Bright and close along the card's edge. */
+.placeholder-family-glow-layer.is-rim {
+    filter: blur(18px) saturate(1.25);
+    transform: scale(1.014, 1.03);
+    --glow-opacity: 0.45;
 }
 
 .placeholder-family-glow-sun {
-    left: var(--glow-sun-x, 50%);
-    top: -56px;
-    width: 420px;
-    height: 240px;
-    translate: -50% 0;
+    left: var(--glow-sun-x);
+    top: -10%;
+    width: 46%;
+    height: 70%;
     background: radial-gradient(closest-side, var(--glow-sun), transparent);
 }
 
 .placeholder-family-glow-figure {
-    --glow-figure: rgba(143, 216, 191, 0.7);
+    --glow-figure: rgba(143, 216, 191, 1);
     left: calc(50% + var(--glow-x));
-    bottom: -66px;
-    width: 340px;
-    height: 260px;
-    translate: -50% 0;
-    background: radial-gradient(
-        closest-side,
-        var(--glow-figure),
-        color-mix(in srgb, var(--glow-figure) 40%, transparent) 55%,
-        transparent
-    );
+    bottom: -18%;
+    width: 290px;
+    height: 72%;
+    background: radial-gradient(closest-side, var(--glow-figure), transparent);
 
     &.is-bug {
-        --glow-figure: rgba(200, 184, 232, 0.7);
+        --glow-figure: rgba(200, 184, 232, 1);
     }
 
     &.is-issue {
-        --glow-figure: rgba(240, 207, 126, 0.6);
+        --glow-figure: rgba(240, 207, 126, 0.95);
     }
 
     &.is-merge {
-        --glow-figure: rgba(156, 197, 232, 0.7);
+        --glow-figure: rgba(156, 197, 232, 1);
     }
 }
 
-/* It breathes, each light out of step with the next, and holds still while
-   the window is out of focus, like every loop. */
+/* On a light wall a dark sky would read as a smudge: only the bright colours
+   throw light there, a touch stronger so they show against white. */
+@media (prefers-color-scheme: light) {
+    .placeholder-family-glow-layer {
+        background: linear-gradient(to bottom, var(--glow-sky), transparent 58%);
+    }
+
+    .placeholder-family[data-time='morning'] .placeholder-family-glow,
+    .placeholder-family[data-time='evening'] .placeholder-family-glow,
+    .placeholder-family[data-time='night'] .placeholder-family-glow {
+        --glow-sky: transparent;
+    }
+
+    .placeholder-family-glow-layer.is-wide {
+        filter: blur(56px) saturate(1.9);
+        --glow-opacity: 1;
+    }
+
+    .placeholder-family-glow-layer.is-rim {
+        --glow-opacity: 0.55;
+    }
+}
+
+/* The spill breathes and the rim answers it, out of step, and both hold still
+   while the window is out of focus, like every loop. Only opacity moves. */
 @media (prefers-reduced-motion: no-preference) {
-    .placeholder-family-glow > * {
-        animation: family-glow-breathe 6s ease-in-out infinite;
+    .placeholder-family-glow-layer {
+        animation: family-glow-breathe 7s ease-in-out infinite;
         animation-play-state: var(--loop-state, running);
     }
 
-    .placeholder-family-glow > :nth-child(2n) {
-        animation-delay: -2s;
-    }
-
-    .placeholder-family-glow > :nth-child(3n) {
-        animation-delay: -4s;
+    .placeholder-family-glow-layer.is-rim {
+        animation-delay: -3.5s;
     }
 }
 
 @keyframes family-glow-breathe {
     0%,
     100% {
-        opacity: 0.8;
+        opacity: calc(var(--glow-opacity) * 0.75);
     }
 
     50% {
-        opacity: 1;
+        opacity: var(--glow-opacity);
     }
 }
 
