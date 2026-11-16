@@ -92,8 +92,12 @@ export const CHECK_RUNS_PER_PULL_REQUEST = 50;
 /** Merged or closed PRs read besides, for Merged or closed today: the most recently updated. */
 export const RECENTLY_CLOSED_PER_REPOSITORY = 20;
 
-/** Review threads read per PR, for its unresolved count: the first 50, each with its first comment. */
-export const REVIEW_THREADS_PER_PULL_REQUEST = 50;
+/**
+ * Review threads read per PR, for its unresolved count: the first 20, each
+ * with its first comment. Each thread's comments are charged on every PR read,
+ * so this weighs most in `pullRequestsInQuery`.
+ */
+export const REVIEW_THREADS_PER_PULL_REQUEST = 20;
 
 /**
  * A repository's pull requests, open ones only unless merged ones are wanted,
