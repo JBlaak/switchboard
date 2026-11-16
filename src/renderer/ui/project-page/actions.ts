@@ -135,10 +135,22 @@ export async function loadProjectOverview(projectPath: string, closed: boolean, 
     await Promise.all([ask(false), ask(true)]);
 }
 
-/** Ask again now, for whatever the page shows: after a session started from it, say. */
+/**
+ * Ask again now, for whatever the page shows: after a session started from
+ * it, say. Main holds the plans for five minutes between polls; an explicit
+ * reload has it forget them first, so they are read afresh too.
+ */
 export function reloadProjectOverview(): void {
     const {projectPath, showClosed, showMerged} = getState().projectPage;
-    if (projectPath) void loadProjectOverview(projectPath, showClosed, showMerged);
+    if (!projectPath) return;
+    void (async () => {
+        try {
+            await window.api.projectForgetPlans(projectPath);
+        } catch {
+            // Main could not forget them; the reload still asks, plans at most five minutes old.
+        }
+        await loadProjectOverview(projectPath, showClosed, showMerged);
+    })();
 }
 
 /** A plan row's click or ↵: the plan inside the page. */

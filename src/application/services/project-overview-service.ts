@@ -4,10 +4,14 @@
  * requests grouped by `groupOverview` (#170), its worktrees, and which issues
  * and worktrees have a session running.
  *
- * Plans are read through PlanService, so they share its 30 s cache; the
- * issues and PRs are kept here for as long, so a second ask within 30 s does
- * not run `gh` at all. Which sessions run and own which issue is asked fresh
- * every time, because that is local and changes by the second.
+ * The issues and PRs are kept for 30 s (PLAN_CACHE_MS), so a second ask
+ * within 30 s does not run `gh` at all. The plans, read through PlanService,
+ * are kept apart and longer, for OVERVIEW_PLANS_MS: the page polls every
+ * minute and the plans are by far its dearest GitHub read, so its PRs and
+ * issues refresh on every poll and its plans every five minutes.
+ * `forgetPlans` drops them sooner, for an explicit reload. Which sessions run
+ * and own which issue is asked fresh every time, because that is local and
+ * changes by the second.
  *
  * Stale over empty: when a refresh fails after a good answer, the last good
  * answer is served marked stale, with when it was fetched. When there has
@@ -67,6 +71,16 @@ import type {GitRemotes} from '../ports/git-remotes';
 import type {IssueSessionService} from './issue-session-service';
 import {PLAN_CACHE_MS, type PlanService} from './plan-service';
 
+/**
+ * How long the project page reuses its plans: the plan summaries and each
+ * plan's full read. They are the dearest part of GitHub's GraphQL budget
+ * (the summaries about 52 points, each open plan about 44 more) and the page
+ * polls every minute: read on every poll, five open plans alone would spend
+ * some 270 of the 5,000 points an hour allows, every minute. Plans change
+ * slowly next to PRs, which still refresh on every poll.
+ */
+export const OVERVIEW_PLANS_MS = 5 * 60_000;
+
 /** A Claude session running now, and the directory it runs in. */
 export interface RunningSession {
     sessionId: string;
@@ -124,6 +138,12 @@ export class ProjectOverviewService {
     private readonly fresh = new Map<string, {at: number; reads: Promise<GitHubReads | null>}>();
     /** The last good reads by repository and options, for when a refresh fails. */
     private readonly last = new Map<string, GitHubReads>();
+    /**
+     * The plans by repository and Show closed, while younger than
+     * OVERVIEW_PLANS_MS; a failed read is dropped once it lands, so the next
+     * poll asks again.
+     */
+    private readonly plans = new Map<string, {at: number; sources: Promise<OverviewPlanSource[] | null>}>();
 
     private readonly deps: ProjectOverviewServiceDeps;
 
@@ -206,6 +226,21 @@ export class ProjectOverviewService {
         return result;
     }
 
+    /**
+     * Read the project's plans afresh on its next answer instead of keeping
+     * them for OVERVIEW_PLANS_MS: for an explicit reload, or after a plan
+     * changed. Its issues and PRs are read afresh with them.
+     */
+    public async forgetPlans(projectPath: string): Promise<void> {
+        const root = await this.deps.git.worktreeRoot(projectPath);
+        const origin = root ? await this.deps.remotes.originUrl(root) : null;
+        const repository = (origin && gitHubRepository(origin)) || null;
+        if (!repository) return;
+        for (const kept of [this.plans, this.fresh]) {
+            for (const key of [...kept.keys()]) if (key.startsWith(repository + ':')) kept.delete(key);
+        }
+    }
+
     private async github(
         projectPath: string,
         root: string,
@@ -260,22 +295,14 @@ export class ProjectOverviewService {
         closed: boolean,
         merged: boolean,
     ): Promise<GitHubReads | null> {
-        const {plans, github, clock} = this.deps;
+        const {github, clock} = this.deps;
         const fetchedAt = clock.now();
-        const [summaries, issues, pullRequests] = await Promise.all([
-            plans.projectPlans(projectPath, {closed}),
+        const [sources, issues, pullRequests] = await Promise.all([
+            this.planSources(projectPath, repository, closed),
             github.issuesIn(repository, {closed: false}),
             this.pullRequestsWithQueue(root, repository, merged),
         ]);
-        if (!summaries || !issues || !pullRequests) return null;
-
-        const read = await Promise.all(summaries.map((summary) => plans.plan(summary.repository, summary.number)));
-        if (read.some((plan) => plan === null)) return null;
-        const sources = summaries.map((summary, at): OverviewPlanSource => ({
-            plan: read[at] as Plan,
-            state: summary.state,
-            updatedAt: summary.updatedAt,
-        }));
+        if (!sources || !issues || !pullRequests) return null;
 
         return {
             fetchedAt,
@@ -285,6 +312,42 @@ export class ProjectOverviewService {
             queue: pullRequests.queue,
             lane: pullRequests.lane,
         };
+    }
+
+    /** The plans kept for the repository while younger than OVERVIEW_PLANS_MS, or a new read of them. */
+    private planSources(
+        projectPath: string,
+        repository: string,
+        closed: boolean,
+    ): Promise<OverviewPlanSource[] | null> {
+        const key = `${repository}:${closed ? 'closed' : 'open'}`;
+        const now = this.deps.clock.now();
+        const hit = this.plans.get(key);
+        if (hit && now - hit.at < OVERVIEW_PLANS_MS) return hit.sources;
+
+        const entry = {at: now, sources: this.readPlanSources(projectPath, closed).catch(() => null)};
+        this.plans.set(key, entry);
+        void entry.sources.then((sources) => {
+            if (sources === null && this.plans.get(key) === entry) this.plans.delete(key);
+        });
+        for (const [other, kept] of this.plans) {
+            if (now - kept.at >= OVERVIEW_PLANS_MS) this.plans.delete(other);
+        }
+        return entry.sources;
+    }
+
+    /** The project's plans, each read in full; null when any of them could not be read. */
+    private async readPlanSources(projectPath: string, closed: boolean): Promise<OverviewPlanSource[] | null> {
+        const {plans} = this.deps;
+        const summaries = await plans.projectPlans(projectPath, {closed});
+        if (!summaries) return null;
+        const read = await Promise.all(summaries.map((summary) => plans.plan(summary.repository, summary.number)));
+        if (read.some((plan) => plan === null)) return null;
+        return summaries.map((summary, at): OverviewPlanSource => ({
+            plan: read[at] as Plan,
+            state: summary.state,
+            updatedAt: summary.updatedAt,
+        }));
     }
 
     /** The issues and PRs alone, for an answer without plans; null when either could not be read. */
