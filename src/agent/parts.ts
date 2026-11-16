@@ -209,7 +209,7 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
     // services as on the Mac, over the VM's own gh login and one lane state
     // file, its fix errands as self-started sessions in copies it makes itself.
     const laneStore = new LaneStateStore({file: new NodeRecordFile(LANE_STATE_FILE), clock: systemClock, log});
-    const github = new GhCli({env});
+    const github = new GhCli({env, log});
     const laneRunner = new LaneRunner({
         github,
         testRebase: new GitTestRebase({

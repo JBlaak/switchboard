@@ -646,3 +646,104 @@ test('checkLogTail answers null for a check that is not an Actions job', async (
     /* Then */
     assert.equal(tail, null);
 });
+
+// ── The GraphQL budget: what each read costs, and holding back the expensive ones ──
+
+type Limit = {cost: number; remaining: number; resetAt: string};
+
+/** A gh whose every GraphQL answer carries this `rateLimit`, on a clock the test moves. */
+function budgeted(rateLimit: () => Limit | 'refused') {
+    let now = Date.parse('2026-11-16T12:00:00Z');
+    const lines: string[] = [];
+    const run = scripted(() => {
+        const limit = rateLimit();
+        if (limit === 'refused') {
+            const errors = [{type: 'RATE_LIMIT', code: 'graphql_rate_limit', message: 'API rate limit exceeded'}];
+            return {code: 1, stdout: JSON.stringify({errors})};
+        }
+        return {
+            stdout: JSON.stringify({data: {__budget: limit, repository: {refs: {nodes: []}}, search: {nodes: []}}}),
+        };
+    });
+    const cli = new GhCli({run, clock: {now: () => now}, log: {info: (line: string) => lines.push(line)}});
+    return {cli, run, lines, advance: (ms: number) => (now += ms)};
+}
+
+const IN_HALF_AN_HOUR = '2026-11-16T12:30:00Z';
+
+test('every GraphQL read also asks for the rate limit', async () => {
+    /* Given */
+    const budget = {cost: 1, remaining: 4999, resetAt: IN_HALF_AN_HOUR};
+    const run = scripted(() => ({
+        stdout: JSON.stringify({data: {__budget: budget, viewer: {login: 'me'}, repository: {}}}),
+    }));
+
+    /* When */
+    await new GhCli({run}).pullRequests('acme/web', [12]);
+
+    /* Then */
+    assert.match(
+        run.calls[0][3],
+        /^query=query\(\$owner: String!, \$name: String!\) \{ __budget: rateLimit \{ cost remaining resetAt \}/,
+    );
+});
+
+test('a review mutation does not ask for the rate limit', async () => {
+    /* Given */
+    const run = scripted(() => ({
+        stdout: JSON.stringify({data: {deletePullRequestReview: {pullRequestReview: {id: 'R'}}}}),
+    }));
+
+    /* When */
+    await new GhCli({run}).deletePendingReview('R');
+
+    /* Then */
+    assert.doesNotMatch(run.calls[0][3], /rateLimit/);
+});
+
+test('each read’s points are summed under its method name in the summary', async () => {
+    /* Given */
+    let remaining = 5000;
+    const {cli, lines, advance} = budgeted(() => ({cost: 2, remaining: (remaining -= 2), resetAt: IN_HALF_AN_HOUR}));
+    await cli.latestTag('acme/web');
+    await cli.latestTag('acme/web');
+
+    /* When */
+    advance(10 * 60_000);
+    await cli.recentTags('acme/web');
+
+    /* Then */
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /: 6 — latestTag 4 \(2 calls\), recentTags 2 \(1 call\); 4994 left/);
+});
+
+test('with the budget nearly spent an expensive read answers null without running gh, a cheap one still runs', async () => {
+    /* Given */
+    const {cli, run, lines} = budgeted(() => ({cost: 52, remaining: 300, resetAt: IN_HALF_AN_HOUR}));
+    await cli.plansIn('acme/web', {closed: false});
+
+    /* When */
+    const plans = await cli.plansIn('acme/web', {closed: false});
+    const tag = await cli.latestTag('acme/web');
+
+    /* Then */
+    assert.equal(plans, null);
+    assert.equal(run.calls.length, 2, 'only the first plansIn and the latestTag ran gh');
+    assert.notEqual(tag, null);
+    assert.match(lines[0], /expensive reads paused until/);
+});
+
+test('a rate-limit refusal holds back the expensive reads that come after it', async () => {
+    /* Given */
+    const answers: Array<Limit | 'refused'> = [{cost: 52, remaining: 4000, resetAt: IN_HALF_AN_HOUR}, 'refused'];
+    const {cli, run} = budgeted(() => answers.shift() ?? {cost: 1, remaining: 3900, resetAt: IN_HALF_AN_HOUR});
+    await cli.plansIn('acme/web', {closed: false});
+    await cli.recentTags('acme/web');
+
+    /* When */
+    const plans = await cli.plansIn('acme/web', {closed: false});
+
+    /* Then */
+    assert.equal(plans, null);
+    assert.equal(run.calls.length, 2);
+});
