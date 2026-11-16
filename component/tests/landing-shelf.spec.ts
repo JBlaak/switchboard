@@ -93,3 +93,28 @@ test('when the head merges the line says so, and it tops Just merged', async ({p
         page.getByTestId('landing-card').getByRole('button', {name: /Stop the login redirect loop #1300/}),
     ).toContainText('just now');
 });
+
+test('the hover card opens the Merge manager', async ({page, api}) => {
+    /* Given */
+    await api.emit('onMergeManagerChanged', mergeManagerState([HEAD, WAITING], new Map()));
+    await page.getByTestId('landing-shelf').getByRole('button', {name: /^Landing/}).hover();
+
+    /* When */
+    await page.getByTestId('landing-card').getByRole('button', {name: 'Open Merge manager'}).click();
+
+    /* Then */
+    await expect(page.getByRole('region', {name: 'Merge manager'})).toBeVisible();
+});
+
+test('the unfolded shelf opens the Merge manager', async ({page, api}) => {
+    /* Given */
+    await api.emit('onMergeManagerChanged', mergeManagerState([HEAD, WAITING], new Map()));
+    const shelf = page.getByTestId('landing-shelf');
+    await shelf.getByRole('button', {name: /^Landing/}).click();
+
+    /* When */
+    await shelf.locator('#landing-shelf-body').getByRole('button', {name: 'Open Merge manager'}).click();
+
+    /* Then */
+    await expect(page.getByRole('region', {name: 'Merge manager'})).toBeVisible();
+});
