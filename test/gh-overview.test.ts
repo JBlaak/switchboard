@@ -445,7 +445,7 @@ test('the pull request read asks, in the same request, for who you are, recently
     assert.match(query, /closedAt reviewDecision mergeable mergeStateStatus/);
     assert.match(
         query,
-        /reviewThreads\(first: 50\) \{ nodes \{ isResolved comments\(first: 1\) \{ totalCount nodes \{ body \} \} \} \}/,
+        /reviewThreads\(first: 20\) \{ nodes \{ isResolved comments\(first: 1\) \{ totalCount nodes \{ body \} \} \} \}/,
     );
 });
 

@@ -45,9 +45,9 @@ test('a plan is one GraphQL request for the issue, its parent and its sub-issues
     const query = queryOf(run.calls[0]);
     assert.match(query, /issue\(number: 22\)/);
     assert.match(query, /parent \{/);
-    assert.match(query, /subIssues\(first: 100\)/);
-    assert.match(query, /blockedBy\(/);
-    assert.match(query, /closedByPullRequestsReferences\(first: 20, includeClosedPrs: true\)/);
+    assert.match(query, /subIssues\(first: 40\)/);
+    assert.match(query, /blockedBy\(first: 20\)/);
+    assert.match(query, /closedByPullRequestsReferences\(first: 5, includeClosedPrs: true\)/);
     assert.deepEqual(run.calls[0].slice(-4), ['-f', 'owner=JBlaak', '-f', 'name=James']);
 });
 
@@ -340,7 +340,7 @@ test("a repository's plans come from one search, open ones only unless closed on
 
     /* Then */
     assert.equal(open.calls.length, 1);
-    assert.match(queryOf(open.calls[0]), /search\(type: ISSUE_ADVANCED, query: \$search, first: 50\)/);
+    assert.match(queryOf(open.calls[0]), /search\(type: ISSUE_ADVANCED, query: \$search, first: 20\)/);
     const plans = '(has:sub-issue OR label:"wayfinder:map" OR (label:ready-for-agent no:parent-issue))';
     assert.deepEqual(open.calls[0].slice(-2), [
         '-f',
@@ -609,7 +609,7 @@ test('the plan query asks for every issue its labels and whether anyone is assig
     const query = queryOf(run.calls[0]);
     assert.match(
         query,
-        /subIssues\(first: 100\) \{\s*nodes \{[^]*labels\(first: 20\)[^]*assignees\(first: 1\) \{ totalCount \}/,
+        /subIssues\(first: 40\) \{\s*nodes \{[^]*labels\(first: 20\)[^]*assignees\(first: 1\) \{ totalCount \}/,
     );
 });
 
