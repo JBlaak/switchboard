@@ -34,6 +34,7 @@ import {
     closeIssueManager,
     closeSnooze,
     commentFromNotes,
+    dismissCloseIssue,
     dismissStopWork,
     openIssueSession,
     openOnGitHub,
@@ -75,7 +76,7 @@ function IssueManagerView(): JSX.Element {
     }, [page.selected]);
 
     const focusNotes = (): void => {
-        root.current?.querySelector<HTMLTextAreaElement>('.im-notes')?.focus();
+        root.current?.querySelector<HTMLTextAreaElement>('.im-composer .im-notes')?.focus();
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
@@ -89,6 +90,7 @@ function IssueManagerView(): JSX.Element {
                 closeSnooze();
                 root.current?.focus({preventScroll: true});
             } else if (state.stop) dismissStopWork();
+            else if (state.close) dismissCloseIssue();
             else if (selectedItem(state)) selectIssue(null);
             else closeIssueManager();
             return;

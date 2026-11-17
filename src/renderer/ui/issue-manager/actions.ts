@@ -2,7 +2,7 @@
  * What the Issue manager page does (#415): open and close it, read its items
  * and an issue's thread, select (which marks seen), save notes as you type,
  * Comment… and Polish and post now, Start and claim, Snooze, Backlog, Open
- * session and Stop working on it.
+ * session, Stop working on it and Close on GitHub.
  *
  * The page's components call these and nothing else.
  */
@@ -262,6 +262,47 @@ export async function confirmStopWork(): Promise<void> {
     }));
     changed(answer.item);
     if (answer.warning) dispatch({type: 'issueManagerNoticed', notice: answer.warning});
+}
+
+// ── Close on GitHub ──
+
+export function askCloseIssue(key: string): void {
+    dispatch({type: 'issueManagerCloseAsked', key});
+}
+
+export function typeCloseComment(comment: string): void {
+    dispatch({type: 'issueManagerCloseCommentTyped', comment});
+}
+
+export function dismissCloseIssue(): void {
+    dispatch({type: 'issueManagerCloseDismissed'});
+}
+
+/**
+ * Close the issue on GitHub, with the comment when one was written. Once
+ * GitHub said so the issue is under Done and the selection moves on; should
+ * it fail, the box stays with why, the comment still in it.
+ */
+export async function confirmCloseIssue(): Promise<void> {
+    const close = getState().issueManager.close;
+    if (!close || close.phase === 'closing') return;
+    dispatch({type: 'issueManagerCloseConfirmed'});
+    const answer = await window.api.issueManagerClose(close.key, close.comment).catch((err: Error) => ({
+        ok: false as const,
+        reason: err.message || 'Could not close the issue',
+    }));
+    if (!answer.ok) {
+        dispatch({type: 'issueManagerCloseFailed', key: close.key, reason: answer.reason});
+        return;
+    }
+    dispatch({type: 'issueManagerCloseDismissed'});
+    moveOnFrom(close.key);
+    changed(answer.item);
+    const number = /#(\d+)$/.exec(close.key)?.[1];
+    dispatch({
+        type: 'issueManagerNoticed',
+        notice: `Closed #${number} on GitHub${close.comment.trim() ? ' with your comment' : ''}; it is under Done.`,
+    });
 }
 
 // ── Snooze (S) and Backlog (B) ──

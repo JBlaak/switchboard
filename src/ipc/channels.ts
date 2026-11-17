@@ -92,6 +92,7 @@ export const INVOKE = {
     issueManagerPrepareStart: 'issue-manager:prepare-start',
     issueManagerStarted: 'issue-manager:started',
     issueManagerStopWork: 'issue-manager:stop-work',
+    issueManagerClose: 'issue-manager:close',
     mergeManagerState: 'merge-manager:state',
     mergeManagerLand: 'merge-manager:land',
     mergeManagerUnland: 'merge-manager:unland',

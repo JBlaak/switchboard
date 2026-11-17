@@ -4,8 +4,9 @@
  * it, and where each started issue stands.
  *
  * What it writes to GitHub, each only from you pressing something: Start
- * assigns you, Post writes the comment, and Stop takes you off the issue
- * again when you ask it to. Everything else is the inbox's own state.
+ * assigns you, Post writes the comment, Stop takes you off the issue again
+ * when you ask it to, and Close on GitHub closes it (with your comment, when
+ * you wrote one). Everything else is the inbox's own state.
  *
  * **Start and claim** assigns you (`gh issue edit --add-assignee @me`), reads
  * the ticket and its thread, and makes the issue's worktree with a prompt
@@ -45,6 +46,9 @@ export const ISSUE_WORK_POLL_MS = 2 * 60_000;
 export type PolishResult = {ok: true; body: string; footer: string} | {ok: false; reason: string};
 
 export type IssueWriteResult = {ok: true} | {ok: false; reason: string};
+
+/** Closed on GitHub, with the item as it is now (under Done); or why it is not. */
+export type IssueCloseResult = {ok: true; item: InboxItem | null} | {ok: false; reason: string};
 
 /** A started issue's worktree and prompt, for the renderer to start its session in; or why there is none. */
 export type IssueStartPrepared =
@@ -227,6 +231,21 @@ export class IssueManagerService {
         if (!unassign) return {item};
         const unassigned = await this.deps.github.unassignSelf(facts.repository, facts.number);
         return unassigned.ok ? {item} : {item, warning: `Still assigned to you on GitHub: ${unassigned.reason}.`};
+    }
+
+    // ── Close on GitHub ──
+
+    /**
+     * Close the issue on GitHub, with `comment` posted on it as written when
+     * there is one: under Done here once GitHub said so, as it is when it
+     * failed.
+     */
+    public async close(key: string, comment: string): Promise<IssueCloseResult> {
+        const facts = this.issue(key);
+        if (!facts) return {ok: false, reason: 'That issue is no longer in the Issue manager'};
+        const closed = await this.deps.github.closeIssue(facts.repository, facts.number, comment.trim() || null);
+        if (!closed.ok) return {ok: false, reason: closed.reason};
+        return {ok: true, item: this.deps.inbox.finish(key)};
     }
 
     // ── Following ──

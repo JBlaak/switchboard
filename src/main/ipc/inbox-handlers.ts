@@ -60,6 +60,9 @@ export function registerInboxHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.issueManagerStopWork, (key: unknown, unassign: unknown) =>
         app.issueManager.stopWork(asKey(key), unassign === true),
     );
+    ipc.handle(INVOKE.issueManagerClose, (key: unknown, comment: unknown) =>
+        app.issueManager.close(asKey(key), asText(comment)),
+    );
 }
 
 function asText(value: unknown): string {
