@@ -31,8 +31,12 @@ import type {
 import {GitHubRateLimited, type PullRequestCloses} from '../../application/ports/github-cli';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import {
+    MORE_SUB_ISSUE_PAGES,
     PLANS_QUERY,
+    addSubIssuesPage,
     closingIssuesQuery,
+    nextSubIssuesCursor,
+    subIssuesPageQuery,
     planQuery,
     plansOfQuery,
     plansSearch,
@@ -275,13 +279,44 @@ export class GhCli implements GitHubCli {
         const parts = REPO.exec(repo);
         if (!parts || validNumbers([number]).length === 0) return null;
         const data = await this.graphql('plan', planQuery(number), {owner: parts[1], name: parts[2]});
-        return data ? toPlan(data, repo) : null;
+        if (!data) return null;
+        const issue = data.repository?.issue;
+        if (issue && !(await this.readAllSubIssues(parts[1], parts[2], issue, 'plan'))) return null;
+        return toPlan(data, repo);
     }
 
     public async plansIn(repo: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
-        if (!REPO.test(repo)) return null;
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
         const data = await this.graphql('plansIn', PLANS_QUERY, {search: plansSearch(repo, options.closed === true)});
-        return data ? toPlanSummaries(data, repo) : null;
+        if (!data) return null;
+        for (const node of data.search?.nodes ?? []) {
+            if (!node || typeof node.number !== 'number') continue;
+            const [owner, name] = (node.repository?.nameWithOwner ?? repo).split('/');
+            if (!(await this.readAllSubIssues(owner, name, node, 'summary'))) return null;
+        }
+        return toPlanSummaries(data, repo);
+    }
+
+    /**
+     * Read the rest of `issue`'s sub-issues into it, a page at a time, when
+     * the first page was not all of them. False when a page could not be read:
+     * a plan missing some of its issues would look smaller than it is.
+     */
+    private async readAllSubIssues(
+        owner: string,
+        name: string,
+        issue: any,
+        detail: 'plan' | 'summary',
+    ): Promise<boolean> {
+        let after = nextSubIssuesCursor(issue);
+        for (let page = 0; after && page < MORE_SUB_ISSUE_PAGES; page++) {
+            const label = detail === 'plan' ? 'planSubIssues' : 'plansInSubIssues';
+            const data = await this.graphql(label, subIssuesPageQuery(issue.number, detail), {owner, name, after});
+            if (!addSubIssuesPage(issue, data)) return false;
+            after = nextSubIssuesCursor(issue);
+        }
+        return true;
     }
 
     public async plansOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
