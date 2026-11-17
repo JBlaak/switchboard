@@ -477,6 +477,46 @@ test('Close again marks it fixed again and stays in Done; the same events never 
     assert.equal(h.fixed.length, 2);
 });
 
+// ── Mark as fixed on Bugsnag ──
+
+test('Mark as fixed on Bugsnag tells Bugsnag and moves the bug to Done', async () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    const item = await h.service.markFixedOnBugsnag(KEY);
+
+    /* Then */
+    assert.deepEqual(h.fixed, [`${PROJECT} ${ERROR}`]);
+    assert.deepEqual(item?.state, {kind: 'done', at: NOW});
+    assert.equal(h.item().state.kind, 'done');
+});
+
+test('Mark as fixed on Bugsnag rejects and leaves the bug where it was when Bugsnag says no', async () => {
+    /* Given */
+    const h = harness({fixFails: true});
+
+    /* When */
+    const marking = h.service.markFixedOnBugsnag(KEY);
+
+    /* Then */
+    await assert.rejects(marking, /down/);
+    assert.equal(h.item().state.kind, 'unread');
+});
+
+test('Mark as fixed on Bugsnag leaves a bug that is being fixed alone', async () => {
+    /* Given */
+    const h = harness();
+    await fixing(h);
+
+    /* When */
+    await h.service.markFixedOnBugsnag(KEY);
+
+    /* Then */
+    assert.deepEqual(h.fixed, []);
+    assert.equal(h.item().state.kind, 'inProgress');
+});
+
 test('Treat as regressed puts it back in the inbox, unread, regressed', async () => {
     /* Given */
     const h = harness({tagged: false});

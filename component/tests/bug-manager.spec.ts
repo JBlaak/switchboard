@@ -19,7 +19,7 @@ import {NO_INBOX_FRESHNESS} from '../../src/domain/inbox/freshness';
 import {P} from '../../e2e/fixtures/standard';
 import {fixtureProjectPath} from '../fixtures/captured';
 import {fixBranch, fixPrompt} from '../../src/domain/inbox/fix';
-import {markRegressed, startWork, updateFix} from '../../src/domain/inbox/items';
+import {finish, markRegressed, startWork, updateFix} from '../../src/domain/inbox/items';
 import type {Page} from '@playwright/test';
 import type {BugFacts, InboxItem} from '../../src/domain/inbox/model';
 
@@ -243,6 +243,41 @@ test('Fix is off for a Bugsnag project linked to no local project', async ({page
     /* Then */
     await expect(bugPage(page).getByRole('button', {name: /^Fix/})).toBeDisabled();
     await expect(bugPage(page).getByText('Link a project first: Settings → Bug manager.')).toBeVisible();
+});
+
+test('Mark as fixed on Bugsnag moves the bug to Done, and says why when Bugsnag says no', async ({
+    page,
+    api,
+    mainInbox,
+}) => {
+    /* Given */
+    api.handle('bugMarkFixed', (key) => {
+        if (key.endsWith(QUIET)) throw new Error('Bugsnag said no (403)');
+        return mainInbox.change(key, (item) => finish(item, FIXTURE_NOW));
+    });
+    await page.keyboard.press('Meta+b');
+    await row(page, QUIET).click();
+
+    /* When */
+    await bugPage(page).getByRole('button', {name: 'Mark as fixed on Bugsnag'}).click();
+
+    /* Then */
+    await expect(bugPage(page).getByRole('status')).toContainText(
+        'Could not mark it fixed on Bugsnag: Bugsnag said no (403)',
+    );
+    await expect(row(page, QUIET)).toBeVisible();
+    await expect(bugPage(page).getByRole('button', {name: 'Mark as fixed on Bugsnag'})).toBeEnabled();
+
+    /* When */
+    await row(page, TRENDING).click();
+    await bugPage(page).getByRole('button', {name: 'Mark as fixed on Bugsnag'}).click();
+
+    /* Then */
+    await expect(row(page, TRENDING)).toBeHidden();
+    await expect(bugPage(page).getByRole('status')).toBeHidden();
+    await bugPage(page).getByRole('tab', {name: /^Done/}).click();
+    await expect(row(page, TRENDING)).toContainText('Marked fixed in Bugsnag');
+    expect(api.callsTo('bugMarkFixed')).toEqual([[`bug:${API}:${QUIET}`], [`bug:${API}:${TRENDING}`]]);
 });
 
 test('a bug seen again after its merge from an older release asks, and Treat as regressed brings it back unread', async ({

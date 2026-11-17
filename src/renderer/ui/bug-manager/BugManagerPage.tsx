@@ -54,6 +54,7 @@ import {
     chooseBugFilter,
     chooseBugTab,
     closeBugAgain,
+    markBugFixed,
     closeBugPage,
     closeBugSnooze,
     fixBug,
@@ -412,9 +413,10 @@ function rowStatus(item: InboxItem): string | null {
               : null;
         return [pr, checks].filter(Boolean).join(' · ');
     }
-    if (item.state.kind === 'done' && work?.pr) {
+    if (item.state.kind === 'done' && work?.pr && work.mergedAt) {
         return `PR #${work.pr.number} merged${work.markedFixed ? ' · marked fixed in Bugsnag' : ''}`;
     }
+    if (item.state.kind === 'done') return 'Marked fixed in Bugsnag';
     if (item.state.kind === 'read' && work?.ended === 'noPr') return 'Tried, no PR';
     if (item.state.kind === 'snoozed') {
         return item.state.until === null
@@ -764,6 +766,7 @@ function SortActions({item, page}: {item: InboxItem; page: BugPageState}): JSX.E
     const unlinked = fixDisabled(page.projects, item);
     const fixing = page.fixing === item.key;
     const triaging = page.triaging === item.key;
+    const markingFixed = page.markingFixed === item.key;
     const snoozing = page.snooze?.key === item.key ? page.snooze : null;
     const phase = triagePhase(item.triage);
     const shown = new Set<BugSortAction>(['fix']);
@@ -808,6 +811,14 @@ function SortActions({item, page}: {item: InboxItem; page: BugPageState}): JSX.E
                         <kbd className="sw-kbd">T</kbd>
                     </button>
                 )}
+                <button
+                    type="button"
+                    className="sw-btn"
+                    disabled={page.markingFixed !== null}
+                    title="Tell Bugsnag it is fixed and move it to Done"
+                    onClick={() => void markBugFixed(item.key)}>
+                    {markingFixed ? 'Marking fixed…' : 'Mark as fixed on Bugsnag'}
+                </button>
             </div>
             {unlinked && <p className="bm-hint">Link a project first: Settings → Bug manager.</p>}
             {snoozing && (

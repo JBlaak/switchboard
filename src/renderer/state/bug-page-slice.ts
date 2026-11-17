@@ -52,6 +52,8 @@ export interface BugPageState {
     readonly fixing: string | null;
     /** A quick triage (T) being started. */
     readonly triaging: string | null;
+    /** A bug being marked fixed on Bugsnag, until Bugsnag answers. */
+    readonly markingFixed: string | null;
     /** One line about the last thing that went wrong; null when nothing did. */
     readonly notice: string | null;
 }
@@ -75,6 +77,7 @@ export type BugPageEvent =
     | {type: 'bugSnoozeClosed'}
     | {type: 'bugFixing'; key: string | null}
     | {type: 'bugTriaging'; key: string | null}
+    | {type: 'bugMarkingFixed'; key: string | null}
     | {type: 'bugPageNoticed'; notice: string | null};
 
 export const initialBugPageState: BugPageState = {
@@ -91,6 +94,7 @@ export const initialBugPageState: BugPageState = {
     snooze: null,
     fixing: null,
     triaging: null,
+    markingFixed: null,
     notice: null,
 };
 
@@ -147,6 +151,8 @@ export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPa
             return {...state, fixing: event.key};
         case 'bugTriaging':
             return {...state, triaging: event.key};
+        case 'bugMarkingFixed':
+            return {...state, markingFixed: event.key};
         case 'bugPageNoticed':
             return {...state, notice: event.notice};
         default:
