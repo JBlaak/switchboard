@@ -37,6 +37,7 @@ export function registerInboxHandlers(ipc: IpcRegistrar, app: Container): void {
     });
     ipc.handle(INVOKE.bugTriage, (key: unknown) => app.bugTriage.start(asKey(key)));
     ipc.handle(INVOKE.bugStopWorking, (key: unknown) => app.bugFix.stopWorking(asKey(key)));
+    ipc.handle(INVOKE.bugMarkFixed, (key: unknown) => app.bugFix.markFixedOnBugsnag(asKey(key)));
     ipc.handle(INVOKE.bugCloseAgain, (key: unknown) => app.bugFix.closeAgain(asKey(key)));
     ipc.handle(INVOKE.bugTreatAsRegressed, (key: unknown) => app.bugFix.treatAsRegressed(asKey(key)));
     ipc.handle(INVOKE.bugDetail, (key: unknown) => app.bugFix.detail(asKey(key)));

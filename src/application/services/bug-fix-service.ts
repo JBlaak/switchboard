@@ -21,6 +21,10 @@
  * the item remembers it did (`markedFixed`), and a failed call is tried again
  * on the next round rather than repeated.
  *
+ * **Mark as fixed on Bugsnag.** A bug in the inbox (not being worked on)
+ * can be marked fixed by hand: Bugsnag is told first, and only when it says
+ * yes does the bug move to Done. A failure leaves it where it was.
+ *
  * **Seen again.** A done bug whose last event is after the merge (Bugsnag
  * reopens a fixed error on a new event) gets those events judged against the
  * first tag that contains the merge commit (`judgeSeenAgain`): regressed
@@ -32,7 +36,7 @@
  * sparklines never bursts past Bugsnag's rate limit.
  */
 import {bugsnagErrorUrl, fixBranch, fixPrompt} from '../../domain/inbox/fix';
-import {finish, markRegressed, returnToInbox, setStage, startWork, updateFix} from '../../domain/inbox/items';
+import {finish, inInbox, markRegressed, returnToInbox, setStage, startWork, updateFix} from '../../domain/inbox/items';
 import {judgeSeenAgain} from '../../domain/inbox/seen-again';
 import {stageLabel, workProgress} from '../../domain/inbox/stage';
 import {frameLine} from '../../domain/bugsnag/model';
@@ -221,6 +225,35 @@ export class BugFixService {
     public stopWorking(key: string): InboxItem | null {
         return this.deps.inbox.update(key, (item) =>
             returnToInbox(withStep(item, this.deps.clock.now(), 'Stopped working on it'), 'stopped'),
+        );
+    }
+
+    // ── Mark as fixed on Bugsnag ──
+
+    /**
+     * Mark as fixed on Bugsnag, by hand: Bugsnag is told, then the bug moves to
+     * Done. Only from the inbox's own states; one being worked on or done stays.
+     * Rejects, with the item untouched, when Bugsnag can't be asked or says no.
+     */
+    public async markFixedOnBugsnag(key: string): Promise<InboxItem | null> {
+        const item = this.deps.inbox.item(key);
+        if (!item || item.facts.kind !== 'bug' || !inInbox(item.state)) return item;
+        if (this.fixing.has(key)) return item;
+        const api = this.deps.bugsnag.api();
+        if (!api) throw new Error('No Bugsnag token is saved');
+        this.fixing.add(key);
+        try {
+            await api.fix(item.facts.projectId, item.facts.errorId);
+        } finally {
+            this.fixing.delete(key);
+        }
+        const now = this.deps.clock.now();
+        return this.deps.inbox.update(key, (current) =>
+            finish(
+                // An earlier Fix's merge no longer counts: events are judged from now.
+                updateFix(current, (work) => ({...work, markedFixed: true, seenAgain: null, quietSince: now})),
+                now,
+            ),
         );
     }
 

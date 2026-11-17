@@ -318,6 +318,8 @@ export interface SwitchboardApi {
     bugTriage(key: string): Promise<{ok: true; item: InboxItem} | {ok: false; reason: string}>;
     /** Stop working on a bug: back in the inbox, read. */
     bugStopWorking(key: string): Promise<InboxItem | null>;
+    /** Mark as fixed on Bugsnag by hand: Bugsnag is told, then the bug moves to Done. Rejects when Bugsnag says no. */
+    bugMarkFixed(key: string): Promise<InboxItem | null>;
     /** Seen again from an older release: mark it fixed in Bugsnag again and keep it in Done. */
     bugCloseAgain(key: string): Promise<InboxItem | null>;
     /** Seen again after the merge, taken as a regression: back in the inbox, unread. */

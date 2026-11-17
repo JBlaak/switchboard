@@ -1,7 +1,7 @@
 /**
  * What the Bug manager page does (#414): opening and closing it, reading the
  * Bug manager's items and what Bugsnag says of each, and what you do to a
- * bug: seen, snooze, backlog, Fix, quick triage, Open session, Stop working
+ * bug: seen, snooze, backlog, Fix, quick triage, Mark as fixed on Bugsnag, Open session, Stop working
  * on it, and the answers to "seen again after the merge". The page's components call these
  * and nothing else.
  */
@@ -229,6 +229,22 @@ export async function openTriageSession(item: InboxItem): Promise<void> {
 
 export async function stopWorkingOnBug(key: string): Promise<void> {
     await changed(window.api.bugStopWorking(key), 'Could not stop working on it');
+}
+
+/**
+ * Mark as fixed on Bugsnag: main tells Bugsnag, then the bug moves to Done.
+ * When Bugsnag says no (or there is no token) it stays where it was and the
+ * page says why.
+ */
+export async function markBugFixed(key: string): Promise<void> {
+    if (getState().bugPage.markingFixed) return;
+    dispatch({type: 'bugMarkingFixed', key});
+    dispatch({type: 'bugPageNoticed', notice: null});
+    try {
+        await changed(window.api.bugMarkFixed(key), 'Could not mark it fixed on Bugsnag');
+    } finally {
+        dispatch({type: 'bugMarkingFixed', key: null});
+    }
 }
 
 export async function closeBugAgain(key: string): Promise<void> {

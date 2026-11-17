@@ -109,6 +109,7 @@ export const INVOKE = {
     bugFixStarted: 'bug:fix-started',
     bugTriage: 'bug:triage',
     bugStopWorking: 'bug:stop-working',
+    bugMarkFixed: 'bug:mark-fixed',
     bugCloseAgain: 'bug:close-again',
     bugTreatAsRegressed: 'bug:treat-as-regressed',
     bugDetail: 'bug:detail',
