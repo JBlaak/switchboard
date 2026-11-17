@@ -85,7 +85,12 @@ import type {SessionStats} from '../domain/session/stats';
 import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/inbox-settings-service';
 import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model';
 import type {IssueThread} from '../domain/inbox/issue-manager';
-import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../application/services/issue-manager-service';
+import type {
+    IssueCloseResult,
+    IssueStartPrepared,
+    IssueWriteResult,
+    PolishResult,
+} from '../application/services/issue-manager-service';
 import type {MergeManagerState} from '../domain/merge-manager/model';
 import type {MergeManagerPageFacts} from '../domain/merge-manager/page';
 import type {LandResult} from '../application/services/merge-manager-service';
@@ -277,6 +282,8 @@ export interface SwitchboardApi {
     issueManagerStarted(key: string, branch: string, sessionId: string | null): Promise<InboxItem | null>;
     /** Stop working on it: back in the inbox, and off the issue on GitHub when `unassign`. */
     issueManagerStopWork(key: string, unassign: boolean): Promise<{item: InboxItem | null; warning?: string}>;
+    /** Close on GitHub: close the issue, posting `comment` first unless it is blank; under Done once closed. */
+    issueManagerClose(key: string, comment: string): Promise<IssueCloseResult>;
     /** The Merge manager's lanes (#434), as `onMergeManagerChanged` pushes them. */
     mergeManagerState(): Promise<MergeManagerState>;
     /** Until when expensive GitHub reads are held back for the GraphQL budget, or null; changes come as `onGithubBudgetHeld`. */

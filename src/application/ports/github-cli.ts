@@ -147,6 +147,9 @@ export interface GitHubCli {
     /** Post a comment on the issue, as it is. */
     commentOnIssue(repo: string, number: number, body: string): Promise<GitHubWrite>;
 
+    /** Close on GitHub: close the issue, posting `comment` on it first when there is one. */
+    closeIssue(repo: string, number: number, comment: string | null): Promise<GitHubWrite>;
+
     /**
      * The pull requests in `repo`, each with its checks taken together, its
      * review decision and the issues it closes, and what the merge queue reads
@@ -276,7 +279,7 @@ export type PlanReads = 'plan' | 'plansIn' | 'plansOf' | 'closingIssues';
 export type ProjectReads = 'issuesIn' | 'pullRequestsIn' | 'ciRunDurations';
 
 /** What the Issue manager reads and writes (#415). */
-export type IssueManagerCalls = 'issueThread' | 'assignSelf' | 'unassignSelf' | 'commentOnIssue';
+export type IssueManagerCalls = 'issueThread' | 'assignSelf' | 'unassignSelf' | 'commentOnIssue' | 'closeIssue';
 
 /** The merge queue's label writes (#315). */
 export type QueueLabelWrites = 'addLabel' | 'removeLabel';

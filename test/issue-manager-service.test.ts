@@ -27,11 +27,13 @@ const THREAD: IssueThread = {
 
 function setup({
     assign = {ok: true},
+    close = {ok: true},
     thread = THREAD,
     polished = 'Thanks, I will pick this up.',
     pullRequests = [] as RepositoryPullRequest[],
 }: {
     assign?: GitHubWrite;
+    close?: GitHubWrite;
     thread?: IssueThread | null;
     polished?: string | null;
     /** Null as when GitHub did not answer. */
@@ -85,6 +87,10 @@ function setup({
             commentOnIssue: async (repo, n, body) => {
                 writes.push(`comment ${repo}#${n}: ${body}`);
                 return {ok: true};
+            },
+            closeIssue: async (repo, n, comment) => {
+                writes.push(`close ${repo}#${n}` + (comment === null ? '' : `: ${comment}`));
+                return close;
             },
             pullRequestsIn: async () => pullRequests,
         },
@@ -196,6 +202,57 @@ test('Stop with unassign takes you off the issue on GitHub', async () => {
 
     /* Then */
     assert.deepEqual(writes, [`unassign ${REPO}#482`]);
+});
+
+// ── Close on GitHub ──
+
+test('Close on GitHub closes the issue and puts it under Done', async () => {
+    /* Given */
+    const {service, writes} = setup();
+
+    /* When */
+    const result = await service.close(KEY, '');
+
+    /* Then */
+    assert.deepEqual(writes, [`close ${REPO}#482`]);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.ok && result.item?.state, {kind: 'done', at: NOW});
+});
+
+test('Close on GitHub posts the comment as written as it closes, and none when it is only blanks', async () => {
+    /* Given */
+    const {service, writes} = setup();
+
+    /* When */
+    await service.close(KEY, 'Fixed in 2.4, see #490.');
+    await service.close(KEY, '   \n ');
+
+    /* Then */
+    assert.deepEqual(writes, [`close ${REPO}#482: Fixed in 2.4, see #490.`, `close ${REPO}#482`]);
+});
+
+test('Close on GitHub that GitHub refuses says why and leaves the issue where it was', async () => {
+    /* Given */
+    const {service, items} = setup({close: {ok: false, reason: 'HTTP 403: Resource not accessible'}});
+
+    /* When */
+    const result = await service.close(KEY, 'Done');
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'HTTP 403: Resource not accessible'});
+    assert.equal(items.get(KEY)?.state.kind, 'unread');
+});
+
+test('Close on GitHub of an issue no longer in the Issue manager writes nothing', async () => {
+    /* Given */
+    const {service, writes} = setup();
+
+    /* When */
+    const result = await service.close('issue:acme/gone#1', '');
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'That issue is no longer in the Issue manager'});
+    assert.deepEqual(writes, []);
 });
 
 // ── Comments ──

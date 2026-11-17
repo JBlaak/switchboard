@@ -424,6 +424,13 @@ export class GhCli implements GitHubCli {
         return this.rest(['issue', 'comment', String(number), '--repo', repo, '--body=' + body]);
     }
 
+    public async closeIssue(repo: string, number: number, comment: string | null): Promise<GitHubWrite> {
+        if (!issueRef(repo, number)) return {ok: false, reason: 'That issue cannot be closed'};
+        // `--comment=` keeps a comment that starts with a dash from being read as a flag.
+        const commented = comment?.trim() ? ['--comment=' + comment] : [];
+        return this.rest(['issue', 'close', String(number), '--repo', repo, ...commented]);
+    }
+
     public async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;

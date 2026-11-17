@@ -1,7 +1,7 @@
 /**
  * The Issue manager page (#415), renderer side: the manager's items as main
  * last answered them, the tab and filter on screen, the selected issue and its
- * thread, and what a Comment, a Start or a Stop is doing.
+ * thread, and what a Comment, a Start, a Stop or a Close is doing.
  *
  * The items are main's (`inboxItems`); the page asks again as it opens and
  * whenever the inbox changes. An action answers the item after it, which
@@ -34,6 +34,14 @@ export type StartFlow =
     | {readonly key: string; readonly phase: 'started'; readonly sessionId: string; readonly warning: string | null}
     | {readonly key: string; readonly phase: 'failed'; readonly reason: string};
 
+/** Close on GitHub, asked: the comment to post as it closes (blank for none), then closing it, or why it did not. */
+export type CloseFlow = {
+    readonly key: string;
+    readonly comment: string;
+    readonly phase: 'asking' | 'closing' | 'failed';
+    readonly reason: string | null;
+};
+
 export interface IssueManagerState {
     /** Null until main first answers. */
     readonly items: readonly InboxItem[] | null;
@@ -48,6 +56,7 @@ export interface IssueManagerState {
     readonly snooze: {readonly key: string; readonly options: readonly SnoozeOptionView[] | null} | null;
     /** Stop working on it, asked: whether to also take you off the issue on GitHub. */
     readonly stop: {readonly key: string; readonly unassign: boolean} | null;
+    readonly close: CloseFlow | null;
     readonly notice: string | null;
     /** F: the list folded away while an issue is open, to read it alone. */
     readonly focus: boolean;
@@ -65,6 +74,7 @@ export const initialIssueManagerState: IssueManagerState = {
     start: null,
     snooze: null,
     stop: null,
+    close: null,
     notice: null,
     focus: false,
     fresh: {},
@@ -101,6 +111,11 @@ export type IssueManagerEvent =
     | {type: 'issueManagerStopAsked'; key: string}
     | {type: 'issueManagerStopUnassignToggled'}
     | {type: 'issueManagerStopDismissed'}
+    | {type: 'issueManagerCloseAsked'; key: string}
+    | {type: 'issueManagerCloseCommentTyped'; comment: string}
+    | {type: 'issueManagerCloseConfirmed'}
+    | {type: 'issueManagerCloseFailed'; key: string; reason: string}
+    | {type: 'issueManagerCloseDismissed'}
     | {type: 'issueManagerNoticed'; notice: string | null}
     | {type: 'issueManagerFocusToggled'};
 
@@ -108,11 +123,11 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
     switch (event.type) {
         // A fresh look every time: what was open last time is put away; the tab stays.
         case 'issueManagerOpened':
-            return {...state, comment: null, snooze: null, stop: null, notice: null, fresh: {}};
+            return {...state, comment: null, snooze: null, stop: null, close: null, notice: null, fresh: {}};
 
         case 'managerPageRequested':
             return event.manager === 'issue'
-                ? {...state, comment: null, snooze: null, stop: null, notice: null}
+                ? {...state, comment: null, snooze: null, stop: null, close: null, notice: null}
                 : state;
 
         case 'issueManagerItemsLoaded':
@@ -129,7 +144,16 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
         case 'issueManagerTabChosen':
             return state.tab === event.tab
                 ? state
-                : {...state, tab: event.tab, filter: null, selected: null, focus: false, snooze: null, stop: null};
+                : {
+                      ...state,
+                      tab: event.tab,
+                      filter: null,
+                      selected: null,
+                      focus: false,
+                      snooze: null,
+                      stop: null,
+                      close: null,
+                  };
 
         case 'issueManagerFilterChosen':
             return {...state, tab: 'inbox', filter: state.filter === event.filter ? null : event.filter};
@@ -145,6 +169,7 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
                 fresh: fresh > 0 ? {...state.fresh, [item!.key]: fresh} : state.fresh,
                 snooze: null,
                 stop: null,
+                close: null,
                 // A comment's preview stays with its issue, but not on screen under another.
                 comment: state.comment && state.comment.key !== event.key ? null : state.comment,
             };
@@ -205,7 +230,7 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
             };
 
         case 'issueManagerSnoozeOpened':
-            return {...state, snooze: {key: event.key, options: null}, stop: null};
+            return {...state, snooze: {key: event.key, options: null}, stop: null, close: null};
 
         case 'issueManagerSnoozeOptions':
             return state.snooze?.key === event.key
@@ -216,13 +241,39 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
             return state.snooze ? {...state, snooze: null} : state;
 
         case 'issueManagerStopAsked':
-            return {...state, stop: {key: event.key, unassign: false}, snooze: null};
+            return {...state, stop: {key: event.key, unassign: false}, snooze: null, close: null};
 
         case 'issueManagerStopUnassignToggled':
             return state.stop ? {...state, stop: {...state.stop, unassign: !state.stop.unassign}} : state;
 
         case 'issueManagerStopDismissed':
             return state.stop ? {...state, stop: null} : state;
+
+        case 'issueManagerCloseAsked':
+            return {
+                ...state,
+                close: {key: event.key, comment: '', phase: 'asking', reason: null},
+                snooze: null,
+                stop: null,
+            };
+
+        case 'issueManagerCloseCommentTyped':
+            return state.close && state.close.phase !== 'closing'
+                ? {...state, close: {...state.close, comment: event.comment}}
+                : state;
+
+        case 'issueManagerCloseConfirmed':
+            return state.close && state.close.phase !== 'closing'
+                ? {...state, close: {...state.close, phase: 'closing', reason: null}}
+                : state;
+
+        case 'issueManagerCloseFailed':
+            return state.close?.key === event.key
+                ? {...state, close: {...state.close, phase: 'failed', reason: event.reason}}
+                : state;
+
+        case 'issueManagerCloseDismissed':
+            return state.close ? {...state, close: null} : state;
 
         case 'issueManagerNoticed':
             return {...state, notice: event.notice};

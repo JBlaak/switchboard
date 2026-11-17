@@ -166,3 +166,44 @@ test('F folds the list away only while an issue is open, and closing the issue b
     assert.deepEqual(issueKeyAction('f', loaded.items![0]!), {kind: 'focus', item: loaded.items![0]!});
     assert.equal(issueKeyAction('f', null), null);
 });
+
+test('Close on GitHub asks with an empty comment, and asking it puts Stop and Snooze away', () => {
+    /* Given */
+    const loaded = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerItemsLoaded', items: items()});
+    const stopping = issueManagerReducer(loaded, {type: 'issueManagerStopAsked', key: 'k'});
+
+    /* When */
+    const asked = issueManagerReducer(stopping, {type: 'issueManagerCloseAsked', key: 'k'});
+
+    /* Then */
+    assert.deepEqual(asked.close, {key: 'k', comment: '', phase: 'asking', reason: null});
+    assert.equal(asked.stop, null);
+    assert.equal(asked.snooze, null);
+});
+
+test('a closing comment is typed until it is sent, and a refusal keeps it with the reason', () => {
+    /* Given */
+    const asked = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerCloseAsked', key: 'k'});
+    const typed = issueManagerReducer(asked, {type: 'issueManagerCloseCommentTyped', comment: 'Fixed in 2.4'});
+
+    /* When */
+    const closing = issueManagerReducer(typed, {type: 'issueManagerCloseConfirmed'});
+    const typedWhileClosing = issueManagerReducer(closing, {type: 'issueManagerCloseCommentTyped', comment: 'x'});
+    const failed = issueManagerReducer(closing, {type: 'issueManagerCloseFailed', key: 'k', reason: 'HTTP 403'});
+
+    /* Then */
+    assert.equal(closing.close?.phase, 'closing');
+    assert.equal(typedWhileClosing.close?.comment, 'Fixed in 2.4');
+    assert.deepEqual(failed.close, {key: 'k', comment: 'Fixed in 2.4', phase: 'failed', reason: 'HTTP 403'});
+});
+
+test('selecting another issue puts Close on GitHub away', () => {
+    /* Given */
+    const asked = issueManagerReducer(initialIssueManagerState, {type: 'issueManagerCloseAsked', key: 'k'});
+
+    /* When */
+    const moved = issueManagerReducer(asked, {type: 'issueManagerSelected', key: 'other'});
+
+    /* Then */
+    assert.equal(moved.close, null);
+});

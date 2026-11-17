@@ -127,6 +127,7 @@ const api: SwitchboardApi = {
     issueManagerStarted: (key, branch, sessionId) =>
         ipcRenderer.invoke(INVOKE.issueManagerStarted, key, branch, sessionId),
     issueManagerStopWork: (key, unassign) => ipcRenderer.invoke(INVOKE.issueManagerStopWork, key, unassign),
+    issueManagerClose: (key, comment) => ipcRenderer.invoke(INVOKE.issueManagerClose, key, comment),
     mergeManagerState: () => ipcRenderer.invoke(INVOKE.mergeManagerState),
     githubHeldUntil: () => ipcRenderer.invoke(INVOKE.githubHeldUntil),
     mergeManagerLand: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerLand, repository, number),

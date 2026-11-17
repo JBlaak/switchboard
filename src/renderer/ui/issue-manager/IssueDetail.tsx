@@ -2,7 +2,8 @@
  * The selected issue on the Issue manager page (#415), taking the page while
  * the list is a rail beside it: a header with where it stands, its title and
  * what you can do with it (Start and claim, Snooze and Backlog in the inbox;
- * Open session and Stop working on it once started), the whole conversation
+ * Open session and Stop working on it once started; Close on GitHub while it
+ * is open, with a comment to post as it closes if you like), the whole conversation
  * read from GitHub (the ticket first, then its comments, with "new since you
  * looked" where the unread ones start, and the polished comment waiting to be
  * posted at the end), and your notes docked under it with Comment… and Polish
@@ -16,10 +17,13 @@ import type {InboxItem, InboxStage} from '../../../domain/inbox/model';
 import type {IssueManagerState} from '../../state/issue-manager-slice';
 import {inProgressPill, landedForItem} from '../../../domain/merge-manager/stage-words';
 import {
+    askCloseIssue,
     askStopWork,
     backlogIssue,
     commentFromNotes,
+    confirmCloseIssue,
     confirmStopWork,
+    dismissCloseIssue,
     dismissComment,
     dismissStopWork,
     editComment,
@@ -33,6 +37,7 @@ import {
     snoozeIssue,
     startIssue,
     toggleStopUnassign,
+    typeCloseComment,
     typeNotes,
 } from './actions';
 
@@ -134,6 +139,7 @@ export function IssueDetail({
     const start = page.start?.key === item.key ? page.start : null;
     const stop = page.stop?.key === item.key ? page.stop : null;
     const snooze = page.snooze?.key === item.key ? page.snooze : null;
+    const close = page.close?.key === item.key ? page.close : null;
     const busy = comment?.phase === 'polishing' || comment?.phase === 'posting';
 
     return (
@@ -187,6 +193,15 @@ export function IssueDetail({
                                 </>
                             )}
                         </>
+                    )}
+                    {state !== 'done' && (
+                        <button
+                            type="button"
+                            className="sw-btn"
+                            disabled={close?.phase === 'closing'}
+                            onClick={() => askCloseIssue(item.key)}>
+                            Close on GitHub
+                        </button>
                     )}
                     <button type="button" className="im-out" onClick={() => openOnGitHub(item)}>
                         Open in GitHub ↗
@@ -267,6 +282,51 @@ export function IssueDetail({
                                 Stop working on it
                             </button>
                             <button type="button" className="sw-btn is-ghost" onClick={dismissStopWork}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {close && (
+                    <div className="im-box im-ask" role="group" aria-label="Close on GitHub">
+                        <span>Close #{facts.number} on GitHub? It moves to Done here.</span>
+                        <textarea
+                            className="im-notes"
+                            aria-label="Closing comment"
+                            placeholder="A comment to post as it closes (optional)"
+                            value={close.comment}
+                            rows={3}
+                            spellCheck
+                            autoFocus
+                            readOnly={close.phase === 'closing'}
+                            onChange={(e) => typeCloseComment(e.target.value)}
+                        />
+                        {close.phase === 'failed' && (
+                            <div className="tk-status is-error" role="alert">
+                                {close.reason}
+                            </div>
+                        )}
+                        <div className="im-actions">
+                            <button
+                                type="button"
+                                className="sw-btn is-primary"
+                                disabled={close.phase === 'closing'}
+                                onClick={() => {
+                                    void confirmCloseIssue();
+                                    onFocusRows();
+                                }}>
+                                {close.phase === 'closing'
+                                    ? 'Closing…'
+                                    : close.comment.trim()
+                                      ? 'Comment and close'
+                                      : 'Close issue'}
+                            </button>
+                            <button
+                                type="button"
+                                className="sw-btn is-ghost"
+                                disabled={close.phase === 'closing'}
+                                onClick={dismissCloseIssue}>
                                 Cancel
                             </button>
                         </div>
