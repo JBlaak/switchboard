@@ -609,7 +609,7 @@ test('the plan query asks for every issue its labels and whether anyone is assig
     const query = queryOf(run.calls[0]);
     assert.match(
         query,
-        /subIssues\(first: 40\) \{\s*nodes \{[^]*labels\(first: 20\)[^]*assignees\(first: 1\) \{ totalCount \}/,
+        /subIssues\(first: 40\) \{\s*pageInfo \{ hasNextPage endCursor \}\s*nodes \{[^]*labels\(first: 20\)[^]*assignees\(first: 1\) \{ totalCount \}/,
     );
 });
 
@@ -677,4 +677,132 @@ test('the plan query asks each closing PR for its labels and the automerge statu
     const query = queryOf(run.calls[0]);
     assert.match(query, /headRefName baseRefName\s+labels\(first: 20\)/);
     assert.match(query, /context\(name: "automerge"\) \{ state description \}/);
+});
+
+/** Sub-issues `from`..`to` as `PLANS_QUERY`/`planQuery` answer them, open unless listed as closed. */
+function subIssueNodes(from: number, to: number, closed: readonly number[] = []): any[] {
+    const nodes = [];
+    for (let number = from; number <= to; number++) {
+        nodes.push({
+            number,
+            title: `Issue ${number}`,
+            state: closed.includes(number) ? 'CLOSED' : 'OPEN',
+            stateReason: closed.includes(number) ? 'COMPLETED' : null,
+            updatedAt: '2026-11-16T10:00:00Z',
+            body: '',
+            repository: {nameWithOwner: 'acme/web'},
+            labels: {nodes: []},
+            assignees: {totalCount: 0},
+            blockedBy: {nodes: []},
+            closedByPullRequestsReferences: {nodes: []},
+        });
+    }
+    return nodes;
+}
+
+const page = (nodes: any[], endCursor: string | null) => ({
+    pageInfo: {hasNextPage: endCursor !== null, endCursor},
+    nodes,
+});
+
+/** A runner answering the first read with `first` and each next page by its `after` cursor. */
+function paged(first: unknown, pages: Record<string, unknown>) {
+    return scripted((args) => {
+        const after = args.find((arg) => arg.startsWith('after='))?.slice('after='.length);
+        if (after === undefined) return {stdout: JSON.stringify(first)};
+        const next = pages[after];
+        return next === undefined ? {code: 1, stderr: 'boom'} : {stdout: JSON.stringify(next)};
+    });
+}
+
+const pageAnswer = (subIssues: unknown) => ({data: {repository: {issue: {subIssues}}}});
+
+test('a plan with more sub-issues than one page reads the rest a page at a time', async () => {
+    /* Given */
+    const run = paged(
+        {
+            data: {
+                repository: {
+                    issue: {
+                        ...subIssueNodes(1648, 1648)[0],
+                        parent: null,
+                        subIssues: page(subIssueNodes(1, 40), 'c40'),
+                    },
+                },
+            },
+        },
+        {c40: pageAnswer(page(subIssueNodes(41, 80), 'c80')), c80: pageAnswer(page(subIssueNodes(81, 97), null))},
+    );
+
+    /* When */
+    const plan = await new GhCli({run}).plan('acme/web', 1648);
+
+    /* Then */
+    assert.ok(plan);
+    assert.deepEqual(
+        plan.issues.map((issue) => issue.number),
+        Array.from({length: 97}, (_, index) => index + 1),
+    );
+    assert.equal(run.calls.length, 3);
+    assert.match(queryOf(run.calls[0]), /subIssues\(first: 40\) \{\s*pageInfo \{ hasNextPage endCursor \}/);
+    assert.match(queryOf(run.calls[1]), /subIssues\(first: 40, after: \$after\)/);
+    assert.match(queryOf(run.calls[1]), /closedByPullRequestsReferences/);
+    assert.ok(run.calls[1].includes('after=c40'));
+    assert.ok(run.calls[2].includes('after=c80'));
+});
+
+test('a plan whose next page of sub-issues cannot be read answers null rather than a smaller plan', async () => {
+    /* Given */
+    const run = paged(
+        {
+            data: {
+                repository: {
+                    issue: {
+                        ...subIssueNodes(1648, 1648)[0],
+                        parent: null,
+                        subIssues: page(subIssueNodes(1, 40), 'c40'),
+                    },
+                },
+            },
+        },
+        {},
+    );
+
+    /* When */
+    const plan = await new GhCli({run}).plan('acme/web', 1648);
+
+    /* Then */
+    assert.equal(plan, null);
+});
+
+test("a repository's plan with more sub-issues than one page is counted whole", async () => {
+    /* Given */
+    const run = paged(
+        {
+            data: {
+                search: {
+                    nodes: [
+                        {
+                            ...subIssueNodes(1648, 1648)[0],
+                            parent: null,
+                            subIssues: page(subIssueNodes(1, 40, [1, 2, 3]), 'c40'),
+                        },
+                    ],
+                },
+            },
+        },
+        {c40: pageAnswer(page(subIssueNodes(41, 57, [41]), null))},
+    );
+
+    /* When */
+    const plans = await new GhCli({run}).plansIn('acme/web', {closed: false});
+
+    /* Then */
+    assert.ok(plans);
+    assert.deepEqual([plans[0].total, plans[0].open], [57, 53]);
+    assert.equal(run.calls.length, 2);
+    const next = queryOf(run.calls[1]);
+    assert.match(next, /issue\(number: 1648\)/);
+    assert.doesNotMatch(next, /closedByPullRequestsReferences/);
+    assert.deepEqual(run.calls[1].slice(-6), ['-f', 'owner=acme', '-f', 'name=web', '-f', 'after=c40']);
 });

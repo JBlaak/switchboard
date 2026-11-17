@@ -26,11 +26,16 @@ import type {PullRequestCloses} from '../../application/ports/github-cli';
 import {toAutomergeStatus} from './gh-overview';
 
 /**
- * Sub-issues per plan: the first 40, unpaged. GitHub charges a query by what
- * it could return, so each one asked for costs whether or not the plan has
- * it; plans so far have had at most a dozen or so.
+ * Sub-issues per page: 40. GitHub charges a query by what it could return, so
+ * each one asked for costs whether or not the plan has it; most plans fit in
+ * one page, and a bigger one reads the rest with `subIssuesPageQuery`.
  */
 export const SUB_ISSUES = 40;
+
+/** Pages read past the first, at most: a plan of up to 400 sub-issues reads whole. */
+export const MORE_SUB_ISSUE_PAGES = 9;
+
+const PAGE_INFO = 'pageInfo { hasNextPage endCursor }';
 
 /**
  * Plans per repository: the 20 most recently updated. GitHub charges
@@ -75,6 +80,7 @@ export function planQuery(number: number): string {
       ${PLAN_ISSUE_FIELDS}
       parent { number title repository { nameWithOwner } }
       subIssues(first: ${SUB_ISSUES}) {
+        ${PAGE_INFO}
         nodes {
           ${PLAN_ISSUE_FIELDS}
         }
@@ -82,6 +88,49 @@ export function planQuery(number: number): string {
     }
   }
 }`;
+}
+
+/** What `PLANS_QUERY` reads of each sub-issue: enough to count and level it. */
+const SUMMARY_SUB_ISSUE_FIELDS = `number state stateReason
+            repository { nameWithOwner }
+            blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { number repository { nameWithOwner } } }`;
+
+/**
+ * The next page of an issue's sub-issues, after `$after`, each with what
+ * `planQuery` reads of one (`detail: 'plan'`) or what `PLANS_QUERY` does
+ * (`'summary'`).
+ */
+export function subIssuesPageQuery(number: number, detail: 'plan' | 'summary'): string {
+    return `query($owner: String!, $name: String!, $after: String!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: ${number}) {
+      subIssues(first: ${SUB_ISSUES}, after: $after) {
+        ${PAGE_INFO}
+        nodes {
+          ${detail === 'plan' ? PLAN_ISSUE_FIELDS : SUMMARY_SUB_ISSUE_FIELDS}
+        }
+      }
+    }
+  }
+}`;
+}
+
+/** Where an issue's sub-issues go on from, or null when the page read was the last. */
+export function nextSubIssuesCursor(issue: any): string | null {
+    const info = issue?.subIssues?.pageInfo;
+    return info?.hasNextPage === true && typeof info.endCursor === 'string' ? info.endCursor : null;
+}
+
+/**
+ * Add a page from `subIssuesPageQuery`'s data to `issue`'s sub-issues, and
+ * take over its page info. False when the data has no such page.
+ */
+export function addSubIssuesPage(issue: any, data: any): boolean {
+    const page = data?.repository?.issue?.subIssues;
+    if (!page || !Array.isArray(page.nodes)) return false;
+    issue.subIssues.nodes = [...(issue.subIssues.nodes ?? []), ...page.nodes];
+    issue.subIssues.pageInfo = page.pageInfo;
+    return true;
 }
 
 /** A plan from `planQuery`'s data, or null when GitHub has no such issue. */
@@ -147,10 +196,9 @@ export const PLANS_QUERY = `query($search: String!) {
         parent { number }
         blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { number repository { nameWithOwner } } }
         subIssues(first: ${SUB_ISSUES}) {
+          ${PAGE_INFO}
           nodes {
-            number state stateReason
-            repository { nameWithOwner }
-            blockedBy(first: ${BLOCKERS_PER_ISSUE}) { nodes { number repository { nameWithOwner } } }
+            ${SUMMARY_SUB_ISSUE_FIELDS}
           }
         }
       }
