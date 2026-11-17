@@ -13,7 +13,10 @@
  * is linked to ("from Connect API + Connect Web"), and the projects linked to
  * none in "Not linked", last. Within a group unread rows come first, then
  * urgent ones, then the most recently seen. The cursor walks the rows in that
- * order.
+ * order. A row the cursor marks seen keeps its unread place, under the
+ * Unread filter too, until the tab or filter changes or the page opens again:
+ * otherwise J/K would push each row it lands on down below the unread ones,
+ * and the next step would skip rows.
  */
 import type {BugDetail} from '../../application/services/bug-fix-service';
 import type {SnoozeOptionView} from '../../application/services/inbox-settings-service';
@@ -39,6 +42,8 @@ export interface BugPageState {
     readonly filter: BugFilter;
     /** The row under the cursor, by key; null for the first row. */
     readonly cursor: string | null;
+    /** Rows marked seen on this visit, by key: they keep their unread place until the tab or filter changes. */
+    readonly seenHere: readonly string[];
     readonly details: Readonly<Record<string, BugDetail>>;
     readonly trends: Readonly<Record<string, readonly number[]>>;
     /** The snooze menu, open on a row; options null while they load. */
@@ -80,6 +85,7 @@ export const initialBugPageState: BugPageState = {
     tab: 'inbox',
     filter: 'all',
     cursor: null,
+    seenHere: [],
     details: {},
     trends: {},
     snooze: null,
@@ -93,10 +99,10 @@ export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPa
         // A fresh look each time: the inbox, unfiltered, from the top. What Bugsnag said stays.
         // The figure on the empty screen opens it too (#416), just as fresh.
         case 'bugPageOpened':
-            return {...state, tab: 'inbox', filter: 'all', cursor: null, snooze: null, notice: null};
+            return {...state, tab: 'inbox', filter: 'all', cursor: null, seenHere: [], snooze: null, notice: null};
         case 'managerPageRequested':
             return event.manager === 'bug'
-                ? {...state, tab: 'inbox', filter: 'all', cursor: null, snooze: null, notice: null}
+                ? {...state, tab: 'inbox', filter: 'all', cursor: null, seenHere: [], snooze: null, notice: null}
                 : state;
         case 'bugPageClosed':
             return state.snooze ? {...state, snooze: null} : state;
@@ -110,17 +116,25 @@ export function bugPageReducer(state: BugPageState, event: RendererEvent): BugPa
             return {...state, items};
         }
         case 'bugTabChosen':
-            return {...state, tab: event.tab, filter: 'all', cursor: null, snooze: null};
+            return {...state, tab: event.tab, filter: 'all', cursor: null, seenHere: [], snooze: null};
         case 'bugFilterChosen':
             return {
                 ...state,
                 tab: 'inbox',
                 filter: state.tab === 'inbox' && state.filter === event.filter ? 'all' : event.filter,
                 cursor: null,
+                seenHere: [],
                 snooze: null,
             };
-        case 'bugCursorMoved':
-            return state.cursor === event.key ? state : {...state, cursor: event.key, snooze: null};
+        case 'bugCursorMoved': {
+            if (state.cursor === event.key) return state;
+            const lands = state.items.find((item) => item.key === event.key);
+            const seenHere =
+                lands?.state.kind === 'unread' && !state.seenHere.includes(lands.key)
+                    ? [...state.seenHere, lands.key]
+                    : state.seenHere;
+            return {...state, cursor: event.key, seenHere, snooze: null};
+        }
         case 'bugDetailLoaded':
             return {...state, details: {...state.details, [event.key]: event.detail}};
         case 'bugTrendLoaded':
@@ -147,12 +161,19 @@ export function inProgressWantsYou(items: readonly InboxItem[]): boolean {
     return items.some((item) => item.state.kind === 'inProgress' && wantsYou(item.state.stage));
 }
 
-function passes(item: InboxItem, filter: BugFilter): boolean {
+type RowsOf = Pick<BugPageState, 'items' | 'projects' | 'tab' | 'filter'> & Partial<Pick<BugPageState, 'seenHere'>>;
+
+/** Unread, or marked seen on this visit and so still in its unread place. */
+function unreadHere(item: InboxItem, seenHere: ReadonlySet<string>): boolean {
+    return item.state.kind === 'unread' || (item.state.kind === 'read' && seenHere.has(item.key));
+}
+
+function passes(item: InboxItem, filter: BugFilter, seenHere: ReadonlySet<string>): boolean {
     switch (filter) {
         case 'all':
             return true;
         case 'unread':
-            return item.state.kind === 'unread';
+            return unreadHere(item, seenHere);
         case 'trending':
             return item.signals?.trending === true;
         case 'regressed':
@@ -182,11 +203,13 @@ export function sourceName(projects: readonly BugsnagProjectSetting[], projectId
 }
 
 /** The rows of the tab, filtered, grouped by local project with "Not linked" last. */
-export function bugGroups(state: Pick<BugPageState, 'items' | 'projects' | 'tab' | 'filter'>): BugGroup[] {
+export function bugGroups(state: RowsOf): BugGroup[] {
+    const seenHere = new Set(state.seenHere ?? []);
     const linkOf = new Map(state.projects.map((project) => [project.id, project.localProject]));
     const groups = new Map<string | null, InboxItem[]>();
     for (const item of state.items) {
-        if (tabOf(item.state) !== state.tab || (state.tab === 'inbox' && !passes(item, state.filter))) continue;
+        if (tabOf(item.state) !== state.tab || (state.tab === 'inbox' && !passes(item, state.filter, seenHere)))
+            continue;
         const projectPath = linkOf.get(item.source) ?? null;
         const rows = groups.get(projectPath) ?? [];
         rows.push(item);
@@ -197,15 +220,15 @@ export function bugGroups(state: Pick<BugPageState, 'items' | 'projects' | 'tab'
             projectPath,
             title: projectPath ? projectTitle(projectPath) : 'Not linked',
             sources: [...new Set(rows.map((row) => sourceName(state.projects, row.source)))].sort(),
-            rows: rows.sort(rowOrder),
+            rows: rows.sort((a, b) => rowOrder(a, b, seenHere)),
         }))
         .sort((a, b) => (a.projectPath === null ? 1 : b.projectPath === null ? -1 : a.title.localeCompare(b.title)));
 }
 
 /** Unread first, then urgent, a done item asking about events after its merge first, then the most recently seen. */
-function rowOrder(a: InboxItem, b: InboxItem): number {
+function rowOrder(a: InboxItem, b: InboxItem, seenHere: ReadonlySet<string>): number {
     const rank = (item: InboxItem): number =>
-        (item.state.kind === 'unread' ? 0 : 4) + (isUrgent(item) ? 0 : 2) + (item.fix?.seenAgain ? 0 : 1);
+        (unreadHere(item, seenHere) ? 0 : 4) + (isUrgent(item) ? 0 : 2) + (item.fix?.seenAgain ? 0 : 1);
     return rank(a) - rank(b) || lastSeen(b) - lastSeen(a);
 }
 
@@ -215,7 +238,7 @@ function lastSeen(item: InboxItem): number {
 }
 
 /** Every row on the page, in the order the cursor walks them. */
-export function bugRows(state: Pick<BugPageState, 'items' | 'projects' | 'tab' | 'filter'>): InboxItem[] {
+export function bugRows(state: RowsOf): InboxItem[] {
     return bugGroups(state).flatMap((group) => group.rows);
 }
 

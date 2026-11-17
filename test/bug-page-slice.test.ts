@@ -149,6 +149,65 @@ test('the cursor steps through the rows and holds at both ends', () => {
     assert.equal(pastEnd, `bug:${API}:b`);
 });
 
+/** J as the page does it: move the cursor, then mark the row it lands on seen. */
+function pressJ(state: BugPageState): BugPageState {
+    const key = steppedBugCursor(state, 1);
+    const moved = bugPageReducer(state, {type: 'bugCursorMoved', key});
+    const landed = moved.items.find((row) => row.key === key)!;
+    return landed.state.kind === 'unread'
+        ? bugPageReducer(moved, {type: 'bugItemChanged', item: {...landed, state: {kind: 'read'}}})
+        : moved;
+}
+
+test('J walks unread rows one by one while it marks them seen', () => {
+    /* Given */
+    let state = page([
+        item('a', {facts: {lastSeen: '2026-11-13T11:00:00Z'}}),
+        item('b', {facts: {lastSeen: '2026-11-13T10:00:00Z'}}),
+        item('c', {facts: {lastSeen: '2026-11-13T09:00:00Z'}}),
+        item('d', {facts: {lastSeen: '2026-11-13T08:00:00Z'}}),
+    ]);
+
+    /* When */
+    const visited: (string | null)[] = [];
+    for (let press = 0; press < 3; press++) {
+        state = pressJ(state);
+        visited.push(state.cursor);
+    }
+
+    /* Then */
+    assert.deepEqual(visited, [`bug:${API}:b`, `bug:${API}:c`, `bug:${API}:d`]);
+    assert.deepEqual(
+        bugRows(state).map((row) => row.key),
+        ['a', 'b', 'c', 'd'].map((id) => `bug:${API}:${id}`),
+    );
+});
+
+test('a row seen on this visit stays under the Unread filter until the filter changes', () => {
+    /* Given */
+    const state = page(
+        [
+            item('a', {facts: {lastSeen: '2026-11-13T11:00:00Z'}}),
+            item('b', {facts: {lastSeen: '2026-11-13T10:00:00Z'}}),
+        ],
+        {filter: 'unread'},
+    );
+
+    /* When */
+    const seen = pressJ(state);
+    const refiltered = bugPageReducer(bugPageReducer(seen, {type: 'bugFilterChosen', filter: 'unread'}), {
+        type: 'bugFilterChosen',
+        filter: 'unread',
+    });
+
+    /* Then */
+    assert.equal(bugRows(seen).length, 2);
+    assert.deepEqual(
+        bugRows(refiltered).map((row) => row.key),
+        [`bug:${API}:a`],
+    );
+});
+
 test('only Needs you and CI failing put the dot on In progress', () => {
     /* Then */
     assert.equal(inProgressWantsYou([item('a', {state: {kind: 'inProgress', stage: 'prCi'}})]), false);
