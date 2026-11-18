@@ -387,3 +387,46 @@ test.describe('wayfinder map', () => {
         expect(startedSince(api, before)[0][3]?.initialPrompt).toBe('/wayfinder 1300');
     });
 });
+
+test.describe('the hand-off question on a start', () => {
+    test.use({answers: {...PROJECT_PAGE_ANSWERS, handoffHosts: [STUB_HANDOFF_HOST]}});
+
+    /** The gap between the bottom of the hand-off question and the top of the actions row it replaced the start in. */
+    async function gapAboveActions(page: Page) {
+        const question = await detail(page).getByRole('group', {name: 'Hand off to a VM'}).boundingBox();
+        const actions = await detail(page).locator('.pv-actions').boundingBox();
+        return actions!.y - (question!.y + question!.height);
+    }
+
+    for (const {name, plans, number, label} of [
+        {name: 'Start session', plans: () => plansStub(), number: 1303, label: 'Start session on #1303'},
+        {
+            name: 'Start /wayfinder',
+            plans: () => plansStub({...LOGIN_PLAN, wayfinder: true}),
+            number: 1303,
+            label: 'Start /wayfinder on #1303',
+        },
+    ]) {
+        test(`${name} asks right above where its button was, not up the pane`, async ({page, api}) => {
+            /* Given */
+            setUp(api, plans());
+            await sessionRow(page, LABEL.loginFix)
+                .first()
+                .click({position: {x: 4, y: 4}});
+            await expect.poll(() => api.callsTo('openTerminal').map(([id]) => id)).toContain(S.loginFix);
+            await page.keyboard.press('Meta+g');
+            await workPage(page).getByRole('tab', {name: 'Plan'}).click();
+            await node(page, number).click();
+
+            /* When */
+            await detail(page).getByRole('button', {name: label}).click();
+
+            /* Then */
+            await expect(
+                detail(page).getByRole('button', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label}),
+            ).toBeVisible();
+            expect(await gapAboveActions(page)).toBeGreaterThanOrEqual(0);
+            expect(await gapAboveActions(page)).toBeLessThan(24);
+        });
+    }
+});
