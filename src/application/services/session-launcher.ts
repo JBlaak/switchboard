@@ -31,6 +31,7 @@ import type {PtyHandle, TerminalGateway} from '../ports/terminal-gateway';
 import type {ShellProfileProvider} from '../ports/shell-profiles';
 import type {TranscriptStore} from '../ports/transcript-store';
 import type {RendererGateway} from '../ports/renderer-gateway';
+import type {SessionRepository} from '../ports/session-repository';
 import type {RemoteConnectionSupervisor} from './remote-connection-supervisor';
 import type {SessionLifecycle} from './session-lifecycle';
 import type {QuestionService} from './question-service';
@@ -91,6 +92,8 @@ export interface SessionLauncherDeps {
     agents?: LauncherAgents;
     /** Keeps the record of live local Claude sessions that a restart brings back. */
     liveSessions?: {started(sessionId: string, projectPath: string): void};
+    /** Where a session's archive flag is kept: an archived session that opens comes out of the archive. */
+    archive?: Pick<SessionRepository, 'getMeta' | 'setArchived'>;
 }
 
 /**
@@ -107,8 +110,25 @@ export class SessionLauncher {
 
     public async open(request: OpenSessionRequest): Promise<OpenSessionResult> {
         const existing = this.deps.registry.get(request.sessionId);
-        if (existing) return this.reattach(request.sessionId, existing);
-        return this.spawn(request);
+        const result = existing ? this.reattach(request.sessionId, existing) : await this.spawn(request);
+        if (result.ok) this.unarchive(request.sessionId);
+        return result;
+    }
+
+    /**
+     * An archived session that is opened again leaves the archive.
+     *
+     * Every way in comes through `open` — a row, search, the tray, Resume with
+     * config, a phone, a restart's restore, a VM hand-off or bring-back — so
+     * this is the one place it is done. The window and the phones refetch their
+     * lists, which is what moves the row out of the archive there too.
+     */
+    private unarchive(sessionId: string): void {
+        const {archive, renderer} = this.deps;
+        if (!archive?.getMeta(sessionId)?.archived) return;
+        archive.setArchived(sessionId, false);
+        this.deps.log.info(`[launch] ${sessionId} opened from the archive; unarchived`);
+        renderer.projectsChanged();
     }
 
     /**
