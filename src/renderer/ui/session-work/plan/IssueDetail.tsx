@@ -193,30 +193,6 @@ export function IssueDetail({
                 </section>
             )}
 
-            {start?.phase === 'confirm' && (
-                <div
-                    className="pv-confirm"
-                    role="group"
-                    aria-label={state === 'locked' ? 'Start early' : 'Hand off to a VM'}>
-                    {state === 'locked' && <span>{stackLine(plan, issue)}</span>}
-                    {vmHosts.length > 0 && <strong>{handOffQuestion(vmHosts)}</strong>}
-                    <div className="pv-confirm-buttons">
-                        <StartWhereButtons
-                            hosts={vmHosts}
-                            hereLabel={
-                                state === 'locked'
-                                    ? 'Start #' + issue.number + ' early' + (vmHosts.length ? ' here' : '')
-                                    : 'Start here'
-                            }
-                            onHere={() => issueActions!.confirmStart?.(plan)}
-                            onVm={(host) => issueActions!.confirmStart?.(plan, host)}
-                        />
-                        <button type="button" className="sw-btn" onClick={() => issueActions!.cancelStart?.()}>
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
             {existing && (
                 <ExistingBranch
                     key={issueKeyString(issue)}
@@ -240,43 +216,69 @@ export function IssueDetail({
                 </div>
             )}
 
-            <div className="pv-actions">
-                {session && issueActions?.jumpToSession && (
-                    <button
-                        type="button"
-                        className="sw-btn is-primary"
-                        onClick={() => issueActions.jumpToSession!(session.id)}>
-                        {'Jump to ' + session.name}
-                    </button>
+            <div className="pv-detail-foot">
+                {start?.phase === 'confirm' && (
+                    <div
+                        className="pv-confirm"
+                        role="group"
+                        aria-label={state === 'locked' ? 'Start early' : 'Hand off to a VM'}>
+                        {state === 'locked' && <span>{stackLine(plan, issue)}</span>}
+                        {vmHosts.length > 0 && <strong>{handOffQuestion(vmHosts)}</strong>}
+                        <div className="pv-confirm-buttons">
+                            <StartWhereButtons
+                                hosts={vmHosts}
+                                hereLabel={
+                                    state === 'locked'
+                                        ? 'Start #' + issue.number + ' early' + (vmHosts.length ? ' here' : '')
+                                        : 'Start here'
+                                }
+                                onHere={() => issueActions!.confirmStart?.(plan)}
+                                onVm={(host) => issueActions!.confirmStart?.(plan, host)}
+                            />
+                            <button type="button" className="sw-btn" onClick={() => issueActions!.cancelStart?.()}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 )}
-                {canStart && start?.phase !== 'confirm' && !existing && (
-                    <button
-                        type="button"
-                        className="sw-btn is-primary"
-                        aria-disabled={start?.phase === 'starting'}
-                        onClick={() => {
-                            if (start?.phase !== 'starting') issueActions!.startSession!(issue, plan);
-                        }}>
-                        {start?.phase === 'starting'
-                            ? start.vm
-                                ? 'Starting on ' + start.vm + '…'
-                                : 'Starting…'
-                            : plan.wayfinder
-                              ? 'Start /wayfinder on #' + issue.number
-                              : 'Start session on #' + issue.number}
+                <div className="pv-actions">
+                    {session && issueActions?.jumpToSession && (
+                        <button
+                            type="button"
+                            className="sw-btn is-primary"
+                            onClick={() => issueActions.jumpToSession!(session.id)}>
+                            {'Jump to ' + session.name}
+                        </button>
+                    )}
+                    {canStart && start?.phase !== 'confirm' && !existing && (
+                        <button
+                            type="button"
+                            className="sw-btn is-primary"
+                            aria-disabled={start?.phase === 'starting'}
+                            onClick={() => {
+                                if (start?.phase !== 'starting') issueActions!.startSession!(issue, plan);
+                            }}>
+                            {start?.phase === 'starting'
+                                ? start.vm
+                                    ? 'Starting on ' + start.vm + '…'
+                                    : 'Starting…'
+                                : plan.wayfinder
+                                  ? 'Start /wayfinder on #' + issue.number
+                                  : 'Start session on #' + issue.number}
+                        </button>
+                    )}
+                    <button type="button" className="sw-btn" onClick={() => on.open(issueUrl(issue))}>
+                        Open issue
                     </button>
-                )}
-                <button type="button" className="sw-btn" onClick={() => on.open(issueUrl(issue))}>
-                    Open issue
-                </button>
-                {pr && (
-                    <button
-                        type="button"
-                        className="sw-btn"
-                        onClick={() => on.open(pullRequestUrl(issue.repository, pr.number))}>
-                        {'Open PR #' + pr.number}
-                    </button>
-                )}
+                    {pr && (
+                        <button
+                            type="button"
+                            className="sw-btn"
+                            onClick={() => on.open(pullRequestUrl(issue.repository, pr.number))}>
+                            {'Open PR #' + pr.number}
+                        </button>
+                    )}
+                </div>
             </div>
         </aside>
     );

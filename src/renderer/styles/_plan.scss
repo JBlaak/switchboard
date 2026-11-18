@@ -1003,11 +1003,18 @@ a.pv-num:hover {
     }
 }
 
+/* The start's confirmation (hand off to a VM?) and the actions it came from, pinned together at the pane's foot. */
+.pv-detail-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+}
+
 .pv-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: auto;
     padding-top: 8px;
 }
 
