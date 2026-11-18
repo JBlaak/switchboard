@@ -255,6 +255,21 @@ export type CliStateChange =
     | {kind: 'ready'};
 
 /**
+ * The message a root `working` report carries once the turn has ended with
+ * background tasks still running: "1 shell still running", "1 shell, 1 monitor
+ * still running". CLI 2.1.327 keeps the root `working` for as long as they run
+ * instead of saying `idle` or `done`, so without this the turn never reads as
+ * ended. A report in a turn names what Claude is doing instead ("Running sleep
+ * 30 in background"), never a count.
+ */
+const STILL_RUNNING = /^\d+ [a-z ]+?(?:, \d+ [a-z ]+?)* still running$/i;
+
+/** A root `working` report that means the turn ended with background tasks running. */
+function endedWithBackgroundWork(report: ProgramStatusReport): boolean {
+    return report.msg !== undefined && STILL_RUNNING.test(report.msg.trim());
+}
+
+/**
  * Whether the CLI is mid-turn, tracked across chunks.
  *
  * Only transitions are interesting — the title is repainted many times per
@@ -266,8 +281,10 @@ export type CliStateChange =
  * what its root record is doing, and from its first report on that is the only
  * thing listened to: the title and OSC 9;4 keep arriving alongside it, and on
  * CLI 2.1.301 the title keeps its last spinner frame after a turn ends, so
- * letting both drive would have them fight. Child records (subagents) do not
- * move the session's state.
+ * letting both drive would have them fight. Child records (subagents,
+ * background shells) do not move the session's state, and a root `working`
+ * that only counts the background tasks still running is a turn that ended
+ * (see `STILL_RUNNING`).
  *
  * Without 7501 — an older CLI, or a remote session whose tmux answered the
  * probe's DA query first — the legacy rules apply: OSC 0 is authoritative in
@@ -341,8 +358,9 @@ export class CliBusyTracker {
     }
 
     /**
-     * A 7501 root report: working is busy; idle, done, error and a cleared
-     * record are not; blocked leaves busy alone and asks for the user.
+     * A 7501 root report: working is busy, unless it only counts background
+     * tasks still running; idle, done, error and a cleared record are not;
+     * blocked leaves busy alone and asks for the user.
      *
      * A blocked report is announced when the block is new — entering it, or
      * moving straight on to a different prompt — not on every repeat of the
@@ -360,7 +378,7 @@ export class CliBusyTracker {
         }
         this.blockedOn = null;
 
-        const busy = report.state === 'working';
+        const busy = report.state === 'working' && !endedWithBackgroundWork(report);
         if (busy === this.isBusy) {
             if (busy || this.isReady) return null;
             this.isReady = true;

@@ -7,9 +7,11 @@
  * finishes. Most of the time that is a **watch**: a shell that only waits on
  * GitHub (`gh pr checks --watch`, `gh run watch`, a `gh` poll loop with
  * `sleep`). A turn that pushed, reported and then watches CI has handed back
- * to the user, who reads the report while GitHub works. Anything else, a
- * build, a test run, an agent or a shell that can't be told, is **work**: the
- * session is still making something, so it is still working.
+ * to the user, who reads the report while GitHub works. A **server** (a dev
+ * server, `php -S`, `yarn dev`) never finishes on its own: it was started for
+ * the user to look at what was built, so it holds nothing up either. Anything
+ * else, a build, a test run, an agent or a shell that can't be told, is
+ * **work**: the session is still making something, so it is still working.
  *
  * The transcript says it all. A background `Bash` call's result carries a
  * `backgroundTaskId` and its call the command; a background agent's result is
@@ -28,14 +30,17 @@ export interface BackgroundTask {
     description: string;
     /** Only waits on GitHub. */
     watch: boolean;
+    /** Serves something for the user to look at, until stopped; never a watch too. */
+    server?: boolean;
 }
 
-/** What a turn's background tasks keep going: none, only watches, or work. */
+/** What a turn's background tasks keep going: none, only watches, or work. Servers keep nothing going. */
 export type TurnHolds = 'none' | 'watches' | 'work';
 
 export function turnHolds(tasks: readonly BackgroundTask[]): TurnHolds {
-    if (tasks.length === 0) return 'none';
-    return tasks.every((task) => task.watch) ? 'watches' : 'work';
+    const holding = tasks.filter((task) => task.server !== true);
+    if (holding.length === 0) return 'none';
+    return holding.every((task) => task.watch) ? 'watches' : 'work';
 }
 
 /**
@@ -97,6 +102,47 @@ export function isWatch(command: string | undefined): boolean {
     if (!programs.every((program) => WATCH_STEPS.has(program))) return false;
     if (!programs.includes('gh')) return false;
     return /\s--watch\b|\bgh\s+run\s+watch\b/.test(command) || programs.includes('sleep');
+}
+
+/** Package managers whose `dev`, `start`, `serve` or `preview` script runs a server. */
+const PACKAGE_MANAGERS: ReadonlySet<string> = new Set(['npm', 'yarn', 'pnpm', 'bun']);
+const SERVER_SCRIPTS: ReadonlySet<string> = new Set(['dev', 'start', 'serve', 'preview']);
+
+/** The words of one step, past keywords and variable assignments, its program by its base name. */
+function wordsOf(step: string): string[] {
+    const words = step.trim().split(/\s+/);
+    const first = words.findIndex((word) => word !== '' && !KEYWORDS.has(word) && !/^\w+=/.test(word));
+    if (first < 0) return [];
+    const [program, ...rest] = words.slice(first);
+    return [program.slice(program.lastIndexOf('/') + 1), ...rest];
+}
+
+/** Whether one step starts a server that runs until stopped. */
+function startsServer([program, first, second]: string[]): boolean {
+    if (program === undefined) return false;
+    if (/^php(@?[\d.]+)?$/.test(program)) return first === '-S' || (first === 'artisan' && second === 'serve');
+    if (PACKAGE_MANAGERS.has(program)) return SERVER_SCRIPTS.has(first === 'run' ? second : first);
+    if (program === 'vite') return first === undefined || first === 'dev' || first === 'serve' || first.startsWith('-');
+    if (program === 'npx') return first === 'vite' && (second === undefined || second.startsWith('-'));
+    if (program === 'next') return first === 'dev' || first === 'start';
+    if (/^python3?$/.test(program)) return first === '-m' && second === 'http.server';
+    if (program === 'rails') return first === 's' || first === 'server';
+    return false;
+}
+
+/**
+ * Whether a background shell's command starts a server the user is meant to
+ * look at: some step of it runs a dev or local web server (`php -S`, `php
+ * artisan serve`, `yarn dev`, `npm run start`, `vite`, `next dev`, `python -m
+ * http.server`, `rails s`). The steps around it (`cd`, `source`, `nvm use`)
+ * do not matter.
+ */
+export function isServer(command: string | undefined): boolean {
+    if (command === undefined) return false;
+    return command
+        .split(/&&|\|\||[;|\n&]/)
+        .map(wordsOf)
+        .some(startsServer);
 }
 
 // The lines are read loosely, as the CLI writes them: each field
@@ -178,10 +224,13 @@ export function runningBackgroundTasks(lines: readonly string[], since: number):
             const call = blocks(line, 'tool_result')[0]?.tool_use_id;
             if (typeof result.backgroundTaskId === 'string') {
                 if (current) {
+                    const command = commands.get(call);
+                    const watch = isWatch(command);
                     running.set(result.backgroundTaskId, {
                         id: result.backgroundTaskId,
                         description: descriptions.get(call) ?? 'a background shell',
-                        watch: isWatch(commands.get(call)),
+                        watch,
+                        ...(!watch && isServer(command) ? {server: true} : {}),
                     });
                 }
                 continue;

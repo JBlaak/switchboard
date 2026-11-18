@@ -6,6 +6,12 @@
  * subagent one, titled with the subagent's task. Counting those is how the
  * sidebar can say "three agents are on this" without reading the transcript.
  *
+ * CLI 2.1.327 gives background shells and monitors a record too, named by
+ * their task id (`b` and eight letters or digits, e.g. `b7303xjcj`) where an
+ * agent's is `a` and sixteen hex digits. Those are kept as records, so a
+ * `clear` still finds them, but are not agents: a dev server left running is
+ * not "an agent on this".
+ *
  * The protocol's rules for the record set are small and kept exactly:
  *
  *   - a report replaces its record wholesale — a later report without a title
@@ -39,6 +45,14 @@ export interface WorkingAgent {
  * not: whatever the record says next, that agent is not doing anything now.
  */
 const WORKING_STATES: ReadonlySet<ProgramStatusState> = new Set<ProgramStatusState>(['working', 'blocked']);
+
+/** A background shell's or monitor's task id, as the last segment of a record's path. */
+const BACKGROUND_TASK_ID = /^b[a-z0-9]{8}$/;
+
+/** Whether a record is a background shell or monitor rather than an agent. */
+function isBackgroundTask(id: string): boolean {
+    return BACKGROUND_TASK_ID.test(id.slice(id.lastIndexOf('/') + 1));
+}
 
 /** True when `id` is `ancestor` itself or sits somewhere beneath it. */
 function isWithin(id: string, ancestor: string): boolean {
@@ -82,7 +96,7 @@ export class ProgramStatusChildren {
 
         const working: WorkingAgent[] = [];
         for (const [key, record] of this.records) {
-            if (!WORKING_STATES.has(record.state)) continue;
+            if (!WORKING_STATES.has(record.state) || isBackgroundTask(key)) continue;
             working.push(record.title === undefined ? {id: key} : {id: key, title: record.title});
         }
 

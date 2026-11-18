@@ -227,3 +227,18 @@ test('the sequence CLI 2.1.301 sends for two parallel subagents', () => {
     /* Then */
     assert.deepEqual(counts, [1, 2, 1, 0, null]);
 });
+
+test('background shells and monitors have records but are not agents', () => {
+    /* Given */
+    const children = new ProgramStatusChildren();
+    children.observe(report('working', 'a4dbba974014e6772', 'Run the review'));
+
+    /* When */
+    const shell = children.observe(report('working', 'b0rckkbmu', 'Start PHP dev server on port 8000'));
+    const nested = children.observe(report('working', 'a4dbba974014e6772/b7303xjcj', 'Sleep for 30 seconds'));
+
+    /* Then */
+    assert.equal(shell, null, 'a shell does not change the agents');
+    assert.equal(nested, null, 'neither does a shell an agent started');
+    assert.deepEqual(children.working, [{id: 'a4dbba974014e6772', title: 'Run the review'}]);
+});
