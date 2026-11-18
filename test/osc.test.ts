@@ -440,3 +440,54 @@ test('a probe query on its own is not a report and changes nothing', () => {
     assert.equal(change, null);
     assert.equal(tracker.speaksProgramStatus, false);
 });
+
+test('a root working that only counts background tasks still running ends the turn', () => {
+    /* Given */
+    // What CLI 2.1.327 emitted for a turn that started `sleep 40` in the
+    // background and replied: the root stays `working`, its message counts
+    // what is left, and `done` only comes once the shell finished.
+    const chunks = [
+        osc7501('state=idle:app=claude-code'),
+        osc7501('state=working:app=claude-code'),
+        osc7501(`state=working:app=claude-code:msg=${b64('Sleeping 40 seconds in background')}`),
+        osc7501(`state=working:app=claude-code:id=bqzxmo6gt:title=${b64('Sleep 40 seconds in background')}`),
+        osc7501(`state=working:app=claude-code:msg=${b64('1 shell still running')}`),
+        osc7501('state=working:app=claude-code'),
+        osc7501('state=clear:id=bqzxmo6gt'),
+        osc7501('state=done:app=claude-code'),
+    ];
+
+    /* When */
+    const {changes} = run(chunks);
+
+    /* Then */
+    assert.deepEqual(changes, [
+        {kind: 'ready'},
+        {kind: 'busy', busy: true},
+        {kind: 'busy', busy: false},
+        {kind: 'busy', busy: true},
+        {kind: 'busy', busy: false},
+    ]);
+});
+
+test('a count of several kinds still running ends the turn too', () => {
+    /* When */
+    const {tracker} = run([
+        osc7501('state=working'),
+        osc7501(`state=working:msg=${b64('1 shell, 1 monitor still running')}`),
+    ]);
+
+    /* Then */
+    assert.equal(tracker.busy, false);
+});
+
+test('a status message that merely mentions still running keeps the turn going', () => {
+    /* When */
+    const {tracker} = run([
+        osc7501('state=working'),
+        osc7501(`state=working:msg=${b64('Checking the build is still running')}`),
+    ]);
+
+    /* Then */
+    assert.equal(tracker.busy, true);
+});

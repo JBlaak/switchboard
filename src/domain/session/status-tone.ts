@@ -20,7 +20,8 @@
  * A turn that ends with only watches is the user's turn, not working: it
  * pushed, reported and handed back, and GitHub does the rest (see
  * `background-tasks`). Unless its pull requests all land on their own, when
- * it is merging.
+ * it is merging. A dev server left running is the user's turn too: it was
+ * started for them to look at what was built, and holds nothing up.
  */
 import {pullRequestRepository, sidebarPill} from '../project/queue-elsewhere';
 import type {MergeQueue} from '../project/merge-queue';

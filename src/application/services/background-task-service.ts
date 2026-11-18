@@ -64,7 +64,7 @@ export class BackgroundTaskService implements CliStateObserver {
         if (tasks.length > 0) this.published.set(sessionId, key);
         else this.published.delete(sessionId);
         this.deps.log.debug(
-            `[background] session=${sessionId} tasks=${tasks.map((t) => t.id + (t.watch ? ':watch' : ':work')).join(',')}`,
+            `[background] session=${sessionId} tasks=${tasks.map((t) => t.id + (t.watch ? ':watch' : t.server ? ':server' : ':work')).join(',')}`,
         );
         this.deps.renderer.sessionBackgroundTasks(sessionId, tasks);
     }

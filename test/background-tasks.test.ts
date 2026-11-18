@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert';
-import {isWatch, runningBackgroundTasks, turnHolds} from '../src/domain/session/background-tasks';
+import {isServer, isWatch, runningBackgroundTasks, turnHolds} from '../src/domain/session/background-tasks';
 
 const T0 = '2026-11-06T10:00:00.000Z';
 const T1 = '2026-11-06T10:01:00.000Z';
@@ -224,4 +224,81 @@ test('one work task among watches holds work', () => {
 
     /* Then */
     assert.strictEqual(holds, 'work');
+});
+
+test('dev and local web servers are servers, whatever sets them up', () => {
+    /* Given */
+    const commands = [
+        'cd /repo/public && APP_ENV=local /opt/homebrew/opt/php@8.3/bin/php -S 127.0.0.1:8000 ../server.php',
+        'php artisan serve',
+        'source ~/.nvm/nvm.sh >/dev/null && nvm use 22 >/dev/null && yarn dev',
+        'npm run dev -- --port 5173',
+        'npm start',
+        'pnpm preview',
+        'npx vite --host',
+        'vite',
+        'next dev',
+        'python3 -m http.server 8080',
+        'bin/rails s',
+    ];
+
+    /* When */
+    const servers = commands.filter((command) => !isServer(command));
+
+    /* Then */
+    assert.deepStrictEqual(servers, [], 'each of these is a server');
+});
+
+test('builds, tests and one-off scripts are not servers', () => {
+    /* Given */
+    const commands = [
+        'npm run build',
+        'yarn test',
+        'vite build',
+        'npx vite build',
+        'php artisan migrate',
+        'npm ci',
+        undefined,
+    ];
+
+    /* When */
+    const servers = commands.filter((command) => isServer(command));
+
+    /* Then */
+    assert.deepStrictEqual(servers, []);
+});
+
+test('a background dev server is running, marked a server', () => {
+    /* Given */
+    const lines = shell('yarn dev', 'b1', 'Start Vite dev server');
+
+    /* When */
+    const tasks = runningBackgroundTasks(lines, BEFORE);
+
+    /* Then */
+    assert.deepStrictEqual(tasks, [{id: 'b1', description: 'Start Vite dev server', watch: false, server: true}]);
+});
+
+test('a turn with only servers holds nothing', () => {
+    /* When */
+    const holds = turnHolds([
+        {id: 'b1', description: 'PHP', watch: false, server: true},
+        {id: 'b2', description: 'Vite', watch: false, server: true},
+    ]);
+
+    /* Then */
+    assert.strictEqual(holds, 'none');
+});
+
+test('servers beside a watch hold watches, beside work hold work', () => {
+    /* Given */
+    const server = {id: 'b1', description: 'Vite', watch: false, server: true};
+
+    /* When */
+    const withWatch = turnHolds([server, {id: 'b2', description: 'CI', watch: true}]);
+    const withWork = turnHolds([server, {id: 'b3', description: 'build', watch: false}]);
+
+    /* Then */
+    assert.strictEqual(withWatch, 'watches');
+    assert.strictEqual(withWork, 'work');
 });
