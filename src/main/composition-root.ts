@@ -624,6 +624,7 @@ export function buildContainer(): Container {
         fileExists: (target) => fs.exists(target),
         agents,
         liveSessions: {started: (sessionId, projectPath) => sessionRestore.started(sessionId, projectPath)},
+        archive: repository,
     });
     // The local sessions a restart or a reboot brings back.
     const sessionRestore = new SessionRestoreService({

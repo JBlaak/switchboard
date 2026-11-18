@@ -295,6 +295,8 @@ async function spawn(
         return String(result.error ?? 'The session could not start');
     }
 
+    // Main took an archived session out of the archive as it opened; the row follows before the refetch does.
+    session.archived = 0;
     if (show) showSession(session.sessionId);
     void pollActiveSessions();
     return null;
