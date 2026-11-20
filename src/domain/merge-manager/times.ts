@@ -151,12 +151,36 @@ export interface TimelineBlock {
     readonly rough: boolean;
 }
 
+/**
+ * Parked PRs on a track: landed but passed over (Held, Fixing, Needs you),
+ * so they take no time on the line. A flag stands where they keep their
+ * place: at the end of the timed block they come after in their lane's
+ * order (at the start for none). Several at one spot share one flag.
+ */
+export interface TimelineFlag {
+    /** Where it stands, as a fraction of the timeline's width. */
+    readonly at: number;
+    /** The parked PRs it stands for, in lane order. */
+    readonly keys: readonly string[];
+    readonly numbers: readonly number[];
+    /** The strongest of them: needs you over fixing over held. */
+    readonly tone: 'needsYou' | 'fixing' | 'held';
+    /** "#498 fix errand stopped · #511 held until approved". */
+    readonly title: string;
+}
+
+export interface TimelineTrack {
+    readonly repository: string;
+    readonly blocks: readonly TimelineBlock[];
+    readonly flags: readonly TimelineFlag[];
+}
+
 export interface Timeline {
     readonly from: number;
     readonly to: number;
     /** The times the timeline marks, between `from` and `to`. */
     readonly ticks: readonly number[];
-    readonly tracks: readonly {readonly repository: string; readonly blocks: readonly TimelineBlock[]}[];
+    readonly tracks: readonly TimelineTrack[];
 }
 
 /** The shortest and the longest stretch the timeline shows. */
@@ -190,6 +214,7 @@ export function timeline(
             const rows = times.get(lane.repository)!.rows;
             return {
                 repository: lane.repository,
+                flags: [],
                 blocks: lane.rows.flatMap((row) => {
                     const time = rows.get(row.key);
                     if (!time || time.from >= to) return [];
