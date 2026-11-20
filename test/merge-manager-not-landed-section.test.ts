@@ -1,7 +1,7 @@
 /**
  * Not landed on the Merge manager's page: what the section shows (the newest
- * five, View all, left out when empty or landed), J/K's order across the
- * lanes and then Not landed, which row the selection is on, the keys on a Not
+ * five, View all, left out when empty or landed), J/K's order through the
+ * status groups (every not landed PR among them), which row the selection is on, the keys on a Not
  * landed row, what its side view says, the slice's Not landed events, and the
  * section drawn.
  */
@@ -129,7 +129,7 @@ function slice(view: 'lanes' | 'notLanded', repository: string | null = null) {
     };
 }
 
-test('J/K go through the lane rows, then the five Not landed rows on screen', () => {
+test('J/K go through the status groups, every Not landed row among them', () => {
     /* Given */
     const state = slice('lanes');
 
@@ -137,15 +137,42 @@ test('J/K go through the lane rows, then the five Not landed rows on screen', ()
     const keys = visibleRowKeys(visibleRows(state));
 
     /* Then */
+    // Merging: the head #1; In line: #2; Waiting on review: the not landed ones, newest first.
     assert.deepEqual(keys, [
         landedKey(REPO, 1),
         landedKey(REPO, 2),
         landedKey('movelab/other', 20),
-        landedKey(REPO, 16),
-        landedKey(REPO, 15),
-        landedKey(REPO, 14),
-        landedKey(REPO, 13),
+        ...[16, 15, 14, 13, 12, 11, 10].map((n) => landedKey(REPO, n)),
     ]);
+});
+
+test('a Not landed row that needs you comes before the lanes in J/K and as the first row', () => {
+    /* Given */
+    const state = {...slice('lanes'), notLanded: [...OPEN, open(30, 30, {checks: 'failure'})]};
+    const rows = visibleRows(state);
+
+    /* When */
+    const keys = visibleRowKeys(rows);
+    const first = pageSelection(rows, null);
+
+    /* Then */
+    assert.equal(keys[0], landedKey(REPO, 30));
+    assert.equal(keys.length, 10);
+    assert.equal(first?.kind, 'notLanded');
+    assert.equal(first?.key, landedKey(REPO, 30));
+});
+
+test('on the Not landed page J/K keep its newest first order', () => {
+    /* Given */
+    const state = {...slice('notLanded'), notLanded: [open(30, 30, {checks: 'failure'}), open(31, 1)]};
+    const rows = visibleRows(state);
+
+    /* When */
+    const keys = visibleRowKeys(rows);
+
+    /* Then */
+    assert.deepEqual(keys, [landedKey(REPO, 31), landedKey(REPO, 30)]);
+    assert.equal(pageSelection(rows, null)?.key, landedKey(REPO, 31));
 });
 
 test("on the Not landed page J/K go through the chip's rows alone", () => {

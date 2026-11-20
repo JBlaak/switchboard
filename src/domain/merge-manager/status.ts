@@ -23,19 +23,11 @@
  *
  * Pure, so the tests hold it still.
  */
-import type {OpenPullRequest} from './not-landed';
+import {notLandedKey, notLandedStatus, type OpenPullRequest} from './not-landed';
 import type {PageLane, PageRow} from './page';
 
 export type StatusGroupId =
-    | 'needsYou'
-    | 'conflicts'
-    | 'checks'
-    | 'fixing'
-    | 'merging'
-    | 'ready'
-    | 'line'
-    | 'review'
-    | 'drafts';
+    'needsYou' | 'conflicts' | 'checks' | 'fixing' | 'merging' | 'ready' | 'line' | 'review' | 'drafts';
 
 /** The colour a group (and its rows' "now" marks) is drawn in. */
 export type StatusTone = 'orange' | 'red' | 'blue' | 'yellow' | 'purple' | 'green' | 'grey';
@@ -133,14 +125,42 @@ export interface StatusGroup extends StatusGroupInfo {
 
 /** The group a landed PR is in. */
 export function landedGroup(row: PageRow): StatusGroupId {
-    void row;
-    throw new Error('not built yet');
+    const {stage} = row;
+    switch (stage.kind) {
+        case 'needsYou':
+            return 'needsYou';
+        case 'waiting':
+            return stage.willConflict ? 'conflicts' : 'line';
+        case 'held':
+            return 'line';
+        case 'head':
+            return stage.step === 'checks' ? 'checks' : 'merging';
+        case 'fixing':
+            return 'fixing';
+        case 'merged':
+            // Never on the page (`pageLanes` leaves merged PRs out); the nearest group.
+            return 'merging';
+    }
 }
 
 /** The group a not landed PR is in, by `notLandedStatus`. */
 export function notLandedGroup(pr: OpenPullRequest): StatusGroupId {
-    void pr;
-    throw new Error('not built yet');
+    switch (notLandedStatus(pr)) {
+        case 'changesAsked':
+        case 'checksFailing':
+            return 'needsYou';
+        case 'conflicts':
+            return 'conflicts';
+        case 'checksRunning':
+            return 'checks';
+        case 'ready':
+            return 'ready';
+        case 'inReview':
+        case 'noReview':
+            return 'review';
+        case 'draft':
+            return 'drafts';
+    }
 }
 
 /**
@@ -149,9 +169,17 @@ export function notLandedGroup(pr: OpenPullRequest): StatusGroupId {
  * gives them).
  */
 export function statusGroups(lanes: readonly PageLane[], notLanded: readonly OpenPullRequest[]): StatusGroup[] {
-    void lanes;
-    void notLanded;
-    throw new Error('not built yet');
+    const items = new Map<StatusGroupId, StatusItem[]>(STATUS_GROUPS.map((group) => [group.id, []]));
+    for (const lane of lanes) {
+        for (const row of lane.rows) items.get(landedGroup(row))!.push({kind: 'lane', key: row.key, row});
+    }
+    const newestFirst = [...notLanded].sort((a, b) => b.createdAt - a.createdAt || b.number - a.number);
+    for (const pr of newestFirst) {
+        items.get(notLandedGroup(pr))!.push({kind: 'notLanded', key: notLandedKey(pr), pr});
+    }
+    return STATUS_GROUPS.map((group) => ({...group, items: items.get(group.id)!})).filter(
+        (group) => group.items.length > 0,
+    );
 }
 
 /** J/K's order: every item's key, top to bottom through the groups. */
@@ -168,7 +196,13 @@ export interface GroupCount {
 
 /** `repository` (`owner/repo`, any case)'s not landed items in `groups`, counted by group; empty for none. */
 export function notLandedCounts(groups: readonly StatusGroup[], repository: string): GroupCount[] {
-    void groups;
-    void repository;
-    throw new Error('not built yet');
+    const id = repository.toLowerCase();
+    return groups
+        .map((group) => ({
+            id: group.id,
+            name: group.name,
+            count: group.items.filter((item) => item.kind === 'notLanded' && item.pr.repository.toLowerCase() === id)
+                .length,
+        }))
+        .filter((count) => count.count > 0);
 }

@@ -189,16 +189,21 @@ const SPAN_MAX_MS = 4 * 60 * MINUTE;
 
 /**
  * Each lane's turns from now: at least the next hour, and as far as the last
- * merge (in half hours, four hours at most). Null when no lane has a time.
+ * merge (in half hours, four hours at most), with a flag where its parked PRs
+ * keep their place. A lane with only parked PRs has a track of flags alone.
+ * Null when no lane has a time or a parked PR.
  */
 export function timeline(
     lanes: readonly PageLane[],
     times: ReadonlyMap<string, LaneTimes>,
     now: number,
 ): Timeline | null {
-    const timed = lanes.filter((lane) => (times.get(lane.repository)?.rows.size ?? 0) > 0);
-    if (timed.length === 0) return null;
-    const last = Math.max(...timed.map((lane) => times.get(lane.repository)!.clearsAt ?? now));
+    const timesOf = (lane: PageLane): ReadonlyMap<string, RowTime> =>
+        times.get(lane.repository)?.rows ?? new Map<string, RowTime>();
+    const shown = lanes.filter((lane) => timesOf(lane).size > 0 || lane.rows.some(parked));
+    if (shown.length === 0) return null;
+    const ends = shown.map((lane) => times.get(lane.repository)?.clearsAt ?? null).filter((at) => at !== null);
+    const last = ends.length > 0 ? Math.max(...ends) : now;
     const halfHour = 30 * MINUTE;
     const span = Math.min(SPAN_MAX_MS, Math.max(SPAN_MIN_MS, Math.ceil((last - now) / halfHour) * halfHour));
     const to = now + span;
@@ -210,11 +215,11 @@ export function timeline(
         from: now,
         to,
         ticks,
-        tracks: timed.map((lane) => {
-            const rows = times.get(lane.repository)!.rows;
+        tracks: shown.map((lane) => {
+            const rows = timesOf(lane);
             return {
                 repository: lane.repository,
-                flags: [],
+                flags: flagsOf(lane, rows, fraction),
                 blocks: lane.rows.flatMap((row) => {
                     const time = rows.get(row.key);
                     if (!time || time.from >= to) return [];
@@ -232,4 +237,33 @@ export function timeline(
             };
         }),
     };
+}
+
+type ParkedTone = TimelineFlag['tone'];
+
+/** Passed over while it keeps its place: Held, Fixing, Needs you. */
+function parked(row: PageRow): boolean {
+    return row.stage.kind === 'held' || row.stage.kind === 'fixing' || row.stage.kind === 'needsYou';
+}
+
+const TONE_WEIGHT: Readonly<Record<ParkedTone, number>> = {held: 0, fixing: 1, needsYou: 2};
+
+/** A lane's parked PRs, one flag per spot: the end of the last timed row before them, the start for none. */
+function flagsOf(lane: PageLane, rows: ReadonlyMap<string, RowTime>, fraction: (at: number) => number): TimelineFlag[] {
+    const spots = new Map<number, PageRow[]>();
+    let at = 0;
+    for (const row of lane.rows) {
+        const time = rows.get(row.key);
+        if (time) at = fraction(time.at);
+        else if (parked(row)) spots.set(at, [...(spots.get(at) ?? []), row]);
+    }
+    return [...spots].map(([spot, parkedRows]) => ({
+        at: spot,
+        keys: parkedRows.map((row) => row.key),
+        numbers: parkedRows.map((row) => row.number),
+        tone: parkedRows
+            .map((row) => row.stage.kind as ParkedTone)
+            .reduce((strongest, tone) => (TONE_WEIGHT[tone] > TONE_WEIGHT[strongest] ? tone : strongest)),
+        title: parkedRows.map((row) => `#${row.number} ${row.words.title}`).join(' · '),
+    }));
 }
