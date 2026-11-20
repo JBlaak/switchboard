@@ -1,10 +1,9 @@
 /* ========== NOT LANDED, ON THE MERGE MANAGER PAGE ==========
-   Your open PRs that are not in a lane: a card after the lanes (the newest
-   five, then View all) and the Not landed page (all of them, a chip per
-   project). The cards, rows and side view are the lanes' (.mm-card, .mm-row,
-   .mm-detail); its own: the hollow place, the status pill's tones, Land it
-   in the row, View all, the empty page's compact line, the chips and the
-   side view's checklist. */
+   Your open PRs that are not in a lane: in the status groups and on the Not
+   landed page (all of them, a chip per project). The cards, rows and side
+   view are the page's (.mm-card, .mm-row, .mm-detail); its own: the hollow
+   place, the status pill's tones, Land it, the empty page's compact line,
+   the chips and the side view's checklist. */
 
 /* ---- A row: the place is hollow, Land it where a lane row has its time ---- */
 .mm-place.is-open {
@@ -82,20 +81,6 @@
     .pp-stage.mm-nl-pill.is-nl-running i {
         animation: im-pulse 1.4s ease-in-out infinite;
         animation-play-state: var(--loop-state, running);
-    }
-}
-
-/* ---- View all, under the section's rows ---- */
-.mm-nl-more {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px 8px;
-    border-top: 1px solid var(--sb-line);
-
-    > span {
-        font-size: 12.5px;
-        color: var(--sb-text-faint);
     }
 }
 

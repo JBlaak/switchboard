@@ -1,9 +1,9 @@
 /**
  * Not landed on the Merge manager's page: what the section shows (the newest
  * five, View all, left out when empty or landed), J/K's order through the
- * status groups (every not landed PR among them), which row the selection is on, the keys on a Not
- * landed row, what its side view says, the slice's Not landed events, and the
- * section drawn.
+ * status groups (every not landed PR among them), which row the selection is
+ * on, the keys on a Not landed row, what its side view says, the slice's Not
+ * landed events, and a Not landed row drawn.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +28,7 @@ import {
 } from '../src/renderer/ui/merge-manager/not-landed-rows';
 import {notLandedKeyAction} from '../src/renderer/ui/merge-manager/page-keys';
 import {initialMergeManagerState, mergeManagerReducer} from '../src/renderer/state/merge-manager-slice';
-import {NotLandedSection} from '../src/renderer/ui/merge-manager/NotLandedSection';
+import {NotLandedRow} from '../src/renderer/ui/merge-manager/NotLandedRow';
 import {HEAD, REPO, landedPr} from './support/merge-manager-fixtures';
 
 const NOW = Date.UTC(2026, 10, 15, 10, 0);
@@ -350,50 +350,18 @@ test('View all closes the side view, a chip filters, and asking for the page aga
 
 // ── Drawn ──
 
-test('the section draws five rows, Land it on all but a draft, and View all with how many more', () => {
-    /* Given */
-    const prs = [
-        open(10, 1, {isDraft: true}),
-        open(11, 2, {reviewDecision: 'APPROVED'}),
-        ...[12, 13, 14, 15, 16].map((n) => open(n, 30 - n)),
-    ];
-    const section = notLandedSection(prs, EMPTY_MERGE_MANAGER_STATE);
-
-    /* When */
-    const html = renderToStaticMarkup(
-        createElement(NotLandedSection, {section, now: NOW, selected: null, busy: {}, onSelect: () => {}}),
-    );
-
-    /* Then */
-    assert.equal((html.match(/class="mm-row mm-nl-row/g) ?? []).length, 5);
-    assert.equal((html.match(/data-land-key=/g) ?? []).length, 4);
-    assert.match(html, /View all 7/);
-    assert.match(html, /· 2 more/);
-    assert.match(html, /land the chosen one/);
-});
-
-test('the section draws nothing when nothing is left unlanded', () => {
-    /* Given */
-    const section = notLandedSection([], EMPTY_MERGE_MANAGER_STATE);
-
-    /* When */
-    const html = renderToStaticMarkup(
-        createElement(NotLandedSection, {section, now: NOW, selected: null, busy: {}, onSelect: () => {}}),
-    );
-
-    /* Then */
-    assert.equal(html, '');
-});
-
 test('a ready row offers Land it as the primary button, a draft none and a dimmer title', () => {
     /* Given */
     const prs = [open(10, 2, {isDraft: true}), open(11, 1, {reviewDecision: 'APPROVED'})];
-    const section = notLandedSection(prs, EMPTY_MERGE_MANAGER_STATE);
 
     /* When */
-    const html = renderToStaticMarkup(
-        createElement(NotLandedSection, {section, now: NOW, selected: null, busy: {}, onSelect: () => {}}),
-    );
+    const html = prs
+        .map((pr) =>
+            renderToStaticMarkup(
+                createElement(NotLandedRow, {pr, now: NOW, selected: false, busy: false, onSelect: () => {}}),
+            ),
+        )
+        .join('');
 
     /* Then */
     assert.match(html, /mm-nl-land is-ready" data-land-key="movelab\/connect#11"/);

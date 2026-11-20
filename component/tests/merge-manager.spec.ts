@@ -1,12 +1,16 @@
 /**
  * The Merge manager's page (#439): ⌘⇧L opens it from anywhere, the
- * terminal included, on its lanes, with the head as a card, when each PR is
- * expected to merge and the next hour on a timeline; J opens the side view
- * and moves through the rows, Esc closes the side view and then goes back to
- * the session, and ⌘⇧L opens it again.
+ * terminal included, on every PR by status: a chip per group, Coming up with
+ * the next hour on a timeline (parked PRs as flags on their track, the
+ * repository's not landed ones counted), the groups that ask for attention
+ * as cards with the PR's timeline and what is happening now, the rest as
+ * compact rows, Drafts folded. J opens the side view and moves through the
+ * groups top to bottom, Esc closes the side view and then goes back to the
+ * session, and ⌘⇧L opens it again.
  *
- * How the lanes are ordered and the times worked out is unit tested
- * (test/merge-manager-page.test.ts, test/merge-manager-times.test.ts).
+ * Which group a PR is in, its timeline, the times and the flags are unit
+ * tested (test/merge-manager-status.test.ts, test/merge-manager-times.test.ts
+ * and the like).
  */
 import {test, expect} from '../support/test';
 import {openSession} from '../support/running-session';
@@ -17,6 +21,7 @@ import {mergeManagerState} from '../../src/domain/merge-manager/landed';
 import {landedKey} from '../../src/domain/merge-manager/model';
 import type {LandedPullRequest, LaneStage} from '../../src/domain/merge-manager/model';
 import type {MergeManagerPageFacts} from '../../src/domain/merge-manager/page';
+import type {OpenPullRequest} from '../../src/domain/merge-manager/not-landed';
 import type {Page} from '@playwright/test';
 
 const REPO = 'acme/api';
@@ -46,21 +51,50 @@ function landedPr(number: number, title: string, minutesAgo: number, stage: Lane
     };
 }
 
+/** One of the user's open PRs, not landed: approved and green unless `over` says otherwise. */
+function openPr(number: number, title: string, hoursAgo: number, over: Partial<OpenPullRequest> = {}): OpenPullRequest {
+    return {
+        repository: REPO,
+        number,
+        title,
+        url: `https://github.com/${REPO}/pull/${number}`,
+        isDraft: false,
+        createdAt: FIXTURE_NOW - hoursAgo * 3_600_000,
+        headRef: 'feat/' + number,
+        reviewDecision: 'APPROVED',
+        mergeable: 'MERGEABLE',
+        checks: 'success',
+        reviewRequested: [],
+        changesRequestedBy: [],
+        approvedBy: ['ana'],
+        ...over,
+    };
+}
+
 function mergePage(page: Page) {
     return page.getByRole('region', {name: 'Merge manager'});
 }
 
 test.use({answers: {mergeManagerPage: NO_FACTS}});
 
-test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side view, and Esc closes it, then the page', async ({
+test('⌘⇧L opens the Merge manager by status, J goes through the groups top to bottom, and Esc closes the side view, then the page', async ({
     page,
     api,
 }) => {
-    /* Given: a Switchboard lane with its head, one waiting and one held for a review, and CI that takes 11 min */
+    /* Given: a Switchboard lane with its head running checks, one that will conflict and one held for a review, CI that takes 11 min, and three open PRs not landed: one ready, one in review and a draft */
     api.answer('mergeManagerPage', {
         ...NO_FACTS,
         savedThisWeek: {'update-not-pushed': 2, 'run-cancelled': 1, 'conflict-found': 0},
         runMs: {[REPO]: 11 * 60_000},
+    });
+    api.answer('mergeManagerNotLanded', {
+        pullRequests: [
+            openPr(1400, 'Cache the avatars', 1),
+            openPr(1410, 'Try a new header', 2, {isDraft: true}),
+            openPr(1420, 'Log slow queries', 3, {reviewDecision: 'REVIEW_REQUIRED', reviewRequested: ['bo']}),
+        ],
+        fetchedAt: FIXTURE_NOW,
+        failed: false,
     });
     await api.emit(
         'onMergeManagerChanged',
@@ -81,44 +115,91 @@ test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side v
     /* When */
     await page.keyboard.press('Meta+Shift+KeyL');
 
-    /* Then */
+    /* Then: the header, a chip per group, Coming up and the groups */
     const manager = mergePage(page);
     await expect(manager.getByRole('heading', {name: 'Merge manager'})).toBeVisible();
     await expect(manager).toContainText('Merging on this Mac');
-    await expect(manager.getByRole('group', {name: 'Summary'})).toHaveCount(0);
-    await expect(manager.getByRole('group', {name: REPO})).toContainText('Switchboard lane');
-    await expect(manager.getByRole('list', {name: 'Where the head is'})).toContainText('Updated on the trunk');
     await expect(manager).toContainText('3 CI runs saved this week');
-    await expect(manager.getByRole('group', {name: REPO})).toContainText('clear by ~');
-    await expect(manager.getByRole('region', {name: 'Coming up'})).toContainText('#1320');
-    const waiting = manager.getByRole('option', {name: /#1320 Paginate the export/});
-    await expect(waiting).toContainText('will conflict');
-    await expect(waiting).toContainText(/in \d+ min/);
-    await expect(manager.getByRole('option', {name: /#1330 Rate-limit webhooks/})).toContainText(
-        'keeps its place until it is reviewed',
+    const chips = manager.getByRole('navigation', {name: 'Groups'});
+    await expect(chips.getByRole('button')).toHaveText([
+        'Conflicts1',
+        'Checks running1',
+        'Ready to land1',
+        'In line1',
+        'Waiting on review1',
+        'Drafts1',
+    ]);
+    const comingUp = manager.getByRole('region', {name: 'Coming up'});
+    await expect(comingUp).toContainText('#1320');
+    await expect(comingUp).toContainText('Switchboard lane');
+    await expect(comingUp).toContainText('clear by ~');
+    await expect(comingUp.getByRole('button', {name: '‖ #1330'})).toBeVisible();
+    await expect(comingUp.getByRole('button', {name: '1 ready to land'})).toBeVisible();
+    await expect(comingUp.getByRole('button', {name: '1 waiting on review'})).toBeVisible();
+    await expect(comingUp).toContainText('2 landed: next ~');
+    await expect(comingUp).toContainText('1 parked');
+    await expect(comingUp).toContainText('+ 3 not landed');
+
+    /* Then: a card with its pill, its kind, when it merges, its timeline and what happens now */
+    const conflicts = manager.getByRole('group', {name: 'Conflicts'});
+    const willConflict = conflicts.getByRole('option', {name: /#1320 Paginate the export/});
+    await expect(willConflict).toContainText('Landed · Switchboard lane · 2nd');
+    await expect(willConflict).toContainText(/in \d+ min/);
+    await expect(willConflict.getByRole('img')).toHaveAttribute('aria-label', /In line/);
+    await expect(willConflict).toContainText('Now');
+    await expect(manager.getByRole('group', {name: 'Checks running'}).getByRole('option')).toContainText(
+        '#1300 Stop the login redirect loop',
     );
+
+    /* Then: compact rows, with Land it on the ready one and Nudge on the held one */
+    const ready = manager.getByRole('group', {name: 'Ready to land'}).getByRole('option', {name: /#1400/});
+    await expect(ready.getByRole('button', {name: 'Land it'})).toBeVisible();
+    await expect(
+        manager.getByRole('group', {name: 'In line'}).getByRole('option', {name: /#1330 Rate-limit webhooks/}),
+    ).toBeVisible();
+    await expect(manager.getByRole('group', {name: 'In line'}).getByRole('button', {name: /Nudge ana/})).toBeVisible();
+
+    /* Then: Drafts is folded */
+    const drafts = manager.getByRole('group', {name: 'Drafts'});
+    await expect(drafts.getByRole('button', {name: 'Show 1'})).toBeVisible();
+    await expect(drafts.getByRole('option')).toHaveCount(0);
     await expect(manager.getByRole('complementary')).toHaveCount(0);
 
     /* When */
     await page.keyboard.press('j');
 
-    /* Then: the side view opens on the head */
-    await expect(manager.getByRole('complementary')).toContainText('#1300 Stop the login redirect loop');
-    await expect(manager.getByRole('button', {name: /Open session/})).toBeVisible();
+    /* Then: the side view opens on the top group's PR */
+    await expect(manager.getByRole('complementary')).toContainText('#1320 Paginate the export');
+    await expect(manager.getByRole('complementary')).toContainText('Expected to merge');
 
     /* When */
     await page.keyboard.press('j');
 
-    /* Then: the waiting one, with when it merges */
-    await expect(manager.getByRole('complementary')).toContainText('Expected to merge');
-    await expect(manager.getByRole('complementary')).toContainText('update and checks');
+    /* Then: the head */
+    await expect(manager.getByRole('complementary')).toContainText('#1300 Stop the login redirect loop');
+    await expect(manager.getByRole('complementary').getByRole('button', {name: /Open session/})).toBeVisible();
+
+    /* When */
+    await page.keyboard.press('j');
+
+    /* Then: the ready one, not landed */
+    await expect(manager.getByRole('complementary')).toContainText('#1400 Cache the avatars');
+    await expect(manager.getByRole('complementary')).toContainText('If you land it now');
 
     /* When */
     await page.keyboard.press('j');
 
     /* Then: the held one, with Nudge */
     await expect(manager.getByRole('complementary')).toContainText('#1330 Rate-limit webhooks');
-    await expect(manager.getByRole('button', {name: /Nudge ana/})).toBeVisible();
+    await expect(manager.getByRole('complementary').getByRole('button', {name: /Nudge ana/})).toBeVisible();
+
+    /* When */
+    await page.keyboard.press('j');
+    await page.keyboard.press('j');
+
+    /* Then: on the draft, its folded group shows it */
+    await expect(manager.getByRole('complementary')).toContainText('#1410 Try a new header');
+    await expect(drafts.getByRole('option', {name: /#1410 Try a new header/})).toBeVisible();
 
     /* When */
     await page.keyboard.press('Escape');
@@ -136,10 +217,89 @@ test('⌘⇧L opens the Merge manager on its lanes and times, J opens the side v
 
     /* When */
     await page.keyboard.press('Meta+Shift+KeyL');
-    await page.keyboard.press('j');
+    await page.keyboard.press('k');
 
     /* Then: the selection is where it was */
-    await expect(mergePage(page).getByRole('complementary')).toContainText('#1330 Rate-limit webhooks');
+    await expect(mergePage(page).getByRole('complementary')).toContainText('#1410 Try a new header');
+});
+
+test('parked PRs stand as one flag on their track, which selects the first of them, and a card offers its actions', async ({
+    page,
+    api,
+}) => {
+    /* Given: a head, and behind it one an errand gave up on and one a fix errand works on */
+    api.answer('mergeManagerPage', {...NO_FACTS, runMs: {[REPO]: 11 * 60_000}});
+    await api.emit(
+        'onMergeManagerChanged',
+        mergeManagerState(
+            [
+                landedPr(1300, 'Stop the login redirect loop', 50, {kind: 'head', step: 'merging'}),
+                landedPr(1340, 'Retry the upload', 40, {kind: 'needsYou', reason: {kind: 'errand-stopped'}}),
+                landedPr(1350, 'Trim the logs', 30, {kind: 'fixing', cause: 'checks'}),
+            ],
+            new Map(),
+        ),
+    );
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+
+    /* When */
+    await page.keyboard.press('Meta+Shift+KeyL');
+
+    /* Then */
+    const manager = mergePage(page);
+    const flag = manager.getByRole('region', {name: 'Coming up'}).getByRole('button', {name: '! 2'});
+    await expect(flag).toHaveAttribute('title', /#1340.*#1350/);
+    const needsYou = manager.getByRole('group', {name: 'Needs you'}).getByRole('option', {name: /#1340/});
+    await expect(needsYou.getByRole('button', {name: /Try again/})).toBeVisible();
+    await expect(needsYou.getByRole('button', {name: /Unland/})).toBeVisible();
+    await expect(needsYou.getByRole('button', {name: /GitHub/})).toBeVisible();
+    await expect(manager.getByRole('group', {name: 'Fixing'})).toContainText('#1350 Trim the logs');
+    await expect(manager.getByRole('group', {name: 'Merging'})).toContainText('#1300 Stop the login redirect loop');
+
+    /* When */
+    await flag.click();
+
+    /* Then */
+    await expect(manager.getByRole('complementary')).toContainText('#1340 Retry the upload');
+    await expect(needsYou).toHaveAttribute('aria-selected', 'true');
+});
+
+test('a chip scrolls to its group, and Show unfolds Drafts and Hide folds it again', async ({page, api}) => {
+    /* Given: nothing landed, two open PRs: one in review and a draft */
+    api.answer('mergeManagerNotLanded', {
+        pullRequests: [
+            openPr(1420, 'Log slow queries', 3, {reviewDecision: 'REVIEW_REQUIRED', reviewRequested: ['bo']}),
+            openPr(1410, 'Try a new header', 2, {isDraft: true}),
+        ],
+        fetchedAt: FIXTURE_NOW,
+        failed: false,
+    });
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    await page.keyboard.press('Meta+Shift+KeyL');
+    const manager = mergePage(page);
+    const drafts = manager.getByRole('group', {name: 'Drafts'});
+
+    /* When */
+    await manager
+        .getByRole('navigation', {name: 'Groups'})
+        .getByRole('button', {name: /Drafts/})
+        .click();
+
+    /* Then: the chip unfolds the group it goes to */
+    await expect(drafts.getByRole('option', {name: /#1410 Try a new header/})).toBeInViewport();
+
+    /* When */
+    await drafts.getByRole('button', {name: 'Hide'}).click();
+
+    /* Then */
+    await expect(drafts.getByRole('option')).toHaveCount(0);
+
+    /* When */
+    await drafts.getByRole('button', {name: 'Show 1'}).click();
+
+    /* Then */
+    await expect(drafts.getByRole('option', {name: /#1410/})).toBeVisible();
+    await expect(manager.getByRole('group', {name: 'Waiting on review'})).toContainText('#1420 Log slow queries');
 });
 
 test('with nothing landed the page shows the Merge manager large and how to land a pull request', async ({

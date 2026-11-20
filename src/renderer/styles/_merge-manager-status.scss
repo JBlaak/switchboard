@@ -1,0 +1,539 @@
+/* ========== THE MERGE MANAGER PAGE, BY STATUS ==========
+   Every PR in a status group (StatusGroups.tsx): the chips under the header,
+   each group's heading (tone dot, name, count, blurb), the prominent groups'
+   cards with the PR's whole timeline and what is happening now, the other
+   groups' compact rows in one panel, and the PR timeline itself
+   (PrTimelineView.tsx). A group's tone is `--tone` / `--tone-rgb`, set by
+   `.is-tone-*` and inherited by its cards, rows and timelines. */
+
+@use 'sass:list';
+
+$tones: (
+    'orange': (
+        var(--sb-orange),
+        var(--sb-orange-rgb),
+    ),
+    'red': (
+        var(--sb-red),
+        var(--sb-red-rgb),
+    ),
+    'blue': (
+        var(--sb-blue),
+        var(--sb-blue-rgb),
+    ),
+    'yellow': (
+        var(--sb-yellow),
+        var(--sb-yellow-rgb),
+    ),
+    'purple': (
+        var(--sb-purple),
+        var(--sb-purple-rgb),
+    ),
+    'green': (
+        var(--sb-green),
+        var(--sb-green-rgb),
+    ),
+    'grey': (
+        var(--sb-text-muted),
+        var(--sb-overlay-rgb),
+    ),
+);
+
+@each $name, $pair in $tones {
+    .mm-chip.is-tone-#{$name},
+    .mm-group.is-tone-#{$name},
+    .mm-prt.is-tone-#{$name} {
+        --tone: #{list.nth($pair, 1)};
+        --tone-rgb: #{list.nth($pair, 2)};
+    }
+}
+
+/* ---- The chips: one per group, to scroll to it ---- */
+.mm-chips {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 32px 0;
+}
+
+.mm-chip {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    font: 700 12px var(--sb-font-head);
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+
+    i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--tone);
+    }
+    b {
+        color: var(--sb-text-strong);
+        font-variant-numeric: tabular-nums;
+    }
+    &:hover {
+        color: var(--sb-text-strong);
+        box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+    }
+    &.is-prominent {
+        height: 30px;
+        padding: 0 13px;
+        background: rgba(var(--tone-rgb), 0.12);
+        box-shadow: inset 0 0 0 1px rgba(var(--tone-rgb), 0.3);
+        font-size: 13px;
+        color: var(--tone);
+
+        b {
+            color: var(--tone);
+        }
+        &:hover {
+            background: rgba(var(--tone-rgb), 0.2);
+        }
+    }
+}
+
+/* ---- A group: its heading, then its cards or rows ---- */
+.mm-group {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-margin-top: 16px;
+}
+
+.mm-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 0 4px;
+
+    i {
+        align-self: center;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--tone);
+    }
+    h2 {
+        margin: 0;
+        font: 800 14px var(--sb-font-head);
+        color: var(--sb-text-strong);
+    }
+    .is-prominent > & {
+        i {
+            width: 11px;
+            height: 11px;
+        }
+        h2,
+        .mm-group-count {
+            font-size: 17px;
+        }
+    }
+}
+
+.mm-group-count {
+    font: 800 14px var(--sb-font-head);
+    color: var(--tone);
+    font-variant-numeric: tabular-nums;
+}
+
+.mm-group-blurb {
+    font-size: 12.5px;
+    color: var(--sb-text-faint);
+}
+
+.mm-group-fold {
+    align-self: center;
+    margin-left: auto;
+}
+
+/* ---- A card: a prominent group's PR, with its whole timeline ---- */
+.mm-group-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mm-sc {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 20px 14px;
+    border-radius: var(--sb-r-card);
+    background: rgba(var(--tone-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px rgba(var(--tone-rgb), 0.28);
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(var(--tone-rgb), 0.09);
+    }
+    &.is-selected {
+        box-shadow:
+            inset 0 0 0 1.5px var(--sb-accent),
+            inset 4px 0 0 var(--sb-accent);
+    }
+}
+
+.mm-sc-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.mm-sc-title {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    font: 700 15px/1.35 var(--sb-font-head);
+    color: var(--sb-text-strong);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.mm-sc-kind {
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+.mm-sc-gap {
+    flex: 1;
+}
+
+.mm-sc-eta {
+    font-size: 12px;
+    color: var(--sb-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+
+    b {
+        font: 800 13.5px var(--sb-font-head);
+        color: var(--sb-text-strong);
+    }
+    &.is-rough b {
+        font-weight: 600;
+        color: var(--sb-text-muted);
+    }
+}
+
+.mm-sc-now {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--sb-text-dim);
+
+    b {
+        margin-right: 6px;
+        font: 800 11px var(--sb-font-head);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--tone);
+    }
+}
+
+.mm-acts {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+
+    .mm-nl-land {
+        height: 26px;
+        padding: 0 10px;
+        font-size: 11.5px;
+    }
+}
+
+/* ---- A compact row: title and now, a mini timeline, its pill and time, its actions ---- */
+.mm-group-rows {
+    overflow: hidden;
+}
+
+.mm-sr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(110px, 190px) auto auto;
+    gap: 16px;
+    align-items: center;
+    min-height: 56px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--sb-line);
+    box-sizing: border-box;
+    cursor: pointer;
+
+    &:first-child {
+        border-top: 0;
+    }
+    &:hover {
+        background: rgba(var(--sb-overlay-rgb), 0.03);
+    }
+    &.is-selected,
+    &.is-selected:hover {
+        background: rgba(var(--sb-accent-rgb), 0.07);
+        box-shadow: inset 3px 0 0 var(--sb-accent);
+    }
+    &.is-draft .mm-row-title,
+    &.is-draft .mm-row-number {
+        color: var(--sb-text-faint);
+    }
+}
+
+.mm-sr-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+}
+
+.mm-sr-eta {
+    font: 800 12.5px var(--sb-font-head);
+    color: var(--sb-text-strong);
+    font-variant-numeric: tabular-nums;
+
+    &.is-rough {
+        font-weight: 600;
+        color: var(--sb-text-muted);
+    }
+}
+
+/* ---- A PR's timeline: seven stations, the head's three steps, the live stretch ---- */
+.mm-prt {
+    --dot: 16px;
+    --rail: 4px;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 18px;
+
+    &.is-compact {
+        --dot: 9px;
+        --rail: 3px;
+        padding-top: 0;
+    }
+}
+
+.mm-prt-st {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    &.is-split {
+        flex-grow: 2.4;
+    }
+    &.is-last {
+        flex: 0 0 auto;
+    }
+}
+
+.mm-prt-rail {
+    display: flex;
+    align-items: center;
+    height: var(--dot);
+}
+
+.mm-prt-dot {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--dot);
+    height: var(--dot);
+    box-sizing: border-box;
+    border-radius: 50%;
+    font: 900 10px/1 var(--sb-font-head);
+    color: var(--sb-bg-base);
+
+    .is-done > .mm-prt-rail > & {
+        background: var(--sb-text-faint);
+    }
+    .is-now > .mm-prt-rail > & {
+        background: var(--tone);
+        box-shadow: 0 0 0 4px rgba(var(--tone-rgb), 0.22);
+    }
+    .is-stopped > .mm-prt-rail > & {
+        background: var(--sb-orange);
+    }
+    .is-conflict > .mm-prt-rail > & {
+        background: var(--sb-red);
+    }
+    .is-fixing > .mm-prt-rail > & {
+        background: var(--sb-yellow);
+    }
+    .is-held > .mm-prt-rail > & {
+        box-shadow: inset 0 0 0 2px var(--sb-text-faint);
+        font-size: 8px;
+        color: var(--sb-text-faint);
+    }
+    .is-todo > .mm-prt-rail > & {
+        box-shadow: inset 0 0 0 2px var(--sb-border-strong);
+    }
+    .is-compact .is-now > .mm-prt-rail > & {
+        box-shadow: 0 0 0 3px rgba(var(--tone-rgb), 0.22);
+    }
+    .is-compact .is-held > .mm-prt-rail > &,
+    .is-compact .is-todo > .mm-prt-rail > & {
+        box-shadow: inset 0 0 0 1.5px var(--sb-border-strong);
+    }
+}
+
+.mm-prt-line,
+.mm-prt-parts {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 3px;
+    margin: 0 4px;
+
+    .is-compact & {
+        margin: 0 2px;
+    }
+}
+
+.mm-prt-part {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
+/* A duration over a line, a head step's label over its part. */
+.mm-prt-over {
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    overflow: hidden;
+    font: 600 11px var(--sb-font-body);
+    color: var(--sb-text-faint);
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+
+    .mm-prt-part.is-now > & {
+        color: var(--tone);
+        font-weight: 700;
+    }
+    .mm-prt-part.is-stopped > & {
+        color: var(--sb-orange);
+    }
+    .mm-prt-part.is-fixing > & {
+        color: var(--sb-yellow);
+    }
+}
+
+.mm-prt-seg {
+    flex: 1;
+    min-width: 0;
+    height: var(--rail);
+    border-radius: var(--rail);
+    background: var(--sb-text-dimmest);
+
+    &.is-todo {
+        background: repeating-linear-gradient(90deg, var(--sb-border-strong) 0 6px, transparent 6px 11px);
+    }
+    &.is-held {
+        opacity: 0.5;
+    }
+    &.is-now {
+        background: var(--tone);
+    }
+    &.is-stopped {
+        background: var(--sb-orange);
+    }
+    &.is-conflict {
+        background: var(--sb-red);
+    }
+    &.is-fixing {
+        background: var(--sb-yellow);
+    }
+}
+
+/* The live stretch: a TimedBar in the group's tone. */
+.mm-prt-seg.mm-prt-bar {
+    overflow: hidden;
+    background: rgba(var(--tone-rgb), 0.22);
+
+    > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--rail);
+        background: var(--tone);
+    }
+}
+
+.mm-prt-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-right: 6px;
+}
+
+.mm-prt-label {
+    font: 700 12.5px var(--sb-font-head);
+    color: var(--sb-text);
+    white-space: nowrap;
+
+    .is-todo > .mm-prt-text > & {
+        color: var(--sb-text-faint);
+    }
+    .is-now > .mm-prt-text > & {
+        color: var(--tone);
+    }
+    .is-stopped > .mm-prt-text > & {
+        color: var(--sb-orange);
+    }
+    .is-conflict > .mm-prt-text > & {
+        color: var(--sb-red);
+    }
+    .is-fixing > .mm-prt-text > & {
+        color: var(--sb-yellow);
+    }
+}
+
+.mm-prt-sub {
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The now mark breathes on a card (not on the compact rows): a loop, so it follows `--loop-state`. */
+@media (prefers-reduced-motion: no-preference) {
+    .mm-prt:not(.is-compact) .is-now > .mm-prt-rail > .mm-prt-dot::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        animation: mm-prt-pulse 1.8s ease-out infinite;
+        animation-play-state: var(--loop-state, running);
+    }
+}
+
+@keyframes mm-prt-pulse {
+    from {
+        box-shadow: 0 0 0 0 rgba(var(--tone-rgb), 0.45);
+    }
+    to {
+        box-shadow: 0 0 0 9px rgba(var(--tone-rgb), 0);
+    }
+}

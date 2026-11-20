@@ -1,7 +1,7 @@
 /**
- * The Merge manager's progress bars move between reads: the head card's
- * active step and the Landing shelf's head row fill toward the step's
- * expected time, and slide once it runs past it.
+ * The Merge manager's progress bars move between reads: the live stretch of
+ * the head's timeline (its card on the page) and the Landing shelf's head
+ * row fill toward the step's expected time, and slide once it runs past it.
  *
  * Where a bar is at a moment is unit tested (test/merge-manager-progress.test.ts).
  */
@@ -61,11 +61,12 @@ async function landHead(page: Page, api: Parameters<typeof openSession>[1], step
     await page.keyboard.press('Meta+Shift+KeyL');
 }
 
-function stepBars(page: Page) {
+/** The live stretch on the head's card: its timeline's one timed bar. */
+function liveBar(page: Page) {
     return page
         .getByRole('region', {name: 'Merge manager'})
-        .getByRole('list', {name: 'Where the head is'})
-        .locator('.mm-bar');
+        .getByRole('option', {name: /#1300 Stop the login redirect loop/})
+        .locator('.mm-prt-bar');
 }
 
 test.use({answers: {mergeManagerPage: FACTS}, fakeTimers: true});
@@ -76,14 +77,12 @@ test('while the checks run their bar fills toward one CI run, and slides once th
 }) => {
     /* Given */
     await landHead(page, api, 'checks');
-    const bars = stepBars(page);
+    const bar = liveBar(page);
 
-    /* Then: the update done, the checks filling, the merge to come */
-    await expect(bars).toHaveCount(3);
-    await expect(bars.nth(0)).toHaveAttribute('data-bar', 'fixed');
-    await expect(bars.nth(1)).toHaveAttribute('data-bar', 'filling');
-    await expect(bars.nth(2)).toHaveAttribute('data-bar', 'fixed');
-    const fill = bars.nth(1).locator('span');
+    /* Then: one bar, the checks', filling */
+    await expect(bar).toHaveCount(1);
+    await expect(bar).toHaveAttribute('data-bar', 'filling');
+    const fill = bar.locator('span');
     // Never behind the read: one of two checks passed.
     await expect(fill).toHaveAttribute('style', /--bar-from: 0\.5;/);
     await expect(fill).toHaveAttribute('style', /animation-duration: 4[5-8]\d{4}ms/);
@@ -92,30 +91,27 @@ test('while the checks run their bar fills toward one CI run, and slides once th
     await page.clock.fastForward(8 * MIN + 1000);
 
     /* Then */
-    await expect(bars.nth(1)).toHaveAttribute('data-bar', 'indeterminate');
+    await expect(bar).toHaveAttribute('data-bar', 'indeterminate');
 });
 
-for (const [step, index] of [
-    ['updating', 0],
-    ['merging', 2],
-] as const) {
-    test(`while ${step} the head's step fills toward a minute from when it was seen, then slides`, async ({
+for (const step of ['updating', 'merging'] as const) {
+    test(`while ${step} the head's live stretch fills toward a minute from when it was seen, then slides`, async ({
         page,
         api,
     }) => {
         /* Given */
         await landHead(page, api, step);
-        const bars = stepBars(page);
+        const bar = liveBar(page);
 
         /* Then */
-        await expect(bars.nth(index)).toHaveAttribute('data-bar', 'filling');
-        await expect(bars.nth(index).locator('span')).toHaveAttribute('style', /animation-duration: [5-6]\d{4}ms/);
+        await expect(bar).toHaveAttribute('data-bar', 'filling');
+        await expect(bar.locator('span')).toHaveAttribute('style', /animation-duration: [5-6]\d{4}ms/);
 
         /* When */
         await page.clock.fastForward(MIN + 1000);
 
         /* Then */
-        await expect(bars.nth(index)).toHaveAttribute('data-bar', 'indeterminate');
+        await expect(bar).toHaveAttribute('data-bar', 'indeterminate');
     });
 }
 
