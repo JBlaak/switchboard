@@ -95,6 +95,18 @@ test('a count reads lower-case', () => {
     assert.equal(text, '2 ready to land');
 });
 
+test('one draft or one conflict reads singular', () => {
+    /* Given */
+    const drafts = {id: 'drafts' as const, name: 'Drafts', count: 1};
+    const conflicts = {id: 'conflicts' as const, name: 'Conflicts', count: 1};
+
+    /* When */
+    const texts = [countText(drafts), countText(conflicts), countText({...drafts, count: 2})];
+
+    /* Then */
+    assert.deepEqual(texts, ['1 draft', '1 conflict', '2 drafts']);
+});
+
 test('pins stand at their blocks’ ends, rough ones with ≈, and one too close to the last is left out', () => {
     /* Given */
     const lt = times([

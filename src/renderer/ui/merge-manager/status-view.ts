@@ -65,7 +65,9 @@ export function laneFacts(lane: PageLane | undefined, times: LaneTimes | undefin
 
 /** "1 ready to land", "2 waiting on review": a lane's not landed counts, lower-case. */
 export function countText(count: GroupCount): string {
-    return `${count.count} ${count.name.toLowerCase()}`;
+    const name = count.name.toLowerCase();
+    if (count.count === 1 && (count.id === 'drafts' || count.id === 'conflicts')) return `1 ${name.slice(0, -1)}`;
+    return `${count.count} ${name}`;
 }
 
 /** A time pin under a block's end. */
