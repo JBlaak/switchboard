@@ -48,6 +48,13 @@ async function openSession(page: Page, label: string) {
     await expect(terminalHeader(page)).toBeVisible();
 }
 
+/** Show one page of the global settings, by its name in the list down the left. */
+async function showPage(page: Page, name: string): Promise<void> {
+    const tab = page.getByRole('tab', {name, exact: true});
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 function globalTitle(page: Page): Locator {
     return page.getByText('Global Settings', {exact: true});
 }
@@ -134,6 +141,7 @@ test.describe('layout', () => {
         await expect(terminalHeader(page)).toBeHidden();
 
         /* When */
+        await showPage(page, 'Terminal');
         await field(page, 'Terminal Font Size').getByRole('spinbutton').fill('24');
         await field(page, 'Terminal Theme').getByRole('combobox').selectOption('dracula');
         await button(page, 'Save Settings').click();
@@ -185,17 +193,20 @@ test.describe('global fields', () => {
         await expect(field(page, 'Additional Directories').getByRole('textbox')).toHaveValue('/opt/shared');
         await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('aws-vault exec dev --');
         await expect(field(page, 'Quick Session Folder').getByRole('textbox')).toHaveValue('/tmp/quick');
+        await showPage(page, 'Terminal');
         await expect(field(page, 'Terminal Theme').getByRole('combobox')).toHaveValue('dracula');
         await expect(field(page, 'Terminal Font').getByRole('textbox')).toHaveValue('Menlo');
         await expect(field(page, 'Terminal Font Size').getByRole('spinbutton')).toHaveValue('15');
         await expect(field(page, 'Terminal Line Height').getByRole('spinbutton')).toHaveValue('1.3');
         await expect(field(page, 'Shell Profile').getByRole('combobox')).toHaveValue('auto');
+        await showPage(page, 'Appearance');
         // #52: these read the keys that save writes, not the defaults.
         await expect(field(page, 'Max Visible Sessions').getByRole('spinbutton')).toHaveValue('7');
         await expect(field(page, 'Session Max Age (days)').getByRole('spinbutton')).toHaveValue('9');
         await expect(toggle(page, 'Show weather on the empty screen')).toBeChecked();
         await expect(field(page, 'City').getByRole('textbox')).toHaveValue('Utrecht');
         await expect(page.getByText('Weather for Utrecht', {exact: true})).toBeVisible();
+        await showPage(page, 'About');
         await expect(page.getByText(/^v\d+\.\d+\.\d+/)).toBeVisible();
     });
 });
@@ -224,15 +235,18 @@ test.describe('global save', () => {
         await field(page, 'Additional Directories').getByRole('textbox').fill('/a, /b');
         await field(page, 'Pre-launch Command').getByRole('textbox').fill('direnv exec .');
         await field(page, 'Quick Session Folder').getByRole('textbox').fill('/tmp/scratch');
+        await showPage(page, 'Terminal');
         await field(page, 'Terminal Theme').getByRole('combobox').selectOption('nord');
         await field(page, 'Terminal Font').getByRole('textbox').fill('Menlo');
         // Out of range: stored clamped to what xterm accepts.
         await field(page, 'Terminal Font Size').getByRole('spinbutton').fill('99');
         await field(page, 'Terminal Line Height').getByRole('spinbutton').fill('0.5');
+        await showPage(page, 'Appearance');
         await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('4');
         await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('2');
         await switchOn(page, 'Show weather on the empty screen');
         await field(page, 'Dock Icon').getByRole('combobox').selectOption('patch');
+        await showPage(page, 'Integrations');
         await field(page, 'Tasks URL').getByRole('textbox').fill('https://tasks.example.com/mcp');
         await button(page, 'Save Settings').click();
 
@@ -283,6 +297,7 @@ test.describe('weather city', () => {
             (name) => new Promise((resolve) => setTimeout(() => resolve(name === 'Berlin' ? BERLIN : null), 600)),
         );
         await openGlobalSettings(page);
+        await showPage(page, 'Appearance');
         const city = field(page, 'City').getByRole('textbox');
 
         /* When */
@@ -413,6 +428,7 @@ test.describe('saved prompts', () => {
     test('adding one stores it at once, and a scope change moves it to the project’s list', async ({page, api}) => {
         /* Given */
         await openGlobalSettings(page);
+        await showPage(page, 'Saved prompts');
 
         /* When */
         await prompts(page).getByRole('button', {name: 'Add a prompt', exact: true}).click();
@@ -442,7 +458,7 @@ test.describe('saved prompts', () => {
 const INSTALLED_MONOSPACE = process.platform === 'darwin' ? 'Menlo' : 'DejaVu Sans Mono';
 
 test.describe('global settings form', () => {
-    test('global settings: scrolled to the bottom, the font warning, and Cancel saving nothing', async ({
+    test('global settings: Save in view while the page scrolls, the font warning, and Cancel saving nothing', async ({
         page,
         api,
     }) => {
@@ -461,19 +477,17 @@ test.describe('global settings form', () => {
         expect(region).toBe('drag');
 
         /* When */
-        const body = page.locator('#settings-viewer-body');
-        await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+        const pages = page.locator('#settings-pages');
+        await pages.evaluate((el) => el.scrollTo(0, el.scrollHeight));
 
         /* Then */
-        await expect(field(page, 'Dock Icon').getByRole('combobox')).toBeInViewport();
-        // The buttons keep the body padding beneath them: 32px, give or take subpixel rounding.
-        const gap = await body.evaluate((el) => {
-            const row = el.querySelector('.settings-btn-row')!.getBoundingClientRect();
-            return el.getBoundingClientRect().bottom - row.bottom;
-        });
-        expect(gap).toBeGreaterThan(30);
+        // Only the page scrolls: its last row comes into view and Save never leaves it.
+        await expect(toggle(page, 'Bring Sessions Back After a Restart').locator('..')).toBeInViewport();
+        await expect(button(page, 'Save Settings')).toBeInViewport();
+        await expect(button(page, 'Cancel')).toBeInViewport();
 
         /* When */
+        await showPage(page, 'Terminal');
         const font = field(page, 'Terminal Font').getByRole('textbox');
         const warning = page.getByText(/isn't installed; falling back to the default/);
         await font.fill('No Such Font Xyz');
@@ -496,7 +510,9 @@ test.describe('global settings form', () => {
         await expect(warning).toHaveCount(0);
 
         /* When */
+        await showPage(page, 'Sessions');
         await field(page, 'Pre-launch Command').getByRole('textbox').fill('never-saved');
+        await showPage(page, 'Appearance');
         await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('2');
         await button(page, 'Cancel').click();
 

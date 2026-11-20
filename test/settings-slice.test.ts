@@ -35,8 +35,50 @@ test('settings: opening holds what is stored', () => {
         quickAskRegistered: true,
         quickAskMissing: [],
         openId: 1,
+        category: 'sessions',
         saved: false,
     });
+});
+
+test('settings: an open asked for a page opens on it', () => {
+    /* When */
+    const state = run(initialRendererState(), {...opened(), category: 'remote'} as RendererEvent);
+
+    /* Then */
+    assert.strictEqual(state.settings.panel?.category, 'remote');
+});
+
+test('settings: choosing a page shows it and keeps the rest of the open', () => {
+    /* Given */
+    const open = run(initialRendererState(), opened());
+
+    /* When */
+    const state = run(open, {type: 'settingsCategoryChosen', category: 'terminal'});
+
+    /* Then */
+    assert.deepStrictEqual(state.settings.panel, {...open.settings.panel, category: 'terminal'});
+});
+
+test('settings: choosing a page with the panel closed does nothing', () => {
+    /* Given */
+    const initial = initialRendererState();
+
+    /* When */
+    const state = run(initial, {type: 'settingsCategoryChosen', category: 'terminal'});
+
+    /* Then */
+    assert.strictEqual(state.settings, initial.settings);
+});
+
+test('settings: opening again starts on the first page', () => {
+    /* Given */
+    const onTerminal = run(initialRendererState(), opened(), {type: 'settingsCategoryChosen', category: 'terminal'});
+
+    /* When */
+    const state = run(onTerminal, {type: 'settingsClosed'}, opened());
+
+    /* Then */
+    assert.strictEqual(state.settings.panel?.category, 'sessions');
 });
 
 test('project settings: the read holds both blobs, not yet saved', () => {

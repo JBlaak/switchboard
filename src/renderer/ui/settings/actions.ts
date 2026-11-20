@@ -19,12 +19,13 @@ import {applyTerminalTheme} from '../../features/terminal/terminal-themes';
 import type {SettingsRecord} from '../../state/settings-slice';
 import type {ShellProfile} from '../../../domain/shell/shell-profile';
 import type {WeatherLocation} from '../../../domain/weather/weather';
+import type {SettingsCategory} from '../../state/settings-categories';
 
 /** The last open asked for: a slower, earlier one that lands after it is dropped. */
 let latestOpen = 0;
 
-/** Read what is stored, then show the panel in place of the main area. */
-export async function openSettings(): Promise<void> {
+/** Read what is stored, then show the panel in place of the main area, on `category` or the first page. */
+export async function openSettings(category?: SettingsCategory): Promise<void> {
     const token = ++latestOpen;
     const [current, shellProfiles, appVersion, quickAsk] = await Promise.all([
         window.api.getSetting<SettingsRecord>('global').then((found) => found || {}),
@@ -42,7 +43,13 @@ export async function openSettings(): Promise<void> {
         appVersion,
         quickAskRegistered: quickAsk.registered,
         quickAskMissing: quickAsk.missing,
+        ...(category ? {category} : {}),
     });
+}
+
+/** Show another page of the open panel. What was typed on the others stays until Save or Cancel. */
+export function chooseSettingsCategory(category: SettingsCategory): void {
+    dispatch({type: 'settingsCategoryChosen', category});
 }
 
 /** Close the panel and put back what it covered: the session to return to, or the empty screen. */

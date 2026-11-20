@@ -1,6 +1,7 @@
 /**
- * The global settings form. A project's overrides of the launch options are
- * on its page (#176).
+ * The global settings form, as a page per category with the list of them
+ * down its left (`SettingsNav`), and Save and Cancel in a footer that stays
+ * put. A project's overrides of the launch options are on its page (#176).
  *
  * The controls are uncontrolled: each starts from what was stored when the
  * panel opened and is read once, on Save, the way the vanilla form did. Only
@@ -38,6 +39,7 @@ import {PhoneAccessSection} from '../phone-access/PhoneAccessSection';
 import {VmsSection} from '../vms/VmsSection';
 import {BugManagerSection} from '../bug-manager/BugManagerSection';
 import {SavedPromptsSection} from './SavedPromptsSection';
+import {SettingsNav, SettingsPage} from './SettingsNav';
 import type {JSX} from 'react';
 import type {SettingsPanel} from '../../state/settings-slice';
 
@@ -62,7 +64,7 @@ function quickAskWarning(enabled: boolean, panel: SettingsPanel): string {
 }
 
 export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
-    const {current} = panel;
+    const {current, category} = panel;
 
     function fieldValue(field: string, fallback: unknown): any {
         return current[field] !== undefined ? current[field] : fallback;
@@ -137,433 +139,464 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
 
     return (
         <div className="settings-form">
-            <div className="settings-section">
-                <div className="settings-section-title">Claude Sessions</div>
+            <SettingsNav category={category} />
+            <div className="settings-pages" id="settings-pages">
+                <SettingsPage id="sessions" shown={category}>
+                    <div className="settings-section">
+                        <div className="settings-section-title">Launch defaults</div>
+                        <div className="settings-section-note">
+                            Every new session starts with these. A project can override them on its page.
+                        </div>
 
-                <LaunchField
-                    label="Permission Mode"
-                    description={
-                        <>
-                            Permission mode passed to the <code>claude</code> command
-                        </>
-                    }>
-                    <select className="settings-select" id="sv-perm-mode" ref={permMode} defaultValue={permModeValue}>
-                        {PERMISSION_MODES.map((m) =>
-                            m.value === null ? (
-                                <option key="" value="">
-                                    Your Claude default
-                                </option>
-                            ) : (
-                                <option key={m.value} value={m.value}>
-                                    {m.label}
-                                </option>
-                            ),
-                        )}
-                    </select>
-                </LaunchField>
+                        <LaunchField
+                            label="Permission Mode"
+                            description={
+                                <>
+                                    Permission mode passed to the <code>claude</code> command
+                                </>
+                            }>
+                            <select
+                                className="settings-select"
+                                id="sv-perm-mode"
+                                ref={permMode}
+                                defaultValue={permModeValue}>
+                                {PERMISSION_MODES.map((m) =>
+                                    m.value === null ? (
+                                        <option key="" value="">
+                                            Your Claude default
+                                        </option>
+                                    ) : (
+                                        <option key={m.value} value={m.value}>
+                                            {m.label}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                        </LaunchField>
 
-                <LaunchField
-                    label="Worktree"
-                    description={
-                        <>
-                            Start each new session in its own git worktree (<code>--worktree</code>)
-                        </>
-                    }>
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-worktree"
-                            ref={worktree}
-                            defaultChecked={!!fieldValue('worktree', false)}
+                        <LaunchField
+                            label="Worktree"
+                            description={
+                                <>
+                                    Start each new session in its own git worktree (<code>--worktree</code>)
+                                </>
+                            }>
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-worktree"
+                                    ref={worktree}
+                                    defaultChecked={!!fieldValue('worktree', false)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </LaunchField>
+
+                        <LaunchField
+                            label="Chrome"
+                            description={
+                                <>
+                                    Let Claude use your browser through Claude in Chrome (<code>--chrome</code>)
+                                </>
+                            }>
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-chrome"
+                                    ref={chrome}
+                                    defaultChecked={!!fieldValue('chrome', false)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </LaunchField>
+
+                        <LaunchField
+                            wide
+                            label="Additional Directories"
+                            description={
+                                <>
+                                    Folders outside the project that Claude can also work in, separated by commas (
+                                    <code>--add-dir</code>)
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-add-dirs"
+                                ref={addDirs}
+                                placeholder="/path/to/dir1, /path/to/dir2"
+                                defaultValue={fieldValue('addDirs', '') ?? ''}
+                            />
+                        </LaunchField>
+
+                        <LaunchField
+                            wide
+                            label="Pre-launch Command"
+                            description={
+                                <>
+                                    Put in front of the <code>claude</code> command, e.g. to load credentials first
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-pre-launch"
+                                ref={preLaunch}
+                                placeholder="e.g. aws-vault exec profile --"
+                                defaultValue={fieldValue('preLaunchCmd', '') ?? ''}
+                            />
+                        </LaunchField>
+                    </div>
+
+                    <div className="settings-section">
+                        <div className="settings-section-title">Quick start and cleanup</div>
+
+                        <AppField
+                            wide
+                            label="Quick Session Folder"
+                            description="Where the lightning bolt, ⌘N and N (outside a session) start a session straight away">
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-quick-session-path"
+                                ref={quickSessionPath}
+                                placeholder="/path/to/folder"
+                                defaultValue={fieldValue('quickSessionPath', '') ?? ''}
+                            />
+                        </AppField>
+
+                        <AppField
+                            label="Open Quick Ask with ⌥Space"
+                            description={
+                                <>
+                                    Ask Patch for a session from any app, while Switchboard runs
+                                    <span id="sv-quick-ask-warning" className="settings-warning">
+                                        {quickAskWarning(resolveQuickAskEnabled(current), panel)}
+                                    </span>
+                                </>
+                            }>
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-quick-ask"
+                                    ref={quickAsk}
+                                    defaultChecked={resolveQuickAskEnabled(current)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </AppField>
+
+                        <AppField
+                            label="Remove Worktree on Archive"
+                            description="Archiving a session removes the git worktrees it worked in, when nothing in them is uncommitted. Their branches are kept; ignored files such as node_modules go with them">
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-remove-worktree-on-archive"
+                                    ref={removeWorktree}
+                                    defaultChecked={resolveRemoveWorktreeOnArchive(current)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </AppField>
+
+                        <AppField
+                            label="Bring Sessions Back After a Restart"
+                            description="Sessions that were running when Switchboard quit, crashed or the Mac restarted are resumed when it starts again. One cut off mid tool call waits for you; nothing is sent to it">
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-restore-sessions"
+                                    ref={restoreSessions}
+                                    defaultChecked={resolveRestoreSessions(current)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </AppField>
+                    </div>
+                </SettingsPage>
+                <SettingsPage id="prompts" shown={category}>
+                    <SavedPromptsSection />
+                </SettingsPage>
+                <SettingsPage id="terminal" shown={category}>
+                    <div className="settings-section">
+                        <div className="settings-section-title">Terminal</div>
+
+                        <AppField label="Terminal Theme" description="Colour theme for terminal and Claude sessions">
+                            <select
+                                className="settings-select"
+                                id="sv-terminal-theme"
+                                ref={terminalTheme}
+                                defaultValue={themeValue}>
+                                {Object.entries(TERMINAL_THEMES).map(([key, t]) => (
+                                    <option key={key} value={key}>
+                                        {t.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </AppField>
+
+                        <AppField
+                            label="Terminal Font"
+                            description={
+                                <>
+                                    Font family for terminal sessions. Leave empty for the default.
+                                    <span id="sv-font-warning" className="settings-warning">
+                                        {fontWarning}
+                                    </span>
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-font-family"
+                                ref={fontFamily}
+                                style={{width: '220px'}}
+                                defaultValue={fontFamilyValue}
+                                placeholder={DEFAULT_TERMINAL_FONT_FAMILY}
+                                onChange={(e) => setFontWarning(fontWarningFor(e.currentTarget.value))}
+                            />
+                        </AppField>
+
+                        <AppField label="Terminal Font Size" description="Font size in pixels for terminal sessions">
+                            <input
+                                type="number"
+                                className="settings-input settings-input-compact"
+                                id="sv-font-size"
+                                ref={fontSize}
+                                min="6"
+                                max="32"
+                                step="1"
+                                defaultValue={String(fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE))}
+                            />
+                        </AppField>
+
+                        <AppField
+                            label="Terminal Line Height"
+                            description="Line spacing as a multiple of the font size (1 = tightest)">
+                            <input
+                                type="number"
+                                className="settings-input settings-input-compact"
+                                id="sv-line-height"
+                                ref={lineHeight}
+                                min="1"
+                                max="3"
+                                step="0.05"
+                                defaultValue={String(fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT))}
+                            />
+                        </AppField>
+
+                        <AppField
+                            label="Shell Profile"
+                            description="Shell used for terminal and Claude sessions. Changes take effect for new sessions only.">
+                            <select
+                                className="settings-select"
+                                id="sv-shell-profile"
+                                ref={shellProfile}
+                                defaultValue={shellProfileValue}>
+                                <option value="auto">Auto (detect)</option>
+                                {panel.shellProfiles.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </AppField>
+                    </div>
+                </SettingsPage>
+                <SettingsPage id="appearance" shown={category}>
+                    <div className="settings-section">
+                        <div className="settings-section-title">Sidebar</div>
+
+                        <AppField
+                            label="Max Visible Sessions"
+                            description={
+                                'Show up to this many sessions before folding the rest behind "+N older". Active and pinned sessions always show.'
+                            }>
+                            <input
+                                type="number"
+                                className="settings-input settings-input-compact"
+                                id="sv-visible-count"
+                                ref={visibleCount}
+                                min="1"
+                                max="100"
+                                defaultValue={String(fieldValue('visibleSessionCount', 25))}
+                            />
+                        </AppField>
+
+                        <AppField
+                            label="Session Max Age (days)"
+                            description={
+                                'Sessions older than this also fold behind "+N older", even under the limit above'
+                            }>
+                            <input
+                                type="number"
+                                className="settings-input settings-input-compact"
+                                id="sv-max-age"
+                                ref={maxAge}
+                                min="1"
+                                max="365"
+                                defaultValue={String(fieldValue('sessionMaxAgeDays', 3))}
+                            />
+                        </AppField>
+                    </div>
+
+                    <div className="settings-section">
+                        <div className="settings-section-title">Weather</div>
+
+                        <AppField
+                            label="Show weather on the empty screen"
+                            description="Patch dresses for the weather outside, fetched from Open-Meteo">
+                            <label className="settings-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="sv-weather-enabled"
+                                    ref={weatherEnabled}
+                                    defaultChecked={resolveWeatherEnabled(current)}
+                                />
+                                <span className="settings-toggle-slider"></span>
+                            </label>
+                        </AppField>
+
+                        <AppField
+                            label="City"
+                            description={
+                                <>
+                                    Weather for <span id="sv-weather-resolved">{weather.resolvedName}</span>
+                                    <span id="sv-weather-warning" className="settings-warning">
+                                        {weather.warning}
+                                    </span>
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-weather-city"
+                                ref={weather.cityRef}
+                                placeholder={DEFAULT_WEATHER_LOCATION.name}
+                                defaultValue={resolveWeatherLocation(current).name}
+                                style={{width: '180px'}}
+                            />
+                        </AppField>
+                    </div>
+
+                    <div className="settings-section">
+                        <div className="settings-section-title">App Icon</div>
+
+                        <AppField
+                            label="Dock Icon"
+                            description="The icon Switchboard shows in the Dock while it runs. Closed, it shows the Switchboard icon.">
+                            <select
+                                className="settings-select"
+                                id="sv-app-icon"
+                                ref={appIcon}
+                                defaultValue={normaliseAppIcon(current.appIcon)}>
+                                {APP_ICONS.map((icon) => (
+                                    <option key={icon} value={icon}>
+                                        {APP_ICON_LABELS[icon]}
+                                    </option>
+                                ))}
+                            </select>
+                        </AppField>
+                    </div>
+                </SettingsPage>
+                <SettingsPage id="integrations" shown={category}>
+                    <div className="settings-section">
+                        <div className="settings-section-title">Tasks</div>
+
+                        <AppField
+                            wide
+                            label="Tasks URL"
+                            description={
+                                <>
+                                    Your tasks&apos; MCP address. Leave it empty to keep tasks out of Switchboard
+                                    {blaakTasks.checked && blaakTasks.setUp === false && (
+                                        <span id="sv-blaak-tasks-warning" className="settings-warning">
+                                            {ADD_TO_CLAUDE_LINE}:{' '}
+                                            <code className="settings-copyable">
+                                                {addToClaudeCommand(blaakTasks.checked)}
+                                            </code>
+                                        </span>
+                                    )}
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-blaak-tasks-url"
+                                ref={blaakTasks.urlRef}
+                                placeholder="https://tasks.example.com/mcp"
+                                defaultValue={resolveBlaakTasksUrl(current)}
+                            />
+                        </AppField>
+                    </div>
+
+                    <BugManagerSection />
+
+                    <div className="settings-section">
+                        <div className="settings-section-title">Snoozing</div>
+
+                        <AppField
+                            wide
+                            label="Planner URL"
+                            description={
+                                <>
+                                    Turns on the cycle snoozes in the Bug and Issue managers. Empty means they&apos;re
+                                    hidden
+                                    {planner.checked && typeof planner.answer === 'object' && (
+                                        <span id="sv-planner-ok" className="settings-ok">
+                                            ✓ cycle {planner.answer.number}
+                                        </span>
+                                    )}
+                                    {planner.checked && planner.answer === 'none' && (
+                                        <span id="sv-planner-warning" className="settings-warning">
+                                            The Planner gave no cycle, so the cycle snoozes stay hidden
+                                        </span>
+                                    )}
+                                </>
+                            }>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                id="sv-planner-url"
+                                ref={planner.urlRef}
+                                placeholder="https://planner.example.com"
+                                defaultValue={resolvePlannerUrl(current)}
+                            />
+                        </AppField>
+                    </div>
+                </SettingsPage>
+                <SettingsPage id="remote" shown={category}>
+                    <PhoneAccessSection />
+
+                    <VmsSection />
+                </SettingsPage>
+                <SettingsPage id="about" shown={category}>
+                    <div className="settings-section">
+                        <div className="settings-section-title">About</div>
+                        <AppField
+                            label="Version"
+                            description={
+                                <span id="sv-current-version">{panel.appVersion ? `v${panel.appVersion}` : ''}</span>
+                            }
                         />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </LaunchField>
-
-                <LaunchField
-                    label="Chrome"
-                    description={
-                        <>
-                            Let Claude use your browser through Claude in Chrome (<code>--chrome</code>)
-                        </>
-                    }>
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-chrome"
-                            ref={chrome}
-                            defaultChecked={!!fieldValue('chrome', false)}
-                        />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </LaunchField>
-
-                <LaunchField
-                    wide
-                    label="Additional Directories"
-                    description={
-                        <>
-                            Folders outside the project that Claude can also work in, separated by commas (
-                            <code>--add-dir</code>)
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-add-dirs"
-                        ref={addDirs}
-                        placeholder="/path/to/dir1, /path/to/dir2"
-                        defaultValue={fieldValue('addDirs', '') ?? ''}
-                    />
-                </LaunchField>
-
-                <LaunchField
-                    wide
-                    label="Pre-launch Command"
-                    description={
-                        <>
-                            Put in front of the <code>claude</code> command, e.g. to load credentials first
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-pre-launch"
-                        ref={preLaunch}
-                        placeholder="e.g. aws-vault exec profile --"
-                        defaultValue={fieldValue('preLaunchCmd', '') ?? ''}
-                    />
-                </LaunchField>
-
-                <AppField
-                    wide
-                    label="Quick Session Folder"
-                    description="Where the lightning bolt, ⌘N and N (outside a session) start a session straight away">
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-quick-session-path"
-                        ref={quickSessionPath}
-                        placeholder="/path/to/folder"
-                        defaultValue={fieldValue('quickSessionPath', '') ?? ''}
-                    />
-                </AppField>
-
-                <AppField
-                    label="Open Quick Ask with ⌥Space"
-                    description={
-                        <>
-                            Ask Patch for a session from any app, while Switchboard runs
-                            <span id="sv-quick-ask-warning" className="settings-warning">
-                                {quickAskWarning(resolveQuickAskEnabled(current), panel)}
-                            </span>
-                        </>
-                    }>
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-quick-ask"
-                            ref={quickAsk}
-                            defaultChecked={resolveQuickAskEnabled(current)}
-                        />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </AppField>
-
-                <AppField
-                    label="Remove Worktree on Archive"
-                    description="Archiving a session removes the git worktrees it worked in, when nothing in them is uncommitted. Their branches are kept; ignored files such as node_modules go with them">
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-remove-worktree-on-archive"
-                            ref={removeWorktree}
-                            defaultChecked={resolveRemoveWorktreeOnArchive(current)}
-                        />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </AppField>
-
-                <AppField
-                    label="Bring Sessions Back After a Restart"
-                    description="Sessions that were running when Switchboard quit, crashed or the Mac restarted are resumed when it starts again. One cut off mid tool call waits for you; nothing is sent to it">
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-restore-sessions"
-                            ref={restoreSessions}
-                            defaultChecked={resolveRestoreSessions(current)}
-                        />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </AppField>
+                    </div>
+                </SettingsPage>
             </div>
-
-            <SavedPromptsSection />
-
-            <div className="settings-section">
-                <div className="settings-section-title">Tasks</div>
-
-                <AppField
-                    wide
-                    label="Tasks URL"
-                    description={
-                        <>
-                            Your tasks&apos; MCP address. Leave it empty to keep tasks out of Switchboard
-                            {blaakTasks.checked && blaakTasks.setUp === false && (
-                                <span id="sv-blaak-tasks-warning" className="settings-warning">
-                                    {ADD_TO_CLAUDE_LINE}:{' '}
-                                    <code className="settings-copyable">{addToClaudeCommand(blaakTasks.checked)}</code>
-                                </span>
-                            )}
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-blaak-tasks-url"
-                        ref={blaakTasks.urlRef}
-                        placeholder="https://tasks.example.com/mcp"
-                        defaultValue={resolveBlaakTasksUrl(current)}
-                    />
-                </AppField>
-            </div>
-
-            <BugManagerSection />
-
-            <div className="settings-section">
-                <div className="settings-section-title">Snoozing</div>
-
-                <AppField
-                    wide
-                    label="Planner URL"
-                    description={
-                        <>
-                            Turns on the cycle snoozes in the Bug and Issue managers. Empty means they&apos;re hidden
-                            {planner.checked && typeof planner.answer === 'object' && (
-                                <span id="sv-planner-ok" className="settings-ok">
-                                    ✓ cycle {planner.answer.number}
-                                </span>
-                            )}
-                            {planner.checked && planner.answer === 'none' && (
-                                <span id="sv-planner-warning" className="settings-warning">
-                                    The Planner gave no cycle, so the cycle snoozes stay hidden
-                                </span>
-                            )}
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-planner-url"
-                        ref={planner.urlRef}
-                        placeholder="https://planner.example.com"
-                        defaultValue={resolvePlannerUrl(current)}
-                    />
-                </AppField>
-            </div>
-
-            <div className="settings-section">
-                <div className="settings-section-title">Terminal</div>
-
-                <AppField label="Terminal Theme" description="Colour theme for terminal and Claude sessions">
-                    <select
-                        className="settings-select"
-                        id="sv-terminal-theme"
-                        ref={terminalTheme}
-                        defaultValue={themeValue}>
-                        {Object.entries(TERMINAL_THEMES).map(([key, t]) => (
-                            <option key={key} value={key}>
-                                {t.label}
-                            </option>
-                        ))}
-                    </select>
-                </AppField>
-
-                <AppField
-                    label="Terminal Font"
-                    description={
-                        <>
-                            Font family for terminal sessions. Leave empty for the default.
-                            <span id="sv-font-warning" className="settings-warning">
-                                {fontWarning}
-                            </span>
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-font-family"
-                        ref={fontFamily}
-                        style={{width: '220px'}}
-                        defaultValue={fontFamilyValue}
-                        placeholder={DEFAULT_TERMINAL_FONT_FAMILY}
-                        onChange={(e) => setFontWarning(fontWarningFor(e.currentTarget.value))}
-                    />
-                </AppField>
-
-                <AppField label="Terminal Font Size" description="Font size in pixels for terminal sessions">
-                    <input
-                        type="number"
-                        className="settings-input settings-input-compact"
-                        id="sv-font-size"
-                        ref={fontSize}
-                        min="6"
-                        max="32"
-                        step="1"
-                        defaultValue={String(fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE))}
-                    />
-                </AppField>
-
-                <AppField
-                    label="Terminal Line Height"
-                    description="Line spacing as a multiple of the font size (1 = tightest)">
-                    <input
-                        type="number"
-                        className="settings-input settings-input-compact"
-                        id="sv-line-height"
-                        ref={lineHeight}
-                        min="1"
-                        max="3"
-                        step="0.05"
-                        defaultValue={String(fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT))}
-                    />
-                </AppField>
-
-                <AppField
-                    label="Shell Profile"
-                    description="Shell used for terminal and Claude sessions. Changes take effect for new sessions only.">
-                    <select
-                        className="settings-select"
-                        id="sv-shell-profile"
-                        ref={shellProfile}
-                        defaultValue={shellProfileValue}>
-                        <option value="auto">Auto (detect)</option>
-                        {panel.shellProfiles.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.name}
-                            </option>
-                        ))}
-                    </select>
-                </AppField>
-            </div>
-
-            <div className="settings-section">
-                <div className="settings-section-title">Sidebar</div>
-
-                <AppField
-                    label="Max Visible Sessions"
-                    description={
-                        'Show up to this many sessions before folding the rest behind "+N older". Active and pinned sessions always show.'
-                    }>
-                    <input
-                        type="number"
-                        className="settings-input settings-input-compact"
-                        id="sv-visible-count"
-                        ref={visibleCount}
-                        min="1"
-                        max="100"
-                        defaultValue={String(fieldValue('visibleSessionCount', 25))}
-                    />
-                </AppField>
-
-                <AppField
-                    label="Session Max Age (days)"
-                    description={'Sessions older than this also fold behind "+N older", even under the limit above'}>
-                    <input
-                        type="number"
-                        className="settings-input settings-input-compact"
-                        id="sv-max-age"
-                        ref={maxAge}
-                        min="1"
-                        max="365"
-                        defaultValue={String(fieldValue('sessionMaxAgeDays', 3))}
-                    />
-                </AppField>
-            </div>
-
-            <div className="settings-section">
-                <div className="settings-section-title">Weather</div>
-
-                <AppField
-                    label="Show weather on the empty screen"
-                    description="Patch dresses for the weather outside, fetched from Open-Meteo">
-                    <label className="settings-toggle">
-                        <input
-                            type="checkbox"
-                            id="sv-weather-enabled"
-                            ref={weatherEnabled}
-                            defaultChecked={resolveWeatherEnabled(current)}
-                        />
-                        <span className="settings-toggle-slider"></span>
-                    </label>
-                </AppField>
-
-                <AppField
-                    label="City"
-                    description={
-                        <>
-                            Weather for <span id="sv-weather-resolved">{weather.resolvedName}</span>
-                            <span id="sv-weather-warning" className="settings-warning">
-                                {weather.warning}
-                            </span>
-                        </>
-                    }>
-                    <input
-                        type="text"
-                        className="settings-input"
-                        id="sv-weather-city"
-                        ref={weather.cityRef}
-                        placeholder={DEFAULT_WEATHER_LOCATION.name}
-                        defaultValue={resolveWeatherLocation(current).name}
-                        style={{width: '180px'}}
-                    />
-                </AppField>
-            </div>
-
-            <PhoneAccessSection />
-
-            <VmsSection />
-
-            <div className="settings-section">
-                <div className="settings-section-title">App Icon</div>
-
-                <AppField
-                    label="Dock Icon"
-                    description="The icon Switchboard shows in the Dock while it runs. Closed, it shows the Switchboard icon.">
-                    <select
-                        className="settings-select"
-                        id="sv-app-icon"
-                        ref={appIcon}
-                        defaultValue={normaliseAppIcon(current.appIcon)}>
-                        {APP_ICONS.map((icon) => (
-                            <option key={icon} value={icon}>
-                                {APP_ICON_LABELS[icon]}
-                            </option>
-                        ))}
-                    </select>
-                </AppField>
-            </div>
-
-            <div className="settings-section">
-                <div className="settings-section-title">About</div>
-                <AppField
-                    label="Version"
-                    description={<span id="sv-current-version">{panel.appVersion ? `v${panel.appVersion}` : ''}</span>}
-                />
-            </div>
-
-            <div className="settings-btn-row">
-                <button className="settings-cancel-btn" id="sv-cancel-btn" onClick={() => closeSettings()}>
-                    Cancel
-                </button>
-                <button
-                    className="settings-save-btn"
-                    id="sv-save-btn"
-                    onClick={() => void save()}
-                    style={panel.saved ? {background: 'var(--sb-mint)', color: 'var(--sb-accent)'} : undefined}>
-                    {panel.saved ? '✓ Saved' : 'Save Settings'}
-                </button>
+            <div className="settings-footer">
+                <span className="settings-footer-note">Save stores the changes on every page</span>
+                <div className="settings-btn-row">
+                    <button className="settings-cancel-btn" id="sv-cancel-btn" onClick={() => closeSettings()}>
+                        Cancel
+                    </button>
+                    <button
+                        className="settings-save-btn"
+                        id="sv-save-btn"
+                        onClick={() => void save()}
+                        style={panel.saved ? {background: 'var(--sb-mint)', color: 'var(--sb-accent)'} : undefined}>
+                        {panel.saved ? '✓ Saved' : 'Save Settings'}
+                    </button>
+                </div>
             </div>
         </div>
     );

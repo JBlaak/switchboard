@@ -74,6 +74,7 @@ export async function fakeBlaakTasks(
 export async function switchBlaakTasksOn(page: Page, url: string): Promise<void> {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
     await page.getByRole('menuitem', {name: 'All settings…'}).click();
+    await page.getByRole('tab', {name: 'Integrations', exact: true}).click();
     await page
         .getByText('Tasks URL', {exact: true})
         .locator('xpath=ancestor::*[.//input][1]')

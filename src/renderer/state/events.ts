@@ -12,6 +12,7 @@
  */
 import type {EVENT} from '../../ipc/channels';
 import type {CaptureTarget} from '../../domain/ask/model';
+import type {SettingsCategory} from './settings-categories';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
@@ -198,7 +199,11 @@ export type LocalEvent =
           quickAskRegistered: boolean;
           /** The capture targets whose server isn't in `~/.claude.json` (C6). */
           quickAskMissing: readonly CaptureTarget[];
+          /** The page to open on; the first one when omitted. */
+          category?: SettingsCategory;
       }
+    /** A page of the settings panel was chosen from its list. */
+    | {type: 'settingsCategoryChosen'; category: SettingsCategory}
     /** The settings panel's Save went through. */
     | {type: 'settingsSaved'}
     /** The settings panel closed, or the terminal took its place. */

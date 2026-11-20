@@ -196,10 +196,12 @@ async function openProjectPage(page: Page, label: string): Promise<void> {
     await expect(projectPage(page, label)).toBeVisible();
 }
 
-async function openGlobalSettings(page: Page): Promise<void> {
+/** The global settings, on the page that lists the VMs. */
+async function openVmSettings(page: Page): Promise<void> {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
     await page.getByRole('menuitem', {name: 'All settings…'}).click();
     await expect(globalSettingsTitle(page)).toBeVisible();
+    await page.getByRole('tab', {name: 'Phone & VMs', exact: true}).click();
 }
 
 function globalSettingsTitle(page: Page): Locator {
@@ -218,7 +220,7 @@ function vmHead(page: Page, key: string): Locator {
 
 /** Settings → VMs, open at a VM's controls. */
 async function openVm(page: Page, key: string): Promise<void> {
-    await openGlobalSettings(page);
+    await openVmSettings(page);
     await vmHead(page, key).click();
     await expect(vmHead(page, key)).toHaveAttribute('aria-expanded', 'true');
 }
@@ -347,7 +349,7 @@ test.describe('VM hosts', () => {
         page,
     }) => {
         /* When */
-        await openGlobalSettings(page);
+        await openVmSettings(page);
 
         /* Then */
         const list = page.getByRole('list', {name: 'Registered VMs'});
@@ -475,7 +477,7 @@ test.describe('Settings → VMs', () => {
 
     test('Add a VM adds a new one, open to Install agent', async ({page, api}) => {
         /* Given */
-        await openGlobalSettings(page);
+        await openVmSettings(page);
         await page.getByRole('button', {name: 'Add a VM…'}).click();
         const form = page.locator('form.vm-add');
 
