@@ -209,20 +209,38 @@ test('fixing: Head being fixed, on the step the errand mends', () => {
     assert.match(lines[1]!.label, /Head being fixed/);
 });
 
-test('needs you for changes or a thread: Review stopped', () => {
+test('needs you for changes or a thread: Review stopped, still landed, its place kept in line', () => {
     /* Given */
-    const changes = rowAt({kind: 'needsYou', reason: {kind: 'changes-requested'}});
-    const thread = rowAt({kind: 'needsYou', reason: {kind: 'unresolved-thread'}});
+    const rows = rowsOf([
+        landedPr(1, 50, 'switchboard', HEAD),
+        landedPr(2, 40, 'switchboard', {kind: 'needsYou', reason: {kind: 'changes-requested'}}),
+        landedPr(3, 30, 'switchboard', {kind: 'needsYou', reason: {kind: 'unresolved-thread'}}),
+    ]);
 
     /* When */
-    const lines = [changes, thread].map((row) => landedTimeline(row, undefined, RUN, NOW));
+    const [changes, thread] = [2, 3].map((n) => landedTimeline(rows.get(n)!, undefined, RUN, NOW));
 
     /* Then */
-    assert.deepEqual(marks(lines[0]!), ['done', 'stopped', 'todo', 'todo', 'todo', 'todo', 'todo']);
-    assert.deepEqual(marks(lines[1]!), ['done', 'stopped', 'todo', 'todo', 'todo', 'todo', 'todo']);
-    assert.equal(lines[0]!.headParts, null);
-    assert.equal(lines[0]!.now, 'Needs you: changes are requested');
-    assert.equal(lines[1]!.now, 'Needs you: a review thread is open');
+    assert.deepEqual(marks(changes!), ['done', 'stopped', 'done', 'done', 'held', 'todo', 'todo']);
+    assert.deepEqual(marks(thread!), ['done', 'stopped', 'done', 'done', 'held', 'todo', 'todo']);
+    assert.equal(station(changes!, 'landed').sub, clock(NOW - 40 * MIN));
+    assert.equal(station(changes!, 'line').sub, 'keeps 2nd');
+    assert.equal(station(thread!, 'line').sub, 'keeps 3rd');
+    assert.equal(changes!.headParts, null);
+    assert.equal(changes!.now, 'Needs you: changes are requested');
+    assert.equal(thread!.now, 'Needs you: a review thread is open');
+});
+
+test('needs you in a queue lane with no place known: In line held without a sub', () => {
+    /* Given */
+    const row = rowsOf([landedPr(1, 50, 'queue', {kind: 'needsYou', reason: {kind: 'changes-requested'}})]).get(1)!;
+
+    /* When */
+    const line = landedTimeline(row, undefined, RUN, NOW);
+
+    /* Then */
+    assert.equal(station(line, 'line').mark, 'held');
+    assert.equal(station(line, 'line').sub, null);
 });
 
 test('needs you once an errand stopped or the merge was refused: Head stopped on the step it failed', () => {
@@ -243,9 +261,9 @@ test('needs you once an errand stopped or the merge was refused: Head stopped on
 
 // ── Not landed ──
 
-test('a draft: Opened now, when it was opened under it, the rest to come', () => {
+test('a draft: Opened now, its review and checks as they stand, the rest to come', () => {
     /* Given */
-    const pr = open({isDraft: true, reviewRequested: ['ana']});
+    const pr = open({isDraft: true, reviewRequested: ['ana'], checks: 'pending'});
 
     /* When */
     const line = notLandedTimeline(pr, NOW);
@@ -253,30 +271,35 @@ test('a draft: Opened now, when it was opened under it, the rest to come', () =>
     /* Then */
     assert.deepEqual(marks(line), ['now', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
     assert.equal(station(line, 'opened').sub, clock(pr.createdAt));
-    assert.equal(station(line, 'review').sub, null);
+    assert.equal(station(line, 'review').sub, '@ana');
+    assert.equal(station(line, 'checks').sub, 'running');
+    assert.equal(line.live, null);
     assert.equal(line.now, 'Draft');
     assert.equal(line.headParts, null);
 });
 
-test('waiting on review: Review now with who it is asked of, or held when nobody is', () => {
+test('waiting on review: Review to come, with who it is asked of or nobody asked, and green checks done', () => {
     /* Given */
     const asked = open({reviewRequested: ['ana', 'org/team']});
-    const nobody = open();
+    const nobody = open({checks: null});
 
     /* When */
     const lines = [notLandedTimeline(asked, NOW), notLandedTimeline(nobody, NOW)];
 
     /* Then */
-    assert.deepEqual(marks(lines[0]!), ['done', 'now', 'todo', 'todo', 'todo', 'todo', 'todo']);
+    assert.deepEqual(marks(lines[0]!), ['done', 'todo', 'done', 'todo', 'todo', 'todo', 'todo']);
     assert.equal(station(lines[0]!, 'review').sub, '@ana');
+    assert.equal(station(lines[0]!, 'checks').sub, 'green');
     assert.equal(lines[0]!.now, 'Review asked of @ana, @org/team');
-    assert.deepEqual(marks(lines[1]!), ['done', 'held', 'todo', 'todo', 'todo', 'todo', 'todo']);
+    assert.deepEqual(marks(lines[1]!), ['done', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
+    assert.equal(station(lines[1]!, 'review').sub, 'nobody asked');
+    assert.equal(station(lines[1]!, 'checks').sub, null);
     assert.equal(lines[1]!.now, 'No review asked yet');
 });
 
-test('changes asked: Review stopped, by whom', () => {
+test('changes asked: Review stopped, by whom; checks still running are to come', () => {
     /* Given */
-    const pr = open({reviewDecision: 'CHANGES_REQUESTED', changesRequestedBy: ['bram']});
+    const pr = open({reviewDecision: 'CHANGES_REQUESTED', changesRequestedBy: ['bram'], checks: 'pending'});
 
     /* When */
     const line = notLandedTimeline(pr, NOW);
@@ -284,6 +307,8 @@ test('changes asked: Review stopped, by whom', () => {
     /* Then */
     assert.deepEqual(marks(line), ['done', 'stopped', 'todo', 'todo', 'todo', 'todo', 'todo']);
     assert.equal(station(line, 'review').sub, '@bram');
+    assert.equal(station(line, 'checks').sub, 'running');
+    assert.equal(line.live, null);
     assert.equal(line.now, 'Changes asked by @bram');
 });
 
@@ -302,21 +327,38 @@ test('approved with its checks running: Checks now and live, without a time to g
     assert.equal(line.now, 'Checks running · approved by @ana');
 });
 
-test('failing checks stop at Checks, conflicts at Landed', () => {
+test('failing checks stop at Checks whatever the review; conflicts mark Landed', () => {
     /* Given */
     const failing = open({checks: 'failure'});
-    const conflicting = open({mergeable: 'CONFLICTING'});
+    const conflicting = open({mergeable: 'CONFLICTING', reviewDecision: 'APPROVED', approvedBy: ['ana']});
 
     /* When */
     const lines = [notLandedTimeline(failing, NOW), notLandedTimeline(conflicting, NOW)];
 
     /* Then */
-    assert.deepEqual(marks(lines[0]!), ['done', 'done', 'stopped', 'todo', 'todo', 'todo', 'todo']);
+    assert.deepEqual(marks(lines[0]!), ['done', 'todo', 'stopped', 'todo', 'todo', 'todo', 'todo']);
+    assert.equal(station(lines[0]!, 'review').sub, 'nobody asked');
     assert.equal(station(lines[0]!, 'checks').sub, 'failing');
     assert.equal(lines[0]!.now, 'Its checks are failing');
     assert.deepEqual(marks(lines[1]!), ['done', 'done', 'done', 'conflict', 'todo', 'todo', 'todo']);
     assert.equal(lines[1]!.now, 'Conflicts with its base');
     assert.equal(lines[1]!.live, null);
+});
+
+test('a not landed PR never has more than one station now', () => {
+    /* Given */
+    const prs = [
+        open({isDraft: true, reviewDecision: 'APPROVED', checks: 'pending'}),
+        open({reviewDecision: 'APPROVED', checks: 'pending'}),
+        open({reviewDecision: 'APPROVED'}),
+        open({reviewRequested: ['ana'], checks: 'pending'}),
+    ];
+
+    /* When */
+    const nows = prs.map((pr) => marks(notLandedTimeline(pr, NOW)).filter((mark) => mark === 'now').length);
+
+    /* Then */
+    assert.deepEqual(nows, [1, 1, 1, 0]);
 });
 
 test('approved and green: Landed now, the next move is Land it', () => {

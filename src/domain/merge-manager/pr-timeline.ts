@@ -16,7 +16,7 @@
  *
  * | Stage / status                    | Mark                                                  |
  * |-----------------------------------|-------------------------------------------------------|
- * | Needs you: changes / thread       | Review `stopped`                                      |
+ * | Needs you: changes / thread       | Review `stopped`, In line `held` ("keeps 2nd")        |
  * | Needs you: errand stopped/refused | Head `stopped` (the head step it failed on `stopped`) |
  * | Held: approval / review           | Review `held`, In line `held`                         |
  * | Held: base / draft                | In line `held`                                        |
@@ -24,15 +24,20 @@
  * | Head                              | Head `now`, its step `now`                            |
  * | Fixing                            | Head `fixing`, the step it mends `fixing`             |
  * | Not landed: draft                 | Opened `now`                                          |
- * | Not landed: in review / none      | Review `now` / `held` (nobody asked)                  |
+ * | Not landed: in review / none      | Review `todo` ("@ana" / "nobody asked")               |
  * | Not landed: changes asked         | Review `stopped`                                      |
  * | Not landed: checks running        | Checks `now`                                          |
  * | Not landed: checks failing        | Checks `stopped`                                      |
  * | Not landed: conflicts             | Landed `conflict`                                     |
  * | Not landed: ready                 | Landed `now` (the next move is Land it)               |
  *
- * Everything before the mark is `done` unless the table says otherwise;
- * everything after it `todo`.
+ * A landed PR is always landed: for a landed one everything before the mark
+ * is `done` unless the table says otherwise, everything after it `todo`. A
+ * not landed one's Review and Checks say how they stand (approved `done`,
+ * changes asked `stopped`, not given yet `todo`; checks green `done`, failing
+ * `stopped`, running `now` only while that is all it waits on, else `todo`),
+ * Opened is `done`, and Landed onward `todo` unless the table marks Landed.
+ * At most one station is `now`.
  *
  * Pure; times are epoch ms.
  */
@@ -111,6 +116,7 @@ export function landedTimeline(row: PageRow, time: RowTime | undefined, runMs: n
     if (stage.kind === 'held' && stage.reason.kind === 'base') subs.line = row.words.pill.replace(/^held · /, '');
     const place = stage.kind === 'waiting' ? (stage.position ?? landed.place) : null;
     if (place !== null) subs.line = ordinal(place);
+    if (marks.review === 'stopped' && row.order !== null) subs.line = 'keeps ' + ordinal(row.order);
     if (time) subs.merged = (time.rough ? '≈' : '~') + clock(time.at);
 
     const durations: Partial<Record<StationId, string>> = {};
@@ -134,17 +140,7 @@ export function landedTimeline(row: PageRow, time: RowTime | undefined, runMs: n
 export function notLandedTimeline(pr: OpenPullRequest, now: number): PrTimeline {
     void now;
     const status = notLandedStatus(pr);
-    const marks = notLandedMarks(status);
-    const subs: Partial<Record<StationId, string>> = {opened: clock(pr.createdAt)};
-    const reviewer =
-        status === 'changesAsked'
-            ? pr.changesRequestedBy[0]
-            : status === 'inReview'
-              ? pr.reviewRequested[0]
-              : (pr.approvedBy[0] ?? pr.reviewRequested[0]);
-    if (reviewer) subs.review = '@' + reviewer;
-    const checks = pr.checks === null ? null : CHECKS_SUB[pr.checks];
-    if (checks) subs.checks = checks;
+    const {marks, subs} = notLandedStations(pr, status);
     return {
         stations: stationsOf(marks, subs, {}),
         headParts: null,
@@ -174,7 +170,7 @@ function landedMarks(row: PageRow): Marks {
     switch (stage.kind) {
         case 'needsYou':
             return stage.reason.kind === 'changes-requested' || stage.reason.kind === 'unresolved-thread'
-                ? marked('review', 'stopped')
+                ? {...marked('line', 'held'), review: 'stopped'}
                 : marked('head', 'stopped');
         case 'held':
             return stage.reason.kind === 'approval' || stage.reason.kind === 'review'
@@ -191,28 +187,50 @@ function landedMarks(row: PageRow): Marks {
     }
 }
 
-function notLandedMarks(status: ReturnType<typeof notLandedStatus>): Marks {
-    switch (status) {
-        case 'draft':
-            return marked('opened', 'now');
-        case 'inReview':
-            return marked('review', 'now');
-        case 'noReview':
-            return marked('review', 'held');
-        case 'changesAsked':
-            return marked('review', 'stopped');
-        case 'checksRunning':
-            return marked('checks', 'now');
-        case 'checksFailing':
-            return marked('checks', 'stopped');
-        case 'conflicts':
-            return marked('landed', 'conflict');
-        case 'ready':
-            return marked('landed', 'now');
+/**
+ * A not landed PR's stations as they stand: its review and its checks by what
+ * GitHub says (at most one of them `now`), Landed by its status, the rest to come.
+ */
+function notLandedStations(
+    pr: OpenPullRequest,
+    status: ReturnType<typeof notLandedStatus>,
+): {marks: Marks; subs: Partial<Record<StationId, string>>} {
+    const marks = marked('landed', status === 'conflicts' ? 'conflict' : status === 'ready' ? 'now' : 'todo');
+    const subs: Partial<Record<StationId, string>> = {opened: clock(pr.createdAt)};
+    if (status === 'draft') marks.opened = 'now';
+
+    if (pr.reviewDecision === 'APPROVED') {
+        marks.review = 'done';
+        if (pr.approvedBy[0]) subs.review = '@' + pr.approvedBy[0];
+    } else if (pr.reviewDecision === 'CHANGES_REQUESTED') {
+        marks.review = 'stopped';
+        if (pr.changesRequestedBy[0]) subs.review = '@' + pr.changesRequestedBy[0];
+    } else {
+        marks.review = 'todo';
+        subs.review = pr.reviewRequested[0] ? '@' + pr.reviewRequested[0] : 'nobody asked';
     }
+
+    switch (pr.checks) {
+        case 'success':
+            marks.checks = 'done';
+            subs.checks = 'green';
+            break;
+        case 'pending':
+            marks.checks = status === 'checksRunning' ? 'now' : 'todo';
+            subs.checks = 'running';
+            break;
+        case 'failure':
+            marks.checks = 'stopped';
+            subs.checks = 'failing';
+            break;
+        case null:
+            marks.checks = 'todo';
+            break;
+    }
+    return {marks, subs};
 }
 
-/** The stations, with a sub only where it was reached (an expected merge shows ahead of time). */
+/** The stations, with their subs and durations where known. */
 function stationsOf(
     marks: Marks,
     subs: Partial<Record<StationId, string>>,
@@ -222,7 +240,7 @@ function stationsOf(
         id,
         label: STATION_LABELS[id],
         mark: marks[id],
-        sub: marks[id] === 'todo' && id !== 'merged' ? null : (subs[id] ?? null),
+        sub: subs[id] ?? null,
         duration: durations[id] ?? null,
     }));
 }
@@ -364,12 +382,6 @@ function notLandedNow(pr: OpenPullRequest, status: ReturnType<typeof notLandedSt
 }
 
 // ── Words ──
-
-const CHECKS_SUB: Readonly<Record<NonNullable<OpenPullRequest['checks']>, string>> = {
-    success: 'green',
-    pending: 'running',
-    failure: 'failing',
-};
 
 /** "09:05", local. */
 function clock(at: number): string {
