@@ -17,6 +17,7 @@
 import type {RendererEvent} from './events';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {CaptureTarget} from '../../domain/ask/model';
+import {DEFAULT_SETTINGS_CATEGORY, type SettingsCategory} from './settings-categories';
 
 /** A settings blob — open-ended, since each feature writes its own keys. */
 export type SettingsRecord = Readonly<Record<string, any>>;
@@ -32,6 +33,8 @@ export interface SettingsPanel {
     /** Quick Ask's capture targets whose server isn't set up in Claude Code (C6). */
     readonly quickAskMissing: readonly CaptureTarget[];
     readonly openId: number;
+    /** The page showing; the others stay mounted, hidden, so Save still reads them. */
+    readonly category: SettingsCategory;
     /** Save went through; the panel shows "✓ Saved" until it closes. */
     readonly saved: boolean;
 }
@@ -71,10 +74,15 @@ export function settingsReducer(state: SettingsState, event: RendererEvent): Set
                     quickAskRegistered: event.quickAskRegistered,
                     quickAskMissing: event.quickAskMissing,
                     openId,
+                    category: event.category ?? DEFAULT_SETTINGS_CATEGORY,
                     saved: false,
                 },
             };
         }
+        case 'settingsCategoryChosen':
+            return state.panel && state.panel.category !== event.category
+                ? {...state, panel: {...state.panel, category: event.category}}
+                : state;
         case 'settingsSaved':
             return state.panel && !state.panel.saved ? {...state, panel: {...state.panel, saved: true}} : state;
         case 'settingsClosed':

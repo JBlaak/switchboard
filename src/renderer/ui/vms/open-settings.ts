@@ -10,10 +10,10 @@ import {dispatch} from '../../state/app-store';
 import {openSettings} from '../settings/actions';
 import {registerHost, VMS_SECTION_ID, vmRowId} from './actions';
 
-/** The settings, scrolled to the VM, open to its controls. */
+/** The settings, on Phone & VMs scrolled to the VM, open to its controls. */
 export async function openVmSettings(key: string): Promise<void> {
     dispatch({type: 'vmHostOpened', key});
-    await openSettings();
+    await openSettings('remote');
     requestAnimationFrame(() => {
         const row = document.getElementById(vmRowId(key)) ?? document.getElementById(VMS_SECTION_ID);
         row?.scrollIntoView({block: 'start'});

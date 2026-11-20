@@ -38,6 +38,7 @@ test('turning Phone access on in Settings starts the listener, and off stops it'
     /* Given */
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
     await page.getByRole('menuitem', {name: 'All settings…'}).click();
+    await page.getByRole('tab', {name: 'Phone & VMs', exact: true}).click();
     const section = page.locator('#sv-phone-access');
     const toggle = section.getByRole('checkbox', {name: 'Phone access'});
     await expect(toggle).not.toBeChecked();
