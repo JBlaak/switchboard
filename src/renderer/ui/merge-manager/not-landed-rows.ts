@@ -1,9 +1,10 @@
 /**
  * What the Merge manager's page shows of Not landed, and how its selection
- * goes through it: the section's newest five under the lanes (and View all
- * when there are more), the Not landed page's rows for its project chip, the
- * J/K order (the lane rows, then the Not landed rows on screen), which row
- * the selection is on, and what a Not landed row's side view says.
+ * goes through it: every not landed PR in the page's status groups (and the
+ * section's newest five, kept for View all), the Not landed page's rows for
+ * its project chip, the J/K order (top to bottom through the status groups;
+ * newest first on the Not landed page), which row the selection is on, and
+ * what a Not landed row's side view says.
  *
  * Pure, so it is tested in node; the page and its actions carry it out.
  */
@@ -16,7 +17,8 @@ import {
     repositoryShortName,
     type OpenPullRequest,
 } from '../../../domain/merge-manager/not-landed';
-import {pageLanes, rowKeys, type PageLane, type PageRow} from '../../../domain/merge-manager/page';
+import {pageLanes, type PageLane, type PageRow} from '../../../domain/merge-manager/page';
+import {statusGroups, statusKeys} from '../../../domain/merge-manager/status';
 import type {MergeManagerState} from '../../../domain/merge-manager/model';
 import type {MergeManagerSliceState} from '../../state/merge-manager-slice';
 
@@ -50,10 +52,12 @@ export function notLandedPageSubline(rows: readonly OpenPullRequest[], projects:
 
 // ── Going through ──
 
-/** The rows on screen: the lanes and the section's five, or (on the Not landed page) its chip's rows alone. */
+/** The rows on screen: the lanes and every not landed PR, or (on the Not landed page) its chip's rows alone. */
 export interface VisibleRows {
     readonly lanes: readonly PageLane[];
     readonly notLanded: readonly OpenPullRequest[];
+    /** The Not landed page's own order, newest first; the status groups' otherwise. */
+    readonly newestFirst?: boolean;
 }
 
 export function visibleRows(slice: Pick<MergeManagerSliceState, 'state' | 'notLanded' | 'page'>): VisibleRows {
@@ -61,14 +65,16 @@ export function visibleRows(slice: Pick<MergeManagerSliceState, 'state' | 'notLa
         return {
             lanes: [],
             notLanded: inRepository(notLanded(slice.notLanded ?? [], slice.state), slice.page.repository),
+            newestFirst: true,
         };
     }
-    return {lanes: pageLanes(slice.state), notLanded: notLandedSection(slice.notLanded, slice.state).rows};
+    return {lanes: pageLanes(slice.state), notLanded: notLanded(slice.notLanded ?? [], slice.state)};
 }
 
-/** J/K's order: top to bottom through the lanes, then the Not landed rows. */
+/** J/K's order: top to bottom through the status groups, or the Not landed page's rows as they stand. */
 export function visibleRowKeys(rows: VisibleRows): string[] {
-    return [...rowKeys(rows.lanes), ...rows.notLanded.map(notLandedKey)];
+    if (rows.newestFirst) return rows.notLanded.map(notLandedKey);
+    return statusKeys(statusGroups(rows.lanes, rows.notLanded));
 }
 
 /** The row the selection is on: a lane's (a landed PR) or a Not landed one. */
@@ -87,14 +93,19 @@ export function findSelection(rows: VisibleRows, key: string | null): PageSelect
     return pr ? {kind: 'notLanded', pr, key} : null;
 }
 
-/** The row with `key`, or the first row on screen when it is gone; null for no rows. */
+/** The row with `key`, or the first row on screen (the first group's first) when it is gone; null for no rows. */
 export function pageSelection(rows: VisibleRows, key: string | null): PageSelection | null {
     const found = findSelection(rows, key);
     if (found) return found;
-    const first = rows.lanes[0]?.rows[0];
-    if (first) return {kind: 'lane', row: first, key: first.key};
-    const pr = rows.notLanded[0];
-    return pr ? {kind: 'notLanded', pr, key: notLandedKey(pr)} : null;
+    if (rows.newestFirst) {
+        const pr = rows.notLanded[0];
+        return pr ? {kind: 'notLanded', pr, key: notLandedKey(pr)} : null;
+    }
+    const first = statusGroups(rows.lanes, rows.notLanded)[0]?.items[0];
+    if (!first) return null;
+    return first.kind === 'lane'
+        ? {kind: 'lane', row: first.row, key: first.key}
+        : {kind: 'notLanded', pr: first.pr, key: first.key};
 }
 
 /**

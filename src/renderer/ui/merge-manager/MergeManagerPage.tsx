@@ -2,26 +2,28 @@
  * The Merge manager's page (#439, ⌘⇧L): what the main area shows while its
  * route is `mergeManager`. Its figure and where merging runs ("Merging on
  * this Mac" or on a VM, with the hand-off and bring-back, #442) in the
- * header, and what happened while merging was on a VM under it; the next
- * hour's turns on a timeline, one track per lane; every lane as a card,
- * grouped by repository with its kind, the head on top with three steps and
- * the rest in the lane's order (only the user's own PRs), each with when it
- * is expected to merge, or why it keeps its place; Merged today at the
- * bottom, with how long each took; and, once a row is chosen, its side view
- * beside them, per stage, with its actions and its expected time.
+ * header, and what happened while merging was on a VM under it; a chip per
+ * status group; Coming up, the next hour's turns on a timeline with one
+ * track per lane, its parked PRs as flags and its not landed ones counted;
+ * then every one of the user's PRs, landed or not, by status
+ * (`domain/merge-manager/status`): the groups that ask for attention as
+ * cards with the PR's whole timeline, the rest as compact rows, Drafts
+ * folded; Merged today at the bottom, with how long each took; and, once a
+ * row is chosen, its side view beside them, per stage, with its actions and
+ * its expected time.
  *
- * Between the lanes and Merged today, Not landed: your newest open PRs not in
- * a lane yet, each with Land it (L), and View all for the Not landed page,
- * which the same panel shows instead of the lanes (`NotLandedPage`).
+ * View all (under Coming up) shows the Not landed page in the same panel
+ * (`NotLandedPage`).
  *
- * What it shows is `domain/merge-manager/page` and `times`; its keys, while
- * it has the focus and never in a field, are `page-keys` (J/K go through the
- * lanes, then Not landed); Esc closes the side view, and then the page.
+ * What it shows is `domain/merge-manager/page`, `times`, `status` and
+ * `pr-timeline`; its keys, while it has the focus and never in a field, are
+ * `page-keys` (J/K go through the groups top to bottom); Esc closes the side
+ * view, and then the page.
  *
  * Rendered into `#merge-manager-page`, which `ui/main-area/install-main-area`
  * shows and hides with the route.
  */
-import {useEffect, useLayoutEffect, useRef, type JSX, type KeyboardEvent, type ReactNode} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode} from 'react';
 import {getState} from '../../state/app-store';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
@@ -40,7 +42,6 @@ import {
     pageLanes,
     pageSubline,
     rowActions,
-    rowStageLabel,
     savedText,
     type MergeManagerPageFacts,
     type PageLane,
@@ -50,13 +51,14 @@ import {
     checksSince,
     durationText,
     laneTimes,
-    stillText,
     timeline,
     untilText,
     type LaneTimes,
     type RowTime,
-    type Timeline,
 } from '../../../domain/merge-manager/times';
+import {landedTimeline, notLandedTimeline} from '../../../domain/merge-manager/pr-timeline';
+import {statusGroups, type StatusGroupId, type StatusItem} from '../../../domain/merge-manager/status';
+import {notLanded} from '../../../domain/merge-manager/not-landed';
 import {QUEUE_STEP_MS} from '../../../domain/project/merge-queue';
 import type {LandedView} from '../../../domain/merge-manager/model';
 import type {MergeManagerPageState} from '../../state/merge-manager-slice';
@@ -64,17 +66,12 @@ import {mergeKeyAction, notLandedKeyAction} from './page-keys';
 import {CloseIcon} from './CloseIcon';
 import {NotLandedPage} from './NotLandedPage';
 import {NotLandedDetail} from './NotLandedDetail';
-import {NotLandedSection} from './NotLandedSection';
 import {carryOutNotLandedKey} from './not-landed-actions';
-import {
-    notLandedSection,
-    notLandedSubline,
-    pageSelection,
-    visibleRows,
-    type PageSelection,
-    type VisibleRows,
-} from './not-landed-rows';
-import {TimedBar} from './TimedBar';
+import {notLandedSubline, pageSelection, visibleRows, type PageSelection, type VisibleRows} from './not-landed-rows';
+import {ComingUp} from './ComingUp';
+import {StagePill} from './StagePill';
+import {StatusChips, StatusGroupSection, type ItemContext} from './StatusGroups';
+import {clock, foldedGroupOf, repositoryName} from './status-view';
 import {AwaySummaryBox, MergingHostPill} from './MergingHost';
 import {
     closeMergeDetail,
@@ -143,8 +140,9 @@ function MergeManagerView(): JSX.Element {
     const today = dayStart(now);
     const lanes = pageLanes(merge);
     const merged = mergedToday(merge, today);
-    const section = notLandedSection(open, merge);
-    const selection = openRow({lanes, notLanded: section.rows}, page);
+    const unlanded = notLanded(open ?? [], merge);
+    const groups = statusGroups(lanes, unlanded);
+    const selection = openRow({lanes, notLanded: unlanded}, page);
     const selected = selection?.kind === 'lane' ? selection.row : null;
     const selectedKey = selection?.key ?? null;
     const runMs = page.facts?.runMs ?? {};
@@ -153,6 +151,21 @@ function MergeManagerView(): JSX.Element {
     );
     const line = timeline(lanes, times, now);
     const saved = ciRunsSaved(page.facts?.savedThisWeek);
+    // The folded groups shown (Show N); the one the selection is in shows too.
+    const [unfolded, setUnfolded] = useState<ReadonlySet<StatusGroupId>>(new Set());
+    const holdsSelection = foldedGroupOf(groups, selectedKey);
+    const isOpen = (id: StatusGroupId, folded: boolean): boolean =>
+        !folded || unfolded.has(id) || holdsSelection === id;
+    const fold = (id: StatusGroupId, show: boolean): void => {
+        setUnfolded((was) => {
+            const next = new Set(was);
+            if (show) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+        // Hiding the row the side view is on closes the side view with it.
+        if (!show && holdsSelection === id) closeMergeDetail();
+    };
 
     // Into the page as it opens, so its keys reach it without a click.
     useLayoutEffect(() => {
@@ -229,6 +242,30 @@ function MergeManagerView(): JSX.Element {
         toggleMergeRow(key);
         focusRows();
     };
+    /** A chip or a count: to its group, unfolded. */
+    const goToGroup = (id: StatusGroupId): void => {
+        fold(id, true);
+        requestAnimationFrame(() =>
+            root.current?.querySelector(`[data-group="${id}"]`)?.scrollIntoView({block: 'start', behavior: 'smooth'}),
+        );
+    };
+    const timelineOf = (item: StatusItem) =>
+        item.kind === 'lane'
+            ? landedTimeline(
+                  item.row,
+                  times.get(item.row.repository)?.rows.get(item.key),
+                  times.get(item.row.repository)?.runMs ?? null,
+                  now,
+              )
+            : notLandedTimeline(item.pr, now);
+    const context: ItemContext = {
+        lanes,
+        timelineOf,
+        timeOf: (item) => (item.kind === 'lane' ? times.get(item.row.repository)?.rows.get(item.key) : undefined),
+        selected: selectedKey,
+        busy,
+        onSelect,
+    };
 
     return (
         <div
@@ -254,7 +291,7 @@ function MergeManagerView(): JSX.Element {
                         <div className="sw-subline pp-subline">
                             <span>
                                 {pageSubline(lanes)}
-                                {notLandedSubline(section.total)}
+                                {notLandedSubline(unlanded.length)}
                                 {saved > 0 && (
                                     <span title={savedText(page.facts?.savedThisWeek) ?? undefined}>
                                         {` · ${saved} CI ${saved === 1 ? 'run' : 'runs'} saved this week`}
@@ -276,32 +313,33 @@ function MergeManagerView(): JSX.Element {
                 </div>
             )}
 
+            <StatusChips groups={groups} onGo={goToGroup} />
+
             <div className={'mm-body' + (selection ? ' has-detail' : '')}>
-                <div className="mm-list" role="listbox" aria-label="Lanes">
+                <div className="mm-list" role="listbox" aria-label="Pull requests">
                     {lanes.length === 0 &&
-                        (section.rows.length > 0 ? (
-                            <NotLandedEmptyLine figure={figure} />
-                        ) : (
-                            <EmptyLine figure={figure} />
-                        ))}
-                    {line && <TimelineCard line={line} selected={selectedKey} onSelect={selectMergeRow} />}
-                    {lanes.map((lane) => (
-                        <Lane
-                            key={lane.repository}
-                            lane={lane}
-                            times={times.get(lane.repository) ?? NO_TIMES}
-                            now={now}
+                        (unlanded.length > 0 ? <NotLandedEmptyLine figure={figure} /> : <EmptyLine figure={figure} />)}
+                    {line && (
+                        <ComingUp
+                            line={line}
+                            lanes={lanes}
+                            times={times}
+                            groups={groups}
+                            notLanded={unlanded.length}
                             selected={selectedKey}
-                            onSelect={onSelect}
+                            onSelect={selectMergeRow}
+                            onGo={goToGroup}
+                        />
+                    )}
+                    {groups.map((group) => (
+                        <StatusGroupSection
+                            key={group.id}
+                            group={group}
+                            open={isOpen(group.id, group.folded)}
+                            onFold={() => fold(group.id, !isOpen(group.id, group.folded))}
+                            context={context}
                         />
                     ))}
-                    <NotLandedSection
-                        section={section}
-                        now={now}
-                        selected={selectedKey}
-                        busy={busy}
-                        onSelect={onSelect}
-                    />
                     {merged.length > 0 && <MergedToday merged={merged} lanes={merge.lanes} />}
                 </div>
                 {selected && (
@@ -374,245 +412,6 @@ function NotLandedEmptyLine({figure}: {figure: MergeFigure}): JSX.Element {
             </span>
         </div>
     );
-}
-
-// ── The timeline ──
-
-function TimelineCard({
-    line,
-    selected,
-    onSelect,
-}: {
-    line: Timeline;
-    selected: string | null;
-    onSelect: (key: string) => void;
-}): JSX.Element {
-    const span = line.to - line.from;
-    const left = (at: number): string => ((at - line.from) / span) * 100 + '%';
-    const hours = span > 60 * 60_000;
-    return (
-        <section className="mm-card mm-timeline" aria-label="Coming up">
-            <div className="mm-card-head">
-                <h2>{hours ? `The next ${Math.round(span / 3_600_000)} hours` : 'The next hour'}</h2>
-                {line.tracks.some((track) => track.blocks.some((block) => block.rough)) && (
-                    <span>Dashed: rough, further back in its lane</span>
-                )}
-            </div>
-            <div className="mm-tl">
-                <div className="mm-tl-axis" aria-hidden="true">
-                    <span className="is-now" style={{left: '0%'}}>
-                        now
-                    </span>
-                    {line.ticks.map((at) => (
-                        <span key={at} style={{left: left(at)}}>
-                            {clock(at)}
-                        </span>
-                    ))}
-                </div>
-                {line.tracks.map((track) => (
-                    <div key={track.repository} className="mm-tl-row">
-                        <span className="mm-tl-name" title={track.repository}>
-                            {repositoryName(track.repository)}
-                        </span>
-                        <div className="mm-tl-track">
-                            {line.ticks.map((at) => (
-                                <i key={at} className="mm-tl-tick" style={{left: left(at)}} aria-hidden="true" />
-                            ))}
-                            {track.blocks.map((block) => (
-                                <button
-                                    key={block.key}
-                                    type="button"
-                                    className={
-                                        'mm-tl-block' +
-                                        (block.head ? ' is-head' : '') +
-                                        (block.rough ? ' is-rough' : '') +
-                                        (block.key === selected ? ' is-selected' : '')
-                                    }
-                                    style={{
-                                        left: block.start * 100 + '%',
-                                        width: `max(6px, ${(block.end - block.start) * 100}%)`,
-                                    }}
-                                    title={`#${block.number}`}
-                                    onClick={() => onSelect(block.key)}>
-                                    #{block.number}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-// ── The lanes ──
-
-function Lane({
-    lane,
-    times,
-    now,
-    selected,
-    onSelect,
-}: {
-    lane: PageLane;
-    times: LaneTimes;
-    now: number;
-    selected: string | null;
-    onSelect: (key: string) => void;
-}): JSX.Element {
-    return (
-        <section className="mm-card mm-lanecard" role="group" aria-label={lane.repository}>
-            <div className="mm-lanehead">
-                <h2 title={lane.repository}>{repositoryName(lane.repository)}</h2>
-                <span className={'mm-lane' + (lane.kind === 'switchboard' ? ' is-switchboard' : '')}>
-                    {laneKindLabel(lane.kind)}
-                </span>
-                {lane.approvalLostOnPush && (
-                    <span
-                        className="mm-lane-warn"
-                        title="A push to a PR here dismisses its approval or needs a new one">
-                        updating the head loses its approval
-                    </span>
-                )}
-                <span className="mm-lanehead-gap" />
-                {times.runMs !== null && (
-                    <span className="mm-lane-ci" title="The median of this repository's recent green CI runs">
-                        CI ~{durationText(times.runMs)}
-                    </span>
-                )}
-                {times.clearsAt !== null && <span className="mm-lane-clear">clear by ~{clock(times.clearsAt)}</span>}
-            </div>
-            {lane.rows.map((row) =>
-                row.stage.kind === 'head' ? (
-                    <div key={row.key} className="mm-headcard">
-                        <Row
-                            row={row}
-                            time={times.rows.get(row.key)}
-                            selected={selected === row.key}
-                            onSelect={onSelect}
-                        />
-                        <ol className="mm-steps" aria-label="Where the head is">
-                            {headSteps(row, times.runMs).map((step, index) => (
-                                <li key={step.label} className={'mm-step is-' + step.state}>
-                                    <span className="mm-step-label">
-                                        <span>
-                                            {step.state === 'done' && '✓ '}
-                                            {step.label}
-                                        </span>
-                                        <span className="mm-step-time">
-                                            {stepTime(index, step.state, row, times, now)}
-                                        </span>
-                                    </span>
-                                    <TimedBar
-                                        className="mm-bar"
-                                        timing={step.timing}
-                                        seenKey={`${row.key}|${row.stage.kind === 'head' ? row.stage.step : ''}`}
-                                    />
-                                </li>
-                            ))}
-                        </ol>
-                    </div>
-                ) : (
-                    <Row
-                        key={row.key}
-                        row={row}
-                        time={times.rows.get(row.key)}
-                        selected={selected === row.key}
-                        onSelect={onSelect}
-                    />
-                ),
-            )}
-        </section>
-    );
-}
-
-/** What a head step says of its time: the checks' run so far against a whole one, the merge's clock. */
-function stepTime(
-    index: number,
-    state: 'done' | 'active' | 'todo',
-    row: PageRow,
-    times: LaneTimes,
-    now: number,
-): string | null {
-    const {runMs} = times;
-    const time = times.rows.get(row.key);
-    if (index === 0) return state === 'active' ? 'now' : null;
-    if (index === 1) {
-        if (runMs === null || state === 'done') return null;
-        const since = checksSince(row.landed);
-        if (state === 'active' && since !== null) {
-            return `${durationText(now - since)} of ~${durationText(runMs)}`;
-        }
-        return state === 'todo' ? '~' + durationText(runMs) : null;
-    }
-    return time ? '~' + clock(time.at) : null;
-}
-
-function Row({
-    row,
-    time,
-    selected,
-    onSelect,
-}: {
-    row: PageRow;
-    time: RowTime | undefined;
-    selected: boolean;
-    onSelect: (key: string) => void;
-}): JSX.Element {
-    return (
-        <div
-            role="option"
-            aria-selected={selected}
-            data-merge-key={row.key}
-            className={'mm-row' + (selected ? ' is-selected' : '')}
-            onClick={() => onSelect(row.key)}>
-            <span className={'mm-place' + (row.stage.kind === 'head' ? ' is-head' : '')}>{row.order ?? '·'}</span>
-            <span className="mm-row-text">
-                <span className="mm-row-title">
-                    <span className="mm-row-number">#{row.number}</span> {row.title}
-                </span>
-                <span className="mm-row-meta">
-                    {rowMeta(row)}
-                    {row.words.flag && <span className="mm-row-flag"> · {row.words.flag}</span>}
-                </span>
-            </span>
-            <StagePill row={row} />
-            <Eta row={row} time={time} />
-        </div>
-    );
-}
-
-/** When it merges ("~14:37", "in 17 min"), rough and faded further back; or why it keeps its place. */
-function Eta({row, time}: {row: PageRow; time: RowTime | undefined}): JSX.Element {
-    if (time) {
-        return (
-            <span className={'mm-eta' + (time.rough ? ' is-rough' : '')}>
-                <b>~{clock(time.at)}</b>
-                <span>{untilText(time)}</span>
-            </span>
-        );
-    }
-    return <span className="mm-eta is-still">{stillText(row)}</span>;
-}
-
-function StagePill({row}: {row: PageRow}): JSX.Element {
-    return (
-        <span
-            className={'pp-stage is-landed-' + row.stage.kind + (row.words.tone === 'error' ? ' is-error' : '')}
-            title={row.words.title}>
-            <i aria-hidden="true" />
-            {rowStageLabel(row)}
-        </span>
-    );
-}
-
-/** A row's second line: who approved it, and its branch. */
-function rowMeta(row: PageRow): string {
-    const approved = row.landed.facts?.approvedBy ?? [];
-    const parts = [approved.length > 0 ? 'approved by ' + approved.join(', ') : null, row.landed.headRef].filter(
-        (part): part is string => !!part,
-    );
-    return parts.join(' · ');
 }
 
 function MergedToday({
@@ -1100,14 +899,4 @@ function TryAgainBox({row, page}: {row: PageRow; page: MergeManagerPageState}): 
             </div>
         </div>
     );
-}
-
-/** "switchboard" for `movelab/switchboard`. */
-function repositoryName(repository: string): string {
-    return repository.split('/').pop() ?? repository;
-}
-
-/** "14:02", in the local time. */
-function clock(at: number): string {
-    return new Date(at).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'});
 }

@@ -2,7 +2,8 @@
  * When the user's landed PRs are expected to merge, on the Merge manager's
  * page: the head's time left, a run and a step per PR behind it, nothing for
  * the ones that keep their place, a queue lane by the queue's own numbers,
- * rough from place 3 on, and the timeline that lays it out.
+ * rough from place 3 on, and the timeline that lays it out, with flags where
+ * the parked ones keep their place.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -114,6 +115,70 @@ test('the timeline shows at least the next hour, out to the last merge, with a b
     assert.equal(blocks[0]!.head, true);
     assert.ok(blocks.every((block, i) => i === 0 || block.start >= blocks[i - 1]!.start));
     assert.ok(blocks.slice(2).every((block) => block.rough));
+});
+
+test('parked PRs get a flag at the end of the turn before them, one per spot, in the strongest tone', () => {
+    /* Given */
+    const lane = laneOf([
+        landedPr(1, 50, 'switchboard', {kind: 'head', step: 'updating'}),
+        landedPr(2, 45, 'switchboard', {kind: 'held', reason: {kind: 'review', reviewer: 'ana', team: false}}),
+        landedPr(3, 40, 'switchboard', {kind: 'needsYou', reason: {kind: 'errand-stopped'}}),
+        landedPr(4, 35),
+        landedPr(5, 30, 'switchboard', {kind: 'fixing', cause: 'checks'}),
+        landedPr(6, 25, 'switchboard', {kind: 'held', reason: {kind: 'approval'}}),
+    ]);
+    const times = laneTimes(lane, RUN, NOW);
+
+    /* When */
+    const line = timeline([lane], new Map([[lane.repository, times]]), NOW)!;
+
+    /* Then */
+    // The head has 11 min left, #4 a turn more: 22 min, of the hour shown.
+    assert.equal(line.to - line.from, 60 * MIN);
+    assert.deepEqual(line.tracks[0]!.flags, [
+        {
+            at: 11 / 60,
+            keys: [landedKey(REPO, 2), landedKey(REPO, 3)],
+            numbers: [2, 3],
+            tone: 'needsYou',
+            title: '#2 Held until @ana reviews it · #3 Needs you: the fix errand stopped without a fix',
+        },
+        {
+            at: 22 / 60,
+            keys: [landedKey(REPO, 5), landedKey(REPO, 6)],
+            numbers: [5, 6],
+            tone: 'fixing',
+            title: '#5 A fix errand mends its failed checks · #6 Held until it is approved',
+        },
+    ]);
+    assert.equal(line.tracks[0]!.blocks.length, 2);
+});
+
+test('a lane with only parked PRs is a track of flags at the start, even without a CI run to go by', () => {
+    /* Given */
+    const parked = laneOf([landedPr(1, 50, 'switchboard', {kind: 'held', reason: {kind: 'approval'}})]);
+    const idle = laneOf([queued(7, WAITING)]);
+    const times = new Map([
+        [parked.repository, laneTimes(parked, null, NOW)],
+        [idle.repository, laneTimes(idle, null, NOW)],
+    ]);
+
+    /* When */
+    const line = timeline([parked, idle], times, NOW)!;
+    const none = timeline([idle], times, NOW);
+
+    /* Then */
+    assert.equal(line.to - line.from, 60 * MIN);
+    assert.deepEqual(
+        line.tracks.map((track) => track.repository),
+        [REPO],
+    );
+    assert.deepEqual(line.tracks[0]!.blocks, []);
+    assert.deepEqual(
+        line.tracks[0]!.flags.map((flag) => [flag.at, flag.numbers, flag.tone]),
+        [[0, [1], 'held']],
+    );
+    assert.equal(none, null);
 });
 
 test('times read as minutes, hours and minutes, and rough ones with a tilde', () => {

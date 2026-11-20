@@ -1,12 +1,12 @@
 /* ========== THE MERGE MANAGER PAGE (#439) ==========
    ⌘⇧L: the Merge manager's head and where merging runs, the next hour's
-   turns on a timeline, every lane as a card grouped by repository with the
-   head on top and when each PR merges, and a chosen row's side view beside
-   them. The header and keys are the Issue manager's and the Tasks page's
+   turns on a timeline (Coming up), every PR by status as cards and compact
+   rows (_merge-manager-status.scss), Merged today, and a chosen row's side
+   view beside them. The header and keys are the Issue manager's and the Tasks page's
    (.sw-header, .tk-keys), the boxes and actions the Issue manager's
    (.im-box, .im-actions); the stage pills are the shared stage words'
    (.pp-stage.is-landed-*). Its own: the body, the host pill, the cards, the
-   rows and their times, the head card's steps, the side view. */
+   timeline, Merged today's rows and their times, the side view. */
 
 #merge-manager-page {
     position: absolute;
@@ -123,14 +123,50 @@
     display: contents;
 }
 
+/* A track's name, with its lane's facts small under it. */
 .mm-tl-name {
-    align-self: center;
-    overflow: hidden;
-    padding-right: 12px;
-    font: 600 13px var(--sb-font-body);
-    color: var(--sb-text-dim);
+    align-self: start;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 12px 0 0;
+
+    > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.mm-tl-repo {
     white-space: nowrap;
-    text-overflow: ellipsis;
+    font: 700 13px var(--sb-font-head);
+    color: var(--sb-text-strong);
+}
+
+.mm-tl-facts {
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--sb-text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+.mm-tl-warn {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--sb-yellow);
+}
+
+/* The track, the time pins under it, the parked flags standing on it, and the not landed counts. */
+.mm-tl-lane {
+    position: relative;
+    min-width: 0;
+    padding-bottom: 6px;
+
+    // Room under the pins for the flags' cloths, above the counts.
+    &.has-flags .mm-tl-pins {
+        margin-bottom: 22px;
+    }
 }
 
 .mm-tl-track {
@@ -192,7 +228,120 @@
     }
 }
 
-/* ---- A lane: its heading, the head as a card, then its rows ---- */
+.mm-tl-pins {
+    position: relative;
+    height: 16px;
+
+    // Ending at its block's end, so a flag's pole there passes beside it.
+    span {
+        position: absolute;
+        top: 2px;
+        padding-right: 4px;
+        transform: translateX(-100%);
+        font: 700 10.5px var(--sb-font-body);
+        color: var(--sb-text-muted);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+}
+
+/* A parked flag: a thin pole from the track down to a small cloth under the pins. */
+.mm-tl-flag {
+    --flag: var(--sb-text-muted);
+    --flag-rgb: var(--sb-overlay-rgb);
+    appearance: none;
+    position: absolute;
+    top: 28px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+
+    i {
+        width: 2px;
+        height: 28px;
+        margin-left: -1px;
+        border-radius: 1px;
+        background: var(--flag);
+    }
+    span {
+        margin-left: -1px;
+        padding: 1px 6px;
+        border-radius: 0 5px 5px 5px;
+        background: rgba(var(--flag-rgb), 0.16);
+        box-shadow: inset 0 0 0 1px rgba(var(--flag-rgb), 0.35);
+        font: 800 10.5px var(--sb-font-head);
+        color: var(--flag);
+        white-space: nowrap;
+    }
+    &.is-end {
+        align-items: flex-end;
+        transform: translateX(-100%);
+
+        i,
+        span {
+            margin: 0 -1px 0 0;
+        }
+        span {
+            border-radius: 5px 0 5px 5px;
+        }
+    }
+    &.is-needsYou {
+        --flag: var(--sb-orange);
+        --flag-rgb: var(--sb-orange-rgb);
+    }
+    &.is-fixing {
+        --flag: var(--sb-yellow);
+        --flag-rgb: var(--sb-yellow-rgb);
+    }
+    &:hover span,
+    &.is-selected span {
+        background: rgba(var(--flag-rgb), 0.3);
+    }
+    &.is-selected span {
+        box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    }
+}
+
+.mm-tl-counts {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--sb-text-faint);
+
+    button {
+        appearance: none;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: var(--sb-text-muted);
+        cursor: pointer;
+
+        &:hover {
+            color: var(--sb-text-strong);
+            text-decoration: underline;
+        }
+    }
+}
+
+.mm-tl-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--sb-line);
+    font-size: 12.5px;
+    color: var(--sb-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Merged today: its heading, then its rows ---- */
 .mm-lanecard {
     overflow: hidden;
     padding-bottom: 6px;
@@ -212,43 +361,9 @@
     }
 }
 
-.mm-lanehead-gap {
-    flex: 1;
-}
-
 .mm-lanehead-meta {
     font-size: 12.5px;
     color: var(--sb-text-faint);
-}
-
-.mm-lane {
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: var(--sb-blue-tint);
-    font: 700 11.5px var(--sb-font-head);
-    color: var(--sb-blue);
-
-    &.is-switchboard {
-        background: var(--sb-mint);
-        color: var(--sb-accent);
-    }
-}
-
-.mm-lane-warn {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--sb-yellow);
-}
-
-.mm-lane-ci {
-    font-size: 12.5px;
-    color: var(--sb-text-muted);
-}
-
-.mm-lane-clear {
-    font: 700 13px var(--sb-font-head);
-    color: var(--sb-text-strong);
-    font-variant-numeric: tabular-nums;
 }
 
 /* ---- A row: place, title, stage, and when it merges ---- */
@@ -327,10 +442,6 @@
     text-overflow: ellipsis;
 }
 
-.mm-row-flag {
-    color: var(--sb-yellow);
-}
-
 .mm-eta {
     display: flex;
     flex-direction: column;
@@ -361,85 +472,14 @@
     }
 }
 
-/* ---- The head, as a card with its three steps ---- */
-.mm-headcard {
-    margin: 0 12px 8px;
-    border-radius: var(--sb-r-row);
-    background: rgba(var(--sb-purple-rgb), 0.07);
-    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.2);
-
-    .mm-row {
-        border-top: 0;
-        padding: 12px 12px 10px 8px;
-    }
-    .mm-row:hover {
-        background: transparent;
-    }
-    .mm-row.is-selected {
-        background: rgba(var(--sb-accent-rgb), 0.07);
-        border-radius: var(--sb-r-row) var(--sb-r-row) 0 0;
-    }
-}
-
-.mm-steps {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    margin: 0;
-    padding: 0 20px 16px 54px;
-    list-style: none;
-}
-
-.mm-step {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    font-size: 12.5px;
-    color: var(--sb-text-faint);
-
-    &.is-done {
-        color: var(--sb-lav-ink);
-    }
-    &.is-active {
-        color: var(--sb-text-strong);
-        font-weight: 700;
-    }
-}
-
-.mm-step-label {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.mm-step-time {
-    font-weight: 500;
-    color: var(--sb-text-faint);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.mm-bar {
-    height: 6px;
-    overflow: hidden;
-    border-radius: 3px;
-    background: var(--sb-line);
-
-    span {
-        display: block;
-        height: 100%;
-        border-radius: 3px;
-        background: var(--sb-purple);
-    }
-    .is-active & span {
-        background: var(--sb-accent);
-    }
-}
-
 /* ---- A narrow list, beside the side view: the stage goes under the title ---- */
 @container (max-width: 620px) {
     .mm-tl {
         grid-template-columns: 96px minmax(0, 1fr);
+    }
+    .mm-tl-facts,
+    .mm-tl-warn {
+        display: none;
     }
     .mm-row {
         grid-template-columns: 30px minmax(0, 1fr) auto;
@@ -462,15 +502,16 @@
             max-width: 120px;
         }
     }
-    .mm-headcard .mm-row {
-        padding: 12px 12px 10px 8px;
+    .mm-sr {
+        grid-template-columns: minmax(0, 1fr) auto;
+
+        .mm-prt {
+            display: none;
+        }
     }
-    .mm-steps {
-        gap: 10px;
-        padding: 0 14px 14px 50px;
-    }
-    .mm-step-time {
-        display: none;
+    .mm-sr .mm-acts {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
     }
 }
 
