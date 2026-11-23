@@ -10,6 +10,7 @@
 import {loadProjects} from '../../features/sessions/session-list';
 import {relayoutSessionList} from './relayout';
 import {dispatch, getState} from '../../state/app-store';
+import {errandOf} from '../../state/errand-index';
 import {sessionMap, view} from '../../state/session-store';
 import {renamedName} from '../../state/session-list-layout';
 import {bump} from '../../lib/motion/reflow';
@@ -29,11 +30,17 @@ import type {SessionRow} from '../../../domain/session/session';
 
 // ── Opening and the empty space ──
 
-/** A click on a row: open its session, unless the row is on its way out. */
+/**
+ * A click on a row: open its session, unless the row is on its way out. A
+ * scheduled run that ended is read once it is opened: the Automatic shelf
+ * lets go of it, and so does Blocked.
+ */
 export function openRow(rowId: string, sessionId: string, groupId?: string): void {
     if (isLeaving(rowId, groupId)) return;
     const session = sessionMap.get(sessionId);
     if (session) void openSession(session);
+    const run = errandOf(getState(), sessionId)?.run;
+    if (run && run.status !== 'running') void window.api.scheduleManagerMarkSeen(run.id);
 }
 
 /**
@@ -260,7 +267,7 @@ export function toggleSection(tier: number): void {
     dispatch({type: 'sectionToggled', tier});
 }
 
-/** Unfold the Errands shelf, or fold it again; `open` sets it either way. */
+/** Unfold the Automatic shelf, or fold it again; `open` sets it either way. */
 export function toggleErrandShelf(open?: boolean): void {
     dispatch(open === undefined ? {type: 'errandShelfToggled'} : {type: 'errandShelfToggled', open});
 }

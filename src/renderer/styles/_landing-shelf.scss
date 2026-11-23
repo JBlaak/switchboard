@@ -1,6 +1,6 @@
 // The Landing shelf (LandingShelf): the user's landed PRs as one line docked
-// under the Errands shelf, its hover card, and the rows it unfolds into.
-// Its header reads like the Errands shelf's; the right edge is the time until
+// under the Automatic shelf, its hover card, and the rows it unfolds into.
+// Its header reads like the Automatic shelf's; the right edge is the time until
 // the next merge.
 //
 // The colours are every place's (`stageTone`), set per element by
@@ -393,7 +393,7 @@ $pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 }
 
-// ---- Unfolded: the rows ease in under the line, like the Errands shelf's ----
+// ---- Unfolded: the rows ease in under the line, like the Automatic shelf's ----
 .landing-shelf-body {
     display: grid;
     grid-template-rows: 1fr;

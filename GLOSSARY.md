@@ -64,3 +64,17 @@ _Avoid_: Merge queue bar, queue strip
 **Fix errand**:
 A session the Merge manager starts by itself, in its own worktree, when the head fails out on a conflict or a failed check. It ends by pushing a fix to the pull request's branch, or by judging the failure flaky so the Merge manager retries it; one that stops without either leaves the pull request Needs you. There is at most one per pull request.
 _Avoid_: Auto-fix, Fix CI
+
+## Automatic
+
+**Errand**:
+A session Switchboard starts by itself for one of its managers: a fix errand, the merge queue's Nudge or Fix, or the Bug manager's triage. It keeps out of the user's own sections and archives itself once done.
+_Avoid_: Bot session, background session
+
+**Scheduled run**:
+One run of a schedule: a headless Claude Code session started at the schedule's time, mostly at night. It is listed while it runs and, once ended, until the user has seen it; one that failed, hit its time limit or was missed needs you until then.
+_Avoid_: Cron job, nightly job
+
+**Automatic shelf**:
+The line under the session list that holds the errands and the scheduled runs, out of the user's own sections: what is running, which runs ended and are not read yet, and which schedules come up next. It shows while any of those is listed or any schedule is on; one that needs you also shows in Blocked.
+_Avoid_: Errands shelf

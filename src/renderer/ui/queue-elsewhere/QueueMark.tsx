@@ -5,7 +5,7 @@
  * sentence on hover. Nothing at all for a row the queue knows nothing of.
  *
  * An errand's row no longer carries a pill of its own: errands live on the
- * Errands shelf, and an errand row elsewhere says so itself (`RowMeta`).
+ * Automatic shelf, and an errand row elsewhere says so itself (`RowMeta`).
  */
 import type {JSX} from 'react';
 import {sessionQueueMark} from '../../../domain/project/queue-elsewhere';

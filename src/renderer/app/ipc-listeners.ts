@@ -79,13 +79,17 @@ export function installIpcListeners(): void {
     onEvent('mergeQueueChanged', (_event, state, previous) => {
         if (anyWatching(state) || errandsChanged(previous, state)) relayoutSessionList();
     });
-    // Which sessions are errands decides whether they sit on the Errands shelf
+    // Which sessions are errands decides whether they sit on the Automatic shelf
     // or in the user's sections, and a stuck one also asks in Blocked.
     onEvent('mergeManagerChanged', (_event, state, previous) => {
         if (errandsChanged(previous, state)) relayoutSessionList();
     });
     // So does the Bug manager starting a triage, or one stopping or finishing.
     onEvent('inboxChanged', (_event, state, previous) => {
+        if (errandsChanged(previous, state)) relayoutSessionList();
+    });
+    // And a scheduled run starting, ending or being seen: the Automatic shelf lists it until then.
+    onEvent('scheduleManagerChanged', (_event, state, previous) => {
         if (errandsChanged(previous, state)) relayoutSessionList();
     });
 
