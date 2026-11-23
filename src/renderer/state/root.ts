@@ -22,6 +22,8 @@ import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merg
 import {inboxReducer, initialInboxState} from './inbox-slice';
 import {initialIssueManagerState, issueManagerReducer} from './issue-manager-slice';
 import {initialMergeManagerState, mergeManagerReducer, rekeyMergeManager} from './merge-manager-slice';
+import {initialScheduleManagerState, scheduleManagerReducer} from './schedule-manager-slice';
+import type {ScheduleManagerSliceState} from './schedule-manager-slice';
 import {bugPageReducer, initialBugPageState} from './bug-page-slice';
 import {githubReducer, initialGithubState} from './github-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
@@ -126,6 +128,7 @@ export interface RendererState {
     readonly inbox: InboxSliceState;
     readonly issueManager: IssueManagerState;
     readonly mergeManager: MergeManagerSliceState;
+    readonly scheduleManager: ScheduleManagerSliceState;
     /** The Bug manager page (#414): its items, tab, filter, cursor and Bugsnag reads. */
     readonly bugPage: BugPageState;
     /** GitHub's GraphQL budget: until when expensive reads are held back, for the freshness lines. */
@@ -171,6 +174,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         inbox: initialInboxState,
         issueManager: initialIssueManagerState,
         mergeManager: initialMergeManagerState,
+        scheduleManager: initialScheduleManagerState,
         bugPage: initialBugPageState,
         github: initialGithubState,
     };
@@ -222,6 +226,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const inbox = inboxReducer(state.inbox, event);
     const issueManager = issueManagerReducer(state.issueManager, event);
     const mergeManager = mergeManagerReducer(state.mergeManager, event);
+    const scheduleManager = scheduleManagerReducer(state.scheduleManager, event);
     const bugPage = bugPageReducer(state.bugPage, event);
     const github = githubReducer(state.github, event);
 
@@ -263,6 +268,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         inbox,
         issueManager,
         mergeManager,
+        scheduleManager,
         bugPage,
         github,
     });
@@ -342,6 +348,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         issueManager: state.issueManager,
         // Lanes of PRs, and each session's PRs for Land it.
         mergeManager: rekeyMergeManager(state.mergeManager, oldId, newId),
+        scheduleManager: state.scheduleManager,
         // Keyed by inbox key; a Fix session is found by its worktree.
         bugPage: state.bugPage,
         // Names no session.
