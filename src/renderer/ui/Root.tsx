@@ -25,6 +25,7 @@ import {Questions} from './questions/Questions';
 import {ReadingPage} from './reading-page/ReadingPage';
 import {QuestionsHeaderButton} from './questions/QuestionsHeaderButton';
 import {SessionList} from './session-list/SessionList';
+import {SidebarPageSwitch} from './sidebar-pages/SidebarPageSwitch';
 import {TerminalHost} from './terminal/TerminalHost';
 import {TerminalHeaderControls, TerminalHeaderInfo} from './terminal/TerminalHeader';
 import {SessionTray} from './session-tray/SessionTray';
@@ -106,6 +107,9 @@ export function Root(): JSX.Element | null {
                 <EmptyScreenFamily />
                 <EmptyScreenPatch />
                 <EmptyScreenManagers />
+            </Portal>
+            <Portal target="sidebar-page-switch">
+                <SidebarPageSwitch />
             </Portal>
             <Portal target="sidebar-content">
                 <SessionList />

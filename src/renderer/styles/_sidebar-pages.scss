@@ -1,0 +1,103 @@
+/* ========== SIDEBAR PAGES ==========
+   The sidebar's two pages, the session list (#sidebar-content) and your pull
+   requests (#sidebar-prs), side by side in #sidebar-pages, with the switch
+   between them above (ui/sidebar-pages). At rest the page not shown is
+   [hidden]; during a swipe or a slide both are shown and moved together by
+   their inline transforms, which the clipping here keeps inside the sidebar. */
+
+$slide-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+#sidebar-pages {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Each page a sidebar wide, laid left to right; the session list keeps its own
+   column layout and scrolling from _sidebar.scss. */
+#sidebar-pages > :is(#sidebar-content, #sidebar-prs) {
+    flex: 0 0 100%;
+    min-width: 0;
+}
+
+/* Outranks the pages' own `display`, which would beat the UA's [hidden]. */
+#sidebar-pages > [hidden] {
+    display: none;
+}
+
+/* ---- The switch: Sessions | Pull requests ---- */
+#sidebar-page-switch {
+    flex-shrink: 0;
+    padding: 0 var(--sb-sidebar-gutter) 12px;
+}
+
+.page-switch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 3px;
+    background: var(--sb-bg-base);
+    border-radius: var(--sb-r-control);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+/* Half the track, moved along it by the pages' progress (0 on Sessions, 1 on
+   Pull requests): its own width is one column. Eased like the pages' settle,
+   and held to the fingers while a swipe drives it. */
+.page-switch-pill {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+    border-radius: calc(var(--sb-r-control) - 3px);
+    background: var(--sb-bg-raised);
+    box-shadow:
+        var(--sb-edge),
+        0 1px 3px rgba(var(--sb-shadow-rgb), calc(0.3 * var(--sb-shadow-k)));
+    transform: translateX(calc(var(--sidebar-page-progress, 0) * 100%));
+    transition: transform 320ms $slide-ease;
+    pointer-events: none;
+}
+
+.sidebar-pages-dragging .page-switch-pill {
+    transition: none;
+}
+
+.page-switch-option {
+    position: relative;
+    height: 26px;
+    padding: 0 8px;
+    border: none;
+    border-radius: calc(var(--sb-r-control) - 3px);
+    background: none;
+    font-family: var(--sb-font-head);
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.page-switch-option:hover {
+    color: var(--sb-text-hover);
+}
+
+.page-switch-option[aria-pressed='true'] {
+    color: var(--sb-text-strong);
+}
+
+.page-switch-option:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(var(--sb-accent-rgb), 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-switch-pill {
+        transition: none;
+    }
+}

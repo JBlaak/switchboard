@@ -50,6 +50,7 @@ import {
     isIssueManagerKey,
     isMergeManagerKey,
     isScheduleManagerKey,
+    isSidebarPageKey,
     isTasksPageKey,
     savedPromptKey,
 } from '../../lib/shortcut-keys';
@@ -57,6 +58,7 @@ import {toggleIssueManager} from '../../ui/issue-manager/actions';
 import {toggleBugPage} from '../../ui/bug-manager/page-actions';
 import {toggleMergeManager} from '../../ui/merge-manager/page-actions';
 import {toggleScheduleManager} from '../../ui/schedule-manager/actions';
+import {flipSidebarPage} from '../../ui/sidebar-pages/actions';
 import {trayKeyOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
@@ -262,6 +264,16 @@ function setupTerminalKeyBindings(
                 e._handled = true;
                 e.preventDefault();
                 toggleMergeManager();
+            }
+            return false;
+        }
+
+        // Cmd+P: the sidebar's other page, sessions or pull requests
+        if (isSidebarPageKey(e)) {
+            if (e.type === 'keydown') {
+                e._handled = true;
+                e.preventDefault();
+                flipSidebarPage();
             }
             return false;
         }

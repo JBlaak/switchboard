@@ -23,6 +23,7 @@ import {
     isIssueManagerKey,
     isMergeManagerKey,
     isScheduleManagerKey,
+    isSidebarPageKey,
     isTasksPageKey,
     isUndoArchiveKey,
     savedPromptKey,
@@ -34,6 +35,7 @@ import {trayKeyOnScreen} from '../ui/session-tray/actions';
 import {undoArchive} from '../ui/archive-undo/actions';
 import {toggleTasksPage} from '../ui/tasks-page/actions';
 import {toggleIssueManager} from '../ui/issue-manager/actions';
+import {flipSidebarPage} from '../ui/sidebar-pages/actions';
 import {getState} from '../state/app-store';
 import {isBareQuickSessionKey, isQuickSessionKey, launchQuickSession} from '../features/sessions/quick-session';
 
@@ -99,6 +101,12 @@ export function installShortcuts(): void {
         if (isMergeManagerKey(e)) {
             e.preventDefault();
             toggleMergeManager();
+        }
+
+        // Cmd+P flips the sidebar between the session list and your pull requests.
+        if (isSidebarPageKey(e)) {
+            e.preventDefault();
+            flipSidebarPage();
         }
 
         // Cmd+J opens or closes the Schedule manager page.

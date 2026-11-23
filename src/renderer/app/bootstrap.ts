@@ -29,6 +29,7 @@ import {mountReactRoot} from '../ui/Root';
 import {installFooter} from '../ui/footer/install-footer';
 import {installToolbar} from '../ui/toolbar/actions';
 import {installSessionList} from '../ui/session-list/install-session-list';
+import {installSidebarPages} from '../ui/sidebar-pages/install-sidebar-pages';
 import {installSessionWork} from '../ui/session-work/install-session-work';
 import {installPlan} from '../ui/session-work/plan/install-plan';
 import {installPlanPage} from '../ui/plan-page/install-plan-page';
@@ -65,6 +66,7 @@ export function bootstrap(): void {
     installSidebarKeyboard();
     installShortcuts();
     installSessionList();
+    installSidebarPages();
     installFooter();
     installQuestions();
     installGrill();
