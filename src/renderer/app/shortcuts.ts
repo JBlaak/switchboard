@@ -22,12 +22,14 @@ import {
     isBugPageKey,
     isIssueManagerKey,
     isMergeManagerKey,
+    isScheduleManagerKey,
     isTasksPageKey,
     isUndoArchiveKey,
     savedPromptKey,
 } from '../lib/shortcut-keys';
 import {toggleMergeManager} from '../ui/merge-manager/page-actions';
 import {toggleBugPage} from '../ui/bug-manager/page-actions';
+import {toggleScheduleManager} from '../ui/schedule-manager/actions';
 import {trayKeyOnScreen} from '../ui/session-tray/actions';
 import {undoArchive} from '../ui/archive-undo/actions';
 import {toggleTasksPage} from '../ui/tasks-page/actions';
@@ -97,6 +99,12 @@ export function installShortcuts(): void {
         if (isMergeManagerKey(e)) {
             e.preventDefault();
             toggleMergeManager();
+        }
+
+        // Cmd+J opens or closes the Schedule manager page.
+        if (isScheduleManagerKey(e)) {
+            e.preventDefault();
+            toggleScheduleManager();
         }
 
         // Cmd+B opens or closes the Bug manager page (#414).

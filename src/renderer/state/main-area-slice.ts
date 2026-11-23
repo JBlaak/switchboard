@@ -2,7 +2,8 @@
  * What the main area shows (#168): exactly one of a session's terminal, a
  * session's work page, a project, the app settings, the Tasks page (#249),
  * the Issue manager page (#415), the Bug manager page (#414), the Merge
- * manager page (#439), or the empty screen.
+ * manager page (#439), the Schedule manager's overview or one schedule's
+ * page, or the empty screen.
  *
  * It is the one answer to "what is on screen", which is what the sidebar
  * highlight is derived from (`highlightedSession`). The active session id
@@ -36,6 +37,8 @@ export type MainAreaRoute =
     | {readonly kind: 'bugs'}
     /** The Merge manager page (#439). */
     | {readonly kind: 'mergeManager'}
+    /** The Schedule manager: its overview (`key` null) or one schedule's page (its file's path). */
+    | {readonly kind: 'scheduleManager'; readonly key: string | null}
     | {readonly kind: 'empty'};
 
 export interface MainAreaState {
@@ -112,6 +115,14 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
         // Esc or ⌘⇧L on the Merge manager page.
         case 'mergeManagerPageClosed':
             return state.route.kind === 'mergeManager' ? routed(state, back(returnTo)) : state;
+
+        // ⌘J, its figure, a shelf link, a row; Esc on a schedule's page asks for the overview.
+        case 'scheduleManagerPageRequested':
+            return routed(state, {kind: 'scheduleManager', key: event.key});
+
+        // Esc or ⌘J on the overview.
+        case 'scheduleManagerPageClosed':
+            return state.route.kind === 'scheduleManager' ? routed(state, back(returnTo)) : state;
 
         case 'blaakTasksSwitched':
             return !event.on && state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;
@@ -192,6 +203,8 @@ function sameRoute(a: MainAreaRoute, b: MainAreaRoute): boolean {
             return b.kind === a.kind && b.sessionId === a.sessionId;
         case 'project':
             return b.kind === 'project' && b.projectPath === a.projectPath && sameView(a.view, b.view);
+        case 'scheduleManager':
+            return b.kind === 'scheduleManager' && b.key === a.key;
         default:
             return b.kind === a.kind;
     }

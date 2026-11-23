@@ -41,3 +41,4 @@ export const tasksPagePanel = el('tasks-page');
 export const issueManagerPanel = el('issue-manager-page');
 export const bugPagePanel = el('bug-page');
 export const mergeManagerPanel = el('merge-manager-page');
+export const scheduleManagerPanel = el('schedule-manager-page');

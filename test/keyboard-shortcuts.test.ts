@@ -10,6 +10,7 @@ import {
     isSidebarFocusKey,
     isSidebarToggleKey,
     isMergeManagerKey,
+    isScheduleManagerKey,
     isUndoArchiveKey,
     listCursorKey,
     savedPromptKey,
@@ -97,6 +98,24 @@ test('Cmd+Shift+L opens the Merge manager from anywhere, the terminal and a text
 
     /* Then */
     assert.deepEqual(pageKeys, [true, true, true, false, false]);
+});
+
+test('Cmd+J opens the Schedule manager from anywhere, and no other chord with J does', () => {
+    /* Given */
+    const presses = [
+        cmd('KeyJ'),
+        keydown({code: 'KeyJ', metaKey: true}, 'terminal'),
+        keydown({code: 'KeyJ', metaKey: true}, 'textField'),
+        keydown({code: 'KeyJ'}),
+        keydown({code: 'KeyJ', metaKey: true, shiftKey: true}),
+        keydown({code: 'KeyJ', metaKey: true, altKey: true}),
+    ];
+
+    /* When */
+    const pageKeys = presses.map(isScheduleManagerKey);
+
+    /* Then */
+    assert.deepEqual(pageKeys, [true, true, true, false, false, false]);
 });
 
 // ── Cmd+S ──

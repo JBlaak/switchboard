@@ -156,7 +156,8 @@ modules in `features/`:
   (`state/main-area-slice`): a session, a session's work page, a project
   (so far the Plan view without a session), the app settings, the Tasks page
   (while BlaakTasks is on), the Issue manager page, the Bug manager page, the
-  Merge manager page, or the empty screen. The panels are shown and hidden by style (`lib/dom`), following
+  Merge manager page, the Schedule manager (its overview or one schedule's
+  page), or the empty screen. The panels are shown and hidden by style (`lib/dom`), following
   that route in one place (`ui/main-area/install-main-area`), because a
   terminal can only take focus or be refitted once its panel has a layout
   box, synchronously. Surfaces only dispatch what they want on screen; none

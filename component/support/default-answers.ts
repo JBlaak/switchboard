@@ -50,6 +50,7 @@ export const DEFAULT_ANSWERS: Answers = {
     vmHosts: [],
     inboxSummary: EMPTY_INBOX_SUMMARY,
     mergeManagerState: EMPTY_MERGE_MANAGER_STATE,
+    scheduleManagerFacts: {schedules: [], recentRuns: [], wakeAt: null, suggestedWakeAt: null, week: null},
     githubHeldUntil: null,
     warmAskRoute: undefined,
 
