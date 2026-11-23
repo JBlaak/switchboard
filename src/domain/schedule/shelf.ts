@@ -175,11 +175,19 @@ export function clockTime(at: number): string {
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** A time to come: `03:00` within a day, else with its weekday, `Mon 03:00`. */
+/**
+ * A time to come: `03:00` within a day, with its weekday within the week,
+ * `Mon 03:00`, and with its date further out, `1 Jan 03:00`, where a weekday
+ * alone would read as this week.
+ */
 export function upcomingTime(at: number, now: number): string {
-    if (at - now < 24 * 3_600_000) return clockTime(at);
-    return `${WEEKDAYS[new Date(at).getDay()]} ${clockTime(at)}`;
+    const ahead = at - now;
+    if (ahead < 24 * 3_600_000) return clockTime(at);
+    const d = new Date(at);
+    if (ahead < 7 * 24 * 3_600_000) return `${WEEKDAYS[d.getDay()]} ${clockTime(at)}`;
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} ${clockTime(at)}`;
 }
 
 /**

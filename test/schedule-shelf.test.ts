@@ -164,15 +164,17 @@ test('the next time is the soonest of the schedules that are on, however far', (
     assert.equal(next, local(3, 0, 30));
 });
 
-test('a time within a day reads as a clock, one further away with its weekday', () => {
+test('a time within a day reads as a clock, within the week with its weekday, further out with its date', () => {
     /* Given */
     const now = local(12);
 
     /* When */
     const times = [upcomingTime(local(3, 0, 24), now), upcomingTime(local(3, 0, 30), now)];
+    const later = upcomingTime(now + 39 * 24 * 3_600_000, now);
 
     /* Then */
     assert.deepEqual(times, ['03:00', 'Mon 03:00']);
+    assert.match(later, /^\d{1,2} [A-Z][a-z]{2} \d\d:\d\d$/);
 });
 
 test('the shelf stays while a schedule is on, and not for schedules that are all off', () => {

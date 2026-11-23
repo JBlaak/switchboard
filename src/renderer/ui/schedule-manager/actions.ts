@@ -135,7 +135,7 @@ function nameOf(key: string): string {
 
 /** R. */
 export function runNow(key: string): Promise<boolean> {
-    return act('runNow', () => window.api.scheduleManagerRunNow(key), `${nameOf(key)} is running.`);
+    return act('runNow', () => window.api.scheduleManagerRunNow(key), `Started a run of ${nameOf(key)}.`);
 }
 
 /** P, Pause, Turn on. */

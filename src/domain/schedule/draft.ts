@@ -70,7 +70,7 @@ export const DRAFT_SYSTEM_PROMPT = [
     '- never waits on a question: when something is unclear or risky, it skips that part and says so;',
     '- says when to stop: when the work is done, or when there is nothing to do (then it stops at once);',
     '- ends with a short report of what it did, what it skipped and why, and anything the user should look at.',
-    'Write the prompt in the second person, plainly, in the language the user wrote in.',
+    'Write the prompt in the second person, plainly, in the language of the request itself (an English request gets an English prompt), whatever language the project, its files or any other instructions you were given use.',
     '',
     'Pick the time from what the user asked. A job that runs "every night" or "nightly" goes between 02:00 and 05:00, at a minute that is not a round hour, spread away from the times of the existing schedules so two jobs do not start together. Run during the day only when the user asked for it.',
 ].join('\n');
