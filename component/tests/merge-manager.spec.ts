@@ -151,13 +151,22 @@ test('⌘⇧L opens the Merge manager by status, J goes through the groups top t
         '#1300 Stop the login redirect loop',
     );
 
-    /* Then: compact rows, with Land it on the ready one and Nudge on the held one */
-    const ready = manager.getByRole('group', {name: 'Ready to land'}).getByRole('option', {name: /#1400/});
+    /* Then: a card names its repository */
+    await expect(willConflict).toContainText('api');
+
+    /* Then: compact rows under their repository, each with one button and GitHub; Nudge waits in the side view */
+    const ready = manager
+        .getByRole('group', {name: 'Ready to land'})
+        .getByRole('group', {name: 'api'})
+        .getByRole('option', {name: /#1400/});
     await expect(ready.getByRole('button', {name: 'Land it'})).toBeVisible();
-    await expect(
-        manager.getByRole('group', {name: 'In line'}).getByRole('option', {name: /#1330 Rate-limit webhooks/}),
-    ).toBeVisible();
-    await expect(manager.getByRole('group', {name: 'In line'}).getByRole('button', {name: /Nudge ana/})).toBeVisible();
+    await expect(ready.getByRole('button', {name: 'Open on GitHub'})).toBeVisible();
+    const held = manager
+        .getByRole('group', {name: 'In line'})
+        .getByRole('group', {name: 'api'})
+        .getByRole('option', {name: /#1330 Rate-limit webhooks/});
+    await expect(held.getByRole('button', {name: 'Open session'})).toBeVisible();
+    await expect(held.getByRole('button', {name: /Nudge ana/})).toHaveCount(0);
 
     /* Then: Drafts is folded */
     const drafts = manager.getByRole('group', {name: 'Drafts'});

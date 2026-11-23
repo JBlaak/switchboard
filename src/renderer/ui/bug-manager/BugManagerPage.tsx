@@ -72,6 +72,7 @@ import {
     treatBugAsRegressed,
     triageBug,
 } from './page-actions';
+import {RepoMark} from '../shared/RepoMark';
 
 export function BugManagerPage(): JSX.Element | null {
     const open = useStore((state) => state.mainArea.route.kind === 'bugs');
@@ -235,6 +236,7 @@ function BugManagerView(): JSX.Element {
                     {groups.map((group) => (
                         <section key={group.projectPath ?? ''} className="bm-group" aria-label={group.title}>
                             <h2 className={'bm-group-title' + (group.projectPath ? '' : ' is-unlinked')}>
+                                {group.projectPath && <RepoMark name={group.projectPath} />}
                                 {group.title}
                                 <span className="bm-group-from">
                                     from{' '}

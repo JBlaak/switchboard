@@ -1,0 +1,80 @@
+/* ========== A PROJECT'S MARK ==========
+   Its initial on a small square in a colour of its own (`RepoMark`), the same
+   in the Merge, Issue and Bug managers. Pastel squares with dark ink on the
+   dark palette; deep squares with white ink on the light one. */
+
+@use 'sass:list';
+
+$repo-hues: (
+    'green': (
+        #6cc4a1,
+        #2e8a68,
+    ),
+    'yellow': (
+        #f0cf7e,
+        #8a6510,
+    ),
+    'blue': (
+        #9cc5e8,
+        #2f6c9e,
+    ),
+    'purple': (
+        #b79cf0,
+        #7444c4,
+    ),
+    'orange': (
+        #eeab94,
+        #a8502f,
+    ),
+    'red': (
+        #ee8b8b,
+        #b83a3a,
+    ),
+    'teal': (
+        #7fd3d8,
+        #1f7f86,
+    ),
+    'pink': (
+        #f0a3cf,
+        #a83c7c,
+    ),
+);
+
+.sw-repo-mark {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--mark);
+    color: #141517;
+    font: 800 10.5px/1 var(--sb-font-head);
+    letter-spacing: 0;
+    text-transform: none;
+
+    &.is-small {
+        width: 15px;
+        height: 15px;
+        border-radius: 4px;
+        font-size: 9px;
+    }
+}
+
+@each $name, $pair in $repo-hues {
+    .sw-repo-mark.is-#{$name} {
+        --mark: #{list.nth($pair, 1)};
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .sw-repo-mark {
+        color: #ffffff;
+    }
+    @each $name, $pair in $repo-hues {
+        .sw-repo-mark.is-#{$name} {
+            --mark: #{list.nth($pair, 2)};
+        }
+    }
+}

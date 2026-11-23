@@ -518,16 +518,23 @@
             max-width: 120px;
         }
     }
+    /* Its side view is open beside it, with all its actions. */
     .mm-sr {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        padding-left: 18px;
 
-        .mm-prt {
+        .mm-sr-acts {
             display: none;
         }
     }
-    .mm-sr .mm-acts {
-        grid-column: 1 / -1;
-        justify-content: flex-start;
+    .mm-sc-top {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 6px;
+
+        .mm-sc-repo,
+        .mm-sc-title {
+            grid-column: 1 / -1;
+        }
     }
 }
 

@@ -2,7 +2,8 @@
  * What the Merge manager's page by status says in words (`status-view`): a
  * parked flag's cloth, a lane's facts beside its track, the counts, the time
  * pins under the blocks, Coming up's footer, a card's kind line and the
- * folded group the selection unfolds.
+ * folded group the selection unfolds, and the repository headers a compact
+ * group's rows sit under.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +21,7 @@ import {
     foldedGroupOf,
     itemKind,
     laneFacts,
+    byRepository,
     timePins,
 } from '../src/renderer/ui/merge-manager/status-view';
 import {HEAD, MIN, NOW, REPO, landedPr} from './support/merge-manager-fixtures';
@@ -189,4 +191,24 @@ test('the selection on a draft unfolds Drafts; elsewhere or none unfolds nothing
     assert.equal(onDraft, 'drafts');
     assert.equal(foldedGroupOf(groups, lanes[0]!.rows[0]!.key), null);
     assert.equal(foldedGroupOf(groups, null), null);
+});
+
+test("a compact group's rows sit under their repository, in the order the group has them", () => {
+    /* Given: two drafts in the lane's repository around one elsewhere */
+    const lanes = pageLanes(mergeManagerState([landedPr(1, 30, 'queue', HEAD)], new Map()));
+    const items = statusGroups(lanes, [draft(9), {...draft(4), repository: 'movelab/patch'}, draft(7)]).find(
+        (group) => group.id === 'drafts',
+    )!.items;
+
+    /* When */
+    const repos = byRepository(items, lanes);
+
+    /* Then */
+    assert.deepEqual(
+        repos.map((repo) => [repo.name, repo.lane, repo.items.map((item) => item.key)]),
+        [
+            ['connect', 'Queue lane', [`${REPO}#9`, `${REPO}#7`]],
+            ['patch', null, ['movelab/patch#4']],
+        ],
+    );
 });

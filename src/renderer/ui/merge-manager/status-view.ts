@@ -2,7 +2,8 @@
  * What the Merge manager's page by status says in words: the clock and the
  * repository's short name, a parked flag's cloth on Coming up, a lane's facts
  * beside its track, its not landed counts, the timeline's footer, the time
- * pins under the blocks, and the kind line on a status card.
+ * pins under the blocks, the kind line on a status card and the repository
+ * headers a compact group's rows sit under.
  *
  * Pure, so it is tested in node; the page draws it.
  */
@@ -147,4 +148,38 @@ export function itemKind(item: StatusItem, lanes: readonly PageLane[]): string {
 export function foldedGroupOf(groups: readonly StatusGroup[], key: string | null): StatusGroupId | null {
     if (!key) return null;
     return groups.find((group) => group.folded && group.items.some((item) => item.key === key))?.id ?? null;
+}
+
+/** A repository's rows within a compact group, under its header: "switchboard · Queue lane". */
+export interface RepoRows {
+    readonly repository: string;
+    /** "switchboard". */
+    readonly name: string;
+    /** "Queue lane", "Switchboard lane"; null for a repository without a lane. */
+    readonly lane: string | null;
+    readonly items: readonly StatusItem[];
+}
+
+/** A group's items by repository, each repository where its first item stands, its items in their order. */
+export function byRepository(items: readonly StatusItem[], lanes: readonly PageLane[]): RepoRows[] {
+    const order: string[] = [];
+    const rows = new Map<string, StatusItem[]>();
+    for (const item of items) {
+        const repository = item.kind === 'lane' ? item.row.repository : item.pr.repository;
+        const list = rows.get(repository);
+        if (list) list.push(item);
+        else {
+            order.push(repository);
+            rows.set(repository, [item]);
+        }
+    }
+    return order.map((repository) => {
+        const lane = lanes.find((candidate) => candidate.repository === repository);
+        return {
+            repository,
+            name: repositoryName(repository),
+            lane: lane ? laneKindLabel(lane.kind) : null,
+            items: rows.get(repository) ?? [],
+        };
+    });
 }

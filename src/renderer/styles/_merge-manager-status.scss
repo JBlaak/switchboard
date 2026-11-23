@@ -188,11 +188,43 @@ $tones: (
     }
 }
 
+/* Every card has the same columns, so repositories, pills and times line up down the page. */
 .mm-sc-top {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr) 150px 120px;
+    column-gap: 14px;
     align-items: center;
-    gap: 8px 12px;
+}
+
+.mm-sc-repo {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font: 700 13px var(--sb-font-head);
+    color: var(--sb-text-strong);
+
+    > span {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+}
+
+.mm-sc-pill {
+    justify-self: start;
+}
+
+.mm-sc-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px 14px;
+    flex-wrap: wrap;
+
+    .mm-sc-now {
+        flex: 1 1 320px;
+        min-width: 0;
+    }
 }
 
 .mm-sc-title {
@@ -210,11 +242,8 @@ $tones: (
     color: var(--sb-text-faint);
 }
 
-.mm-sc-gap {
-    flex: 1;
-}
-
 .mm-sc-eta {
+    justify-self: end;
     font-size: 12px;
     color: var(--sb-text-muted);
     font-variant-numeric: tabular-nums;
@@ -258,25 +287,45 @@ $tones: (
     }
 }
 
-/* ---- A compact row: title and now, a mini timeline, its pill and time, its actions ---- */
+/* ---- Compact rows: under a header per repository, every row on the same columns ---- */
 .mm-group-rows {
     overflow: hidden;
 }
 
+.mm-repo + .mm-repo .mm-repo-head {
+    border-top: 1px solid var(--sb-line);
+}
+
+.mm-repo-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px 7px;
+    background: rgba(var(--sb-overlay-rgb), 0.025);
+    font: 800 12.5px var(--sb-font-head);
+    color: var(--sb-text-dim);
+}
+
+.mm-repo-lane {
+    font-weight: 600;
+    color: var(--sb-text-faint);
+
+    &::before {
+        content: '· ';
+    }
+}
+
 .mm-sr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(110px, 190px) auto auto;
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 190px 64px 172px;
+    column-gap: 16px;
     align-items: center;
-    min-height: 56px;
-    padding: 10px 18px;
+    min-height: 54px;
+    padding: 8px 18px 8px 44px;
     border-top: 1px solid var(--sb-line);
     box-sizing: border-box;
     cursor: pointer;
 
-    &:first-child {
-        border-top: 0;
-    }
     &:hover {
         background: rgba(var(--sb-overlay-rgb), 0.03);
     }
@@ -291,14 +340,12 @@ $tones: (
     }
 }
 
-.mm-sr-status {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 3px;
+.mm-sr-pill {
+    justify-self: start;
 }
 
 .mm-sr-eta {
+    justify-self: end;
     font: 800 12.5px var(--sb-font-head);
     color: var(--sb-text-strong);
     font-variant-numeric: tabular-nums;
@@ -309,6 +356,18 @@ $tones: (
     }
 }
 
+.mm-sr-acts {
+    flex-wrap: nowrap;
+}
+
+.mm-sr-github {
+    width: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ---- A PR's timeline: seven stations, the head's three steps, the live stretch ---- */
 .mm-prt {
     --dot: 16px;
@@ -317,12 +376,6 @@ $tones: (
     display: flex;
     align-items: flex-start;
     padding-top: 18px;
-
-    &.is-compact {
-        --dot: 9px;
-        --rail: 3px;
-        padding-top: 0;
-    }
 }
 
 .mm-prt-st {
@@ -382,13 +435,6 @@ $tones: (
     .is-todo > .mm-prt-rail > & {
         box-shadow: inset 0 0 0 2px var(--sb-border-strong);
     }
-    .is-compact .is-now > .mm-prt-rail > & {
-        box-shadow: 0 0 0 3px rgba(var(--tone-rgb), 0.22);
-    }
-    .is-compact .is-held > .mm-prt-rail > &,
-    .is-compact .is-todo > .mm-prt-rail > & {
-        box-shadow: inset 0 0 0 1.5px var(--sb-border-strong);
-    }
 }
 
 .mm-prt-line,
@@ -399,10 +445,6 @@ $tones: (
     display: flex;
     gap: 3px;
     margin: 0 4px;
-
-    .is-compact & {
-        margin: 0 2px;
-    }
 }
 
 .mm-prt-part {
@@ -517,9 +559,9 @@ $tones: (
     font-variant-numeric: tabular-nums;
 }
 
-/* The now mark breathes on a card (not on the compact rows): a loop, so it follows `--loop-state`. */
+/* The now mark breathes: a loop, so it follows `--loop-state`. */
 @media (prefers-reduced-motion: no-preference) {
-    .mm-prt:not(.is-compact) .is-now > .mm-prt-rail > .mm-prt-dot::after {
+    .mm-prt .is-now > .mm-prt-rail > .mm-prt-dot::after {
         content: '';
         position: absolute;
         inset: 0;
