@@ -37,6 +37,7 @@ import {MergeManagerPage} from './merge-manager/MergeManagerPage';
 import {ScheduleManagerPage} from './schedule-manager/ScheduleManagerPage';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import {ErrandShelf} from './session-list/ErrandShelf';
+import {PullRequestList} from './sidebar-prs/PullRequestList';
 import {LandingShelf} from './session-list/LandingShelf';
 import {ErrandStrip} from './terminal/ErrandStrip';
 import type {JSX} from 'react';
@@ -108,6 +109,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="sidebar-content">
                 <SessionList />
+            </Portal>
+            <Portal target="sidebar-prs">
+                <PullRequestList />
             </Portal>
             <Portal target="sidebar-errands">
                 <ErrandShelf />

@@ -27,6 +27,8 @@ import type {ScheduleManagerSliceState} from './schedule-manager-slice';
 import {initialScheduleCreateState, scheduleCreateReducer} from './schedule-create-slice';
 import {initialSidebarPageState, sidebarPageReducer} from './sidebar-page-slice';
 import type {SidebarPageState} from './sidebar-page-slice';
+import {initialSidebarPrsState, sidebarPrsReducer} from './sidebar-prs-slice';
+import type {SidebarPrsState} from './sidebar-prs-slice';
 import type {ScheduleCreateState} from './schedule-create-slice';
 import {bugPageReducer, initialBugPageState} from './bug-page-slice';
 import {githubReducer, initialGithubState} from './github-slice';
@@ -136,6 +138,8 @@ export interface RendererState {
     /** The create-a-schedule dialog: its step, sentence, draft and save. */
     readonly scheduleCreate: ScheduleCreateState;
     readonly sidebarPage: SidebarPageState;
+    /** The sidebar's pull request list: its keyboard cursor and its read in flight. */
+    readonly sidebarPrs: SidebarPrsState;
     /** The Bug manager page (#414): its items, tab, filter, cursor and Bugsnag reads. */
     readonly bugPage: BugPageState;
     /** GitHub's GraphQL budget: until when expensive reads are held back, for the freshness lines. */
@@ -184,6 +188,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         scheduleManager: initialScheduleManagerState,
         scheduleCreate: initialScheduleCreateState,
         sidebarPage: initialSidebarPageState,
+        sidebarPrs: initialSidebarPrsState,
         bugPage: initialBugPageState,
         github: initialGithubState,
     };
@@ -238,6 +243,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const scheduleManager = scheduleManagerReducer(state.scheduleManager, event);
     const scheduleCreate = scheduleCreateReducer(state.scheduleCreate, event);
     const sidebarPage = sidebarPageReducer(state.sidebarPage, event);
+    const sidebarPrs = sidebarPrsReducer(state.sidebarPrs, event);
     const bugPage = bugPageReducer(state.bugPage, event);
     const github = githubReducer(state.github, event);
 
@@ -282,6 +288,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         scheduleManager,
         scheduleCreate,
         sidebarPage,
+        sidebarPrs,
         bugPage,
         github,
     });
@@ -365,6 +372,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         // The session a draft is asked for goes with the request made under its old id.
         scheduleCreate: state.scheduleCreate,
         sidebarPage: state.sidebarPage,
+        // Keyed by PR, naming no session.
+        sidebarPrs: state.sidebarPrs,
         // Keyed by inbox key; a Fix session is found by its worktree.
         bugPage: state.bugPage,
         // Names no session.

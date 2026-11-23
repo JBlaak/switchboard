@@ -47,6 +47,7 @@ import {installBugPage} from '../ui/bug-manager/install-bug-page';
 import {installScheduleManagerPage} from '../ui/schedule-manager/install-schedule-manager-page';
 import {installScheduleCreate} from '../ui/schedule-manager/install-schedule-create';
 import {installGithubBudget} from '../ui/shared/install-github-budget';
+import {installSidebarPrs} from '../ui/sidebar-prs/install-sidebar-prs';
 import {installLoopPause} from '../lib/motion/loops';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
@@ -84,6 +85,7 @@ export function bootstrap(): void {
     installScheduleManagerPage();
     installScheduleCreate();
     installGithubBudget();
+    installSidebarPrs();
     followColorSchemeInTerminals();
     installTerminalProbe();
     // The surfaces that have moved to React portal out of it.
