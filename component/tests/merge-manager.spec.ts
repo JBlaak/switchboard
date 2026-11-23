@@ -264,6 +264,50 @@ test('parked PRs stand as one flag on their track, which selects the first of th
     await expect(needsYou).toHaveAttribute('aria-selected', 'true');
 });
 
+test('Coming up lines its blocks and flags up with now, and keeps a time pin near now off the track names', async ({
+    page,
+    api,
+}) => {
+    /* Given: a head running its checks and a PR parked behind it */
+    api.answer('mergeManagerPage', {...NO_FACTS, runMs: {[REPO]: 11 * 60_000}});
+    await api.emit(
+        'onMergeManagerChanged',
+        mergeManagerState(
+            [
+                landedPr(1300, 'Stop the login redirect loop', 50, {kind: 'head', step: 'checks'}),
+                landedPr(1340, 'Retry the upload', 40, {kind: 'needsYou', reason: {kind: 'errand-stopped'}}),
+            ],
+            new Map(),
+        ),
+    );
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+
+    /* When */
+    await page.keyboard.press('Meta+Shift+KeyL');
+
+    /* Then: the head block starts at now, and the flag's pole stands where the head ends */
+    const comingUp = mergePage(page).getByRole('region', {name: 'Coming up'});
+    const now = (await comingUp.locator('.mm-tl-axis .is-now').boundingBox())!;
+    const block = (await comingUp.getByRole('button', {name: '#1300'}).boundingBox())!;
+    const pole = (await comingUp.locator('.mm-tl-flag i').first().boundingBox())!;
+    expect(Math.abs(block.x - now.x)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(pole.x + pole.width / 2 - (block.x + block.width))).toBeLessThanOrEqual(0.5);
+
+    /* When: the head is merging, so it ends a moment from now */
+    await api.emit(
+        'onMergeManagerChanged',
+        mergeManagerState(
+            [landedPr(1300, 'Stop the login redirect loop', 50, {kind: 'head', step: 'merging'})],
+            new Map(),
+        ),
+    );
+
+    /* Then: its time pin starts at now, not over the track's name */
+    await expect(comingUp.locator('.mm-tl-flag')).toHaveCount(0);
+    const pin = (await comingUp.locator('.mm-tl-pins span').first().boundingBox())!;
+    expect(pin.x).toBeGreaterThanOrEqual(now.x - 0.5);
+});
+
 test('a chip scrolls to its group, and Show unfolds Drafts and Hide folds it again', async ({page, api}) => {
     /* Given: nothing landed, two open PRs: one in review and a draft */
     api.answer('mergeManagerNotLanded', {
