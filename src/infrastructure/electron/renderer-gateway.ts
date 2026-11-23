@@ -31,6 +31,7 @@ import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {InboxSummary} from '../../domain/inbox/model';
 import type {MergeManagerState} from '../../domain/merge-manager/model';
+import type {ScheduleManagerFacts} from '../../domain/schedule/manager';
 import type {ShownPage} from '../../domain/session/page-tool';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -193,6 +194,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public mergeManagerChanged(state: MergeManagerState): void {
         this.send(EVENT.mergeManagerChanged, state);
+    }
+
+    public scheduleManagerChanged(facts: ScheduleManagerFacts): void {
+        this.send(EVENT.scheduleManagerChanged, facts);
     }
 
     public githubBudgetHeld(until: number | null): void {
