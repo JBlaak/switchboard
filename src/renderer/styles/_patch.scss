@@ -320,7 +320,7 @@
     left: calc(50% + 250px);
 }
 
-/* The Schedule manager, once there is a schedule: on Patch's left, past the
+/* The Schedule manager, always there: on Patch's left, past the
    Bug manager when it stands there. */
 .placeholder-manager.is-schedule {
     right: calc(50% + 92px);
