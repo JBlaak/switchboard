@@ -66,6 +66,15 @@ export function isMergeManagerKey(e: KeyboardEvent): boolean {
     return e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyL';
 }
 
+/**
+ * Cmd+P flips the sidebar between the session list and your pull requests,
+ * from anywhere, the terminal and a text field included. Free: the app menu
+ * has no Print to claim it.
+ */
+export function isSidebarPageKey(e: KeyboardEvent): boolean {
+    return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyP';
+}
+
 /** Cmd+J: the Schedule manager page, open or closed, from anywhere, the terminal included. */
 export function isScheduleManagerKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyJ';
