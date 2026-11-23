@@ -109,9 +109,19 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     sessionTaskChanged: {type: 'sessionTaskChanged', sessionId: 's9', taskId: null},
     inboxChanged: {
         type: 'inboxChanged',
-        summary: {bug: {unread: 2, urgent: 1}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}, triaging: [], freshness: NO_INBOX_FRESHNESS},
+        summary: {
+            bug: {unread: 2, urgent: 1},
+            issue: {unread: 0, urgent: 0},
+            configured: {bug: true, issue: false},
+            triaging: [],
+            freshness: NO_INBOX_FRESHNESS,
+        },
     },
     mergeManagerChanged: {type: 'mergeManagerChanged', state: {lanes: [], needsYou: 1}},
+    scheduleManagerChanged: {
+        type: 'scheduleManagerChanged',
+        facts: {schedules: [], recentRuns: [], wakeAt: null, suggestedWakeAt: null, week: null},
+    },
     githubBudgetHeld: {type: 'githubBudgetHeld', until: 5},
 };
 

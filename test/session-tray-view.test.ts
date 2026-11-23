@@ -448,3 +448,21 @@ test('the tray draws no freshness line for a fresh PR status', () => {
     /* Then */
     assert.doesNotMatch(html, /tray-link-freshness/);
 });
+
+// ── Make this a schedule ──
+
+test('the tray offers Make this a schedule for a session that can be one', () => {
+    /* When */
+    const html = tray({makeSchedule: true});
+
+    /* Then */
+    assert.match(html, /<button type="button" class="tray-row"[^>]*aria-label="Make this a schedule"/);
+});
+
+test('the tray leaves Make this a schedule out for a session that cannot be one', () => {
+    /* When */
+    const html = tray({makeSchedule: false});
+
+    /* Then */
+    assert.doesNotMatch(html, /Make this a schedule/);
+});

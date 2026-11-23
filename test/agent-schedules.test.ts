@@ -60,10 +60,14 @@ function recordingRunner(): CommandRunner & {runs: {args: readonly string[]; cwd
         runs,
         run(args, cwd, name, onDone) {
             runs.push({args, cwd, name});
-            onDone();
+            onDone({exitCode: 0, signal: null, stdout: '', stderr: '', startError: null});
+            return {kill: () => {}};
         },
     };
 }
+
+/** Lets a run's start, which waits on the week's usage first, go through. */
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function settingsWith(scheduleDirs: string[] | undefined): () => HostSettings {
     return () => ({instructions: 'On a VM.', copyConfig: true, baseFolder: '~/projects', scheduleDirs});
@@ -184,7 +188,7 @@ test('a host with no schedule folders runs no schedules', () => {
     assert.deepEqual(schedules, []);
 });
 
-test('the cron loop runs only the schedules in the folders, seeding each run where claude resumes it', () => {
+test('the cron loop runs only the schedules in the folders, seeding each run where claude resumes it', async () => {
     /* Given */
     const w = world();
     const app = project(w.home, 'projects/app');
@@ -196,6 +200,7 @@ test('the cron loop runs only the schedules in the folders, seeding each run whe
 
     /* When */
     timers.tick();
+    await flush();
 
     /* Then */
     stop();
@@ -210,7 +215,7 @@ test('the cron loop runs only the schedules in the folders, seeding each run whe
     }
 });
 
-test('a schedule folder added later is scanned on the next tick', () => {
+test('a schedule folder added later is scanned on the next tick', async () => {
     /* Given */
     const w = world();
     const app = project(w.home, 'projects/app');
@@ -235,6 +240,7 @@ test('a schedule folder added later is scanned on the next tick', () => {
     /* When */
     dirs = ['~/projects/app'];
     timers.tick();
+    await flush();
 
     /* Then */
     stop();
@@ -369,7 +375,7 @@ test('the runner starts claude in the project with the schedule args, the host i
 
     /* When */
     await new Promise<void>((resolve) =>
-        runner.run(['--resume', 'sid', '-p', 'Run the scheduled task'], cwd, 'nightly', resolve),
+        runner.run(['--resume', 'sid', '-p', 'Run the scheduled task'], cwd, 'nightly', () => resolve()),
     );
 
     /* Then */

@@ -21,6 +21,8 @@ export interface DialogShellProps {
     overlayClass: string;
     dialogClass: string;
     onClose(): void;
+    /** What Escape does, when not closing: a step back in a dialog of steps. Defaults to `onClose`. */
+    onEscape?(): void;
     /** Called when Enter is pressed outside a text input (see `submitFromInputs`). */
     onSubmit?(): void;
     /**
@@ -31,29 +33,45 @@ export interface DialogShellProps {
      * would fire while the user is still filling in the form.
      */
     submitFromInputs?: boolean;
+    /**
+     * Keep Tab and Shift-Tab inside the dialog, wrapping from its last control
+     * to its first and back, so the keyboard cannot wander to the page under it.
+     */
+    trapFocus?: boolean;
     children: ReactNode;
 }
+
+/** What Tab can land on. */
+const FOCUSABLE =
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
 export function DialogShell({
     overlayClass,
     dialogClass,
     onClose,
+    onEscape,
     onSubmit,
     submitFromInputs = false,
+    trapFocus = false,
     children,
 }: DialogShellProps): JSX.Element {
     // The handlers are read through a ref so the key listener is added once per
     // dialog, not again on every render that hands it a new closure.
-    const handlers = useRef({onClose, onSubmit, submitFromInputs});
-    handlers.current = {onClose, onSubmit, submitFromInputs};
+    const handlers = useRef({onClose, onEscape, onSubmit, submitFromInputs, trapFocus});
+    handlers.current = {onClose, onEscape, onSubmit, submitFromInputs, trapFocus};
+    const dialog = useRef<HTMLDivElement>(null);
 
     // On `document` rather than the dialog, so Escape works regardless of what
     // has focus — and removed when the dialog unmounts.
     useEffect(() => {
         const onKey = (e: KeyboardEvent): void => {
-            const {onClose: close, onSubmit: submit, submitFromInputs: fromInputs} = handlers.current;
+            const {onClose: close, onEscape: escape, onSubmit: submit, submitFromInputs: fromInputs} = handlers.current;
             if (e.key === 'Escape') {
-                close();
+                (escape ?? close)();
+                return;
+            }
+            if (e.key === 'Tab') {
+                if (handlers.current.trapFocus && dialog.current) keepTabInside(dialog.current, e);
                 return;
             }
             if (e.key !== 'Enter' || !submit) return;
@@ -69,10 +87,28 @@ export function DialogShell({
 
     return createPortal(
         <div className={overlayClass} onClick={onBackdrop}>
-            <div className={dialogClass}>{children}</div>
+            <div ref={dialog} className={dialogClass}>
+                {children}
+            </div>
         </div>,
         document.body,
     );
+}
+
+/** Wrap Tab from the last control to the first (and Shift-Tab back), and pull a stray focus back in. */
+function keepTabInside(dialog: HTMLElement, e: KeyboardEvent): void {
+    const controls = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => el.getClientRects().length > 0,
+    );
+    if (controls.length === 0) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    const active = document.activeElement;
+    const inside = active instanceof Node && dialog.contains(active);
+    if (!inside || (e.shiftKey && active === first) || (!e.shiftKey && active === last)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+    }
 }
 
 /**

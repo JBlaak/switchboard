@@ -92,6 +92,7 @@ function main(): void {
             .shutdown()
             .catch((err: Error) => container.log.warn('[phone] shutdown failed:', err.message));
         container.projectsWatcher.stop();
+        container.scheduleManager.stop();
         container.questionHook.stop();
         // Close the VM links first: their sessions keep running on the VM.
         container.agents.shutdown();
@@ -168,6 +169,8 @@ async function start(container: Container): Promise<void> {
     // A shutdown may take the sessions down before the app hears it is quitting;
     // they were still running, so they come back after the reboot.
     powerMonitor.on('shutdown', () => container.sessionRestore.freeze());
+    // A cron time the Mac slept through is run once now, or recorded missed.
+    powerMonitor.on('resume', () => container.schedules.catchUp('wake'));
     // Before the window, so its first poll already finds them running.
     void restoreSessions(container);
     openWindow(container);
@@ -178,6 +181,7 @@ async function start(container: Container): Promise<void> {
     container.projectsWatcher.start();
     container.schedules.ensureCreatorCommand();
     container.schedules.start();
+    container.scheduleManager.start();
     // Only an installed build has a version worth comparing; a dev run would
     // always be "behind" whatever is released.
     if (app.isPackaged) container.updates.start();

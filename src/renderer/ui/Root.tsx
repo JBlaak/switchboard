@@ -34,6 +34,7 @@ import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
 import {DropUploadToast} from './terminal/DropUploadToast';
 import {LandToast} from './merge-manager/LandToast';
 import {MergeManagerPage} from './merge-manager/MergeManagerPage';
+import {ScheduleManagerPage} from './schedule-manager/ScheduleManagerPage';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import {ErrandShelf} from './session-list/ErrandShelf';
 import {LandingShelf} from './session-list/LandingShelf';
@@ -68,6 +69,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="merge-manager-page">
                 <MergeManagerPage />
+            </Portal>
+            <Portal target="schedule-manager-page">
+                <ScheduleManagerPage />
             </Portal>
             <Portal target="sidebar-footer">
                 <Footer />

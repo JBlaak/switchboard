@@ -1,4 +1,4 @@
-/** The Errands shelf as drawn: its header, folded and open, its rows, and the session header's errand strip. */
+/** The Automatic shelf as drawn: its header, folded and open, its sections and rows, and the session header's errand strip. */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
@@ -7,14 +7,19 @@ import './support/static-markup-dom';
 import {ErrandShelfView} from '../src/renderer/ui/session-list/ErrandShelf';
 import {ErrandStripContent} from '../src/renderer/ui/terminal/ErrandStrip';
 import {
+    automaticShelf,
+    errandLead,
     errandPlace,
     errandPullRequestUrl,
     errandRowName,
-    errandShelfSummary,
 } from '../src/renderer/ui/session-list/errand-view';
+import {errandsBySession} from '../src/domain/session/errand-shelf';
+import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
+import {facts, local, run, schedule} from './support/schedule-shelf-fixtures';
+import type {ScheduleManagerFacts} from '../src/domain/schedule/manager';
 import type {ErrandShelfActions, ErrandShelfViewProps} from '../src/renderer/ui/session-list/ErrandShelf';
 import type {ErrandEntry} from '../src/domain/session/errand-shelf';
-import type {LaidErrand} from '../src/renderer/state/session-list-layout';
+import {orderErrands, type LaidErrand} from '../src/renderer/state/session-list-layout';
 import type {SessionRow} from '../src/domain/session/session';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
@@ -32,7 +37,7 @@ function errand(sessionId: string, fields: Partial<ErrandEntry> = {}): ErrandEnt
         needsYou: false,
         host: null,
         ...fields,
-    };
+    } as ErrandEntry;
 }
 
 function laid(entry: ErrandEntry, startedHoursAgo = 1): LaidErrand {
@@ -44,12 +49,24 @@ function laid(entry: ErrandEntry, startedHoursAgo = 1): LaidErrand {
     return {entry: {kind: 'row', id: 'er-' + entry.sessionId, session, projectPath: '/p'}, errand: entry};
 }
 
-const NO_ACTIONS: ErrandShelfActions = {toggle() {}, open() {}, openPullRequest() {}, stop() {}, archive() {}};
+const NO_ACTIONS: ErrandShelfActions = {
+    toggle() {},
+    open() {},
+    openPullRequest() {},
+    stop() {},
+    archive() {},
+    openSchedule() {},
+    markSeen() {},
+    markAllSeen() {},
+    openMergeManager() {},
+};
 
 function render(props: Partial<ErrandShelfViewProps>): string {
     return renderToStaticMarkup(
         createElement(ErrandShelfView, {
             errands: [],
+            schedules: null,
+            filtering: false,
             open: false,
             cursor: null,
             onScreen: null,
@@ -61,7 +78,7 @@ function render(props: Partial<ErrandShelfViewProps>): string {
     );
 }
 
-/** The ids of the rows outside the folding body, then inside it. */
+/** The ids of the session rows outside the folding body, then inside it. */
 function rowIds(html: string): {always: string[]; folding: string[]} {
     const [before, body = ''] = html.split('class="errand-shelf-body');
     const ids = (part: string): string[] =>
@@ -69,9 +86,16 @@ function rowIds(html: string): {always: string[]; folding: string[]} {
     return {always: ids(before), folding: ids(body)};
 }
 
+/** The section labels and row names, top to bottom. */
+function lines(html: string): string[] {
+    return [...html.matchAll(/class="errand-shelf-section">([^<]+)<|class="errand-row-name">([^<]+)</g)].map(
+        (m) => m[1] ?? m[2],
+    );
+}
+
 // ── The shelf ──
 
-test('with no errand the shelf is not drawn at all', () => {
+test('with no errand, no run and no schedule on, the shelf is not drawn at all', () => {
     /* When */
     const html = render({errands: []});
 
@@ -79,7 +103,7 @@ test('with no errand the shelf is not drawn at all', () => {
     assert.equal(html, '');
 });
 
-test('the header is a button saying how many errands there are and how many are running', () => {
+test('the header is a button saying "Automatic", how many rows it holds and how many are running', () => {
     /* Given */
     const errands = [laid(errand('a')), laid(errand('b', {kind: 'nudge', doing: 'nudging the reviewer'}))];
 
@@ -91,15 +115,12 @@ test('the header is a button saying how many errands there are and how many are 
         html,
         /<button type="button" class="errand-shelf-header is-folded" id="errand-shelf-header" aria-expanded="false"/,
     );
-    assert.match(html, /<span class="errand-shelf-label">Errands<\/span>/);
+    assert.match(html, /<span class="errand-shelf-label">Automatic<\/span>/);
     assert.match(html, /<span class="errand-shelf-count">2<\/span>/);
-    assert.match(
-        html,
-        /<span class="errand-shelf-summary"><span class="errand-shelf-dot" aria-hidden="true"><\/span>2 running<\/span>/,
-    );
+    assert.match(html, /<span class="errand-shelf-summary"><span class="errand-shelf-rest">2 running<\/span><\/span>/);
 });
 
-test('when an errand needs you the header says so in red instead', () => {
+test('when an errand needs you the header says so in red first', () => {
     /* Given */
     const errands = [laid(errand('a', {needsYou: true, doing: 'stopped'})), laid(errand('b')), laid(errand('c'))];
 
@@ -108,22 +129,25 @@ test('when an errand needs you the header says so in red instead', () => {
 
     /* Then */
     assert.match(html, /aria-expanded="true"/);
-    assert.match(html, /class="errand-shelf-summary is-needs-you">.*1 needs you<\/span>/);
+    assert.match(
+        html,
+        /<span class="errand-shelf-needs-you">1 needs you<\/span><span class="errand-shelf-rest">· 2 running<\/span>/,
+    );
 });
 
-test('folded, only the errands that need you stay out; the rest fold away under the header', () => {
+test('folded, the shelf is one line: every row folds away under the header, the ones that need you too', () => {
     /* Given */
     const errands = [laid(errand('a', {needsYou: true})), laid(errand('b')), laid(errand('c'))];
 
     /* When */
     const html = render({errands, open: false});
 
-    /* Then */
-    assert.deepEqual(rowIds(html), {always: ['er-a'], folding: ['er-b', 'er-c']});
+    /* Then: a asks in Blocked instead */
+    assert.deepEqual(rowIds(html), {always: [], folding: ['er-a', 'er-b', 'er-c']});
     assert.match(html, /class="errand-shelf-body is-folded" id="errand-shelf-body" inert=""/);
 });
 
-test('open, every errand shows', () => {
+test('open, every errand shows under Running', () => {
     /* Given */
     const errands = [laid(errand('a', {needsYou: true})), laid(errand('b'))];
 
@@ -131,7 +155,8 @@ test('open, every errand shows', () => {
     const html = render({errands, open: true});
 
     /* Then */
-    assert.deepEqual(rowIds(html), {always: ['er-a'], folding: ['er-b']});
+    assert.deepEqual(rowIds(html), {always: [], folding: ['er-a', 'er-b']});
+    assert.deepEqual(lines(html), ['Running', '#431 · fixing checks', '#431 · fixing checks']);
     assert.match(html, /class="errand-shelf-body" id="errand-shelf-body"/);
     assert.doesNotMatch(html, /inert/);
 });
@@ -216,18 +241,21 @@ test('PR ↗ opens the pull request on GitHub', () => {
     assert.equal(url, 'https://github.com/movelab/switchboard/pull/99');
 });
 
-test('the summary counts the errands that need you, or else all of them as running', () => {
+test('the summary counts the errands that need you apart from the ones running', () => {
     /* Given */
     const calm = [laid(errand('a')), laid(errand('b'))];
     const stuck = [laid(errand('a', {needsYou: true})), laid(errand('b', {needsYou: true})), laid(errand('c'))];
 
     /* When */
-    const summaries = [errandShelfSummary(calm), errandShelfSummary(stuck)];
+    const summaries = [
+        automaticShelf(calm, null, NOW, false)?.summary,
+        automaticShelf(stuck, null, NOW, false)?.summary,
+    ];
 
     /* Then */
     assert.deepEqual(summaries, [
-        {text: '2 running', needsYou: false},
-        {text: '2 needs you', needsYou: true},
+        {needsYou: null, rest: '2 running'},
+        {needsYou: '2 needs you', rest: '1 running'},
     ]);
 });
 
@@ -273,12 +301,12 @@ test('a triage row shows a magnifier, "Triage · " and the short title, and offe
     assert.match(html, />Stop<\/button>/);
 });
 
-test('a stuck triage stays out of the folded shelf and is marked like any stuck errand', () => {
+test('a stuck triage is marked like any stuck errand', () => {
     /* Given */
     const errands = [laid(errand('t', {...TRIAGE, doing: 'stopped', needsYou: true})), laid(errand('b'))];
 
     /* When */
-    const html = render({errands, open: false});
+    const html = render({errands, open: true});
 
     /* Then */
     assert.match(html, /class="errand-row needs-you" id="er-t"/);
@@ -323,4 +351,159 @@ test('a row on its way out is marked as leaving', () => {
     /* Then */
     assert.match(html, /id="er-a" data-session-id="a" data-kind="fix" data-leaving=""/);
     assert.doesNotMatch(html, /id="er-b"[^>]*data-leaving/);
+});
+
+// ── Scheduled runs and schedules ──
+
+/** The shelf's session rows for the runs `world` lists, in the layout's order. */
+function runRows(world: ScheduleManagerFacts, extra: readonly LaidErrand[] = []): LaidErrand[] {
+    const index = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], world);
+    return orderErrands([...extra, ...[...index.values()].map((entry) => laid(entry))]);
+}
+
+const SWEEP = schedule('sweep', {settings: {name: 'Bugsnag sweep'}, nextRunAt: local(3, 0, 24)});
+const NOTES = schedule('notes', {settings: {name: 'Release notes'}, nextRunAt: local(4, 0, 24)});
+
+test('with nothing listed but a schedule on, the folded line says when the night starts', () => {
+    /* Given */
+    const world = facts([schedule('weekly', {nextRunAt: local(3, 0, 30)})]);
+
+    /* When */
+    const html = render({schedules: world, now: local(12)});
+
+    /* Then */
+    assert.match(html, /<span class="errand-shelf-label">Automatic<\/span>/);
+    assert.doesNotMatch(html, /errand-shelf-count/);
+    assert.match(html, /<span class="errand-shelf-rest">next Mon 03:00<\/span>/);
+});
+
+test('with every schedule off and nothing listed, the shelf hides; while filtering, it always does', () => {
+    /* Given */
+    const off = facts([schedule('a', {settings: {enabled: false}})]);
+    const on = facts([SWEEP]);
+
+    /* When */
+    const html = [render({schedules: off}), render({schedules: on, filtering: true})];
+
+    /* Then */
+    assert.deepEqual(html, ['', '']);
+});
+
+test('at night: Running holds the runs and the errands going now, then Coming up the next two times', () => {
+    /* Given */
+    const world = facts(
+        [SWEEP, NOTES, schedule('hours', {settings: {name: 'Log my hours'}, nextRunAt: local(6, 30, 24)})],
+        [run('r-1', 'sweep', {status: 'running', dueAt: local(3, 0, 24), endedAt: null})],
+    );
+    const errands = runRows(world, [laid(errand('fix', {number: 514}))]);
+
+    /* When */
+    const html = render({errands, schedules: world, open: true, now: local(3, 10, 24)});
+
+    /* Then */
+    assert.deepEqual(lines(html), [
+        'Running',
+        '#514 · fixing checks',
+        'Bugsnag sweep · 03:00',
+        'Coming up',
+        'Release notes',
+        'Log my hours',
+    ]);
+    assert.match(html, /<span class="errand-shelf-count">4<\/span>/);
+    assert.match(html, /<span class="errand-shelf-rest">2 running · next 04:00<\/span>/);
+    assert.match(html, /class="errand-row is-coming-up" data-schedule-key="notes"/);
+    assert.match(html, /<span class="errand-row-meta">04:00<\/span>/);
+});
+
+test('in the morning: Last night lists the unread runs newest first, one that needs you in red; 03:00 is too far for Coming up', () => {
+    /* Given */
+    const world = facts(
+        [SWEEP, NOTES],
+        [
+            run('limit', 'sweep', {status: 'limit', endedAt: local(3, 20), reason: 'its 20 min limit'}),
+            run('notes', 'notes', {report: 'Draft updated', endedAt: local(4, 5)}),
+            run('quiet', 'notes', {report: 'Nothing new', seen: true, endedAt: local(4, 1)}),
+        ],
+    );
+
+    /* When */
+    const html = render({errands: runRows(world), schedules: world, open: true, now: local(9)});
+
+    /* Then */
+    assert.deepEqual(lines(html), ['Last night', 'Release notes · Draft updated', 'Bugsnag sweep · limit hit']);
+    assert.match(html, /class="errand-row needs-you" id="er-s-limit"/);
+    assert.match(
+        html,
+        /<span class="errand-shelf-needs-you">1 needs you<\/span><span class="errand-shelf-rest">· 2 to read<\/span>/,
+    );
+});
+
+test('a run that ended shows an unread dot instead of its age, with no Stop', () => {
+    /* Given */
+    const world = facts([SWEEP], [run('r', 'sweep')]);
+
+    /* When */
+    const html = render({errands: runRows(world), schedules: world, open: true, now: local(9)});
+
+    /* Then */
+    assert.match(html, /<svg class="errand-row-glyph" data-kind="scheduled"/);
+    assert.match(html, /<span class="errand-row-unread" aria-label="Not read yet"><\/span>/);
+    assert.doesNotMatch(html, />Stop</);
+    assert.doesNotMatch(html, /errand-row-meta/);
+});
+
+test('a missed run, which has no session, still shows under Last night and needs you', () => {
+    /* Given */
+    const world = facts(
+        [SWEEP],
+        [run('m', 'sweep', {status: 'missed', sessionId: null, startedAt: null, endedAt: null, dueAt: local(3)})],
+    );
+
+    /* When */
+    const html = render({errands: runRows(world), schedules: world, open: true, now: local(9)});
+
+    /* Then */
+    assert.match(html, /class="errand-row is-run needs-you" data-run-id="m" data-kind="scheduled"/);
+    assert.deepEqual(lines(html).slice(0, 2), ['Last night', 'Bugsnag sweep · missed']);
+    assert.match(html, /1 needs you/);
+});
+
+test('the links: Mark all read while there is something to read, the Schedule manager, and the Merge manager for its errands', () => {
+    /* Given */
+    const world = facts([SWEEP], [run('r', 'sweep')]);
+    const errands = runRows(world, [laid(errand('fix'))]);
+
+    /* When */
+    const html = render({errands, schedules: world, open: true, now: local(9)});
+
+    /* Then */
+    assert.deepEqual(
+        [...html.matchAll(/class="errand-shelf-link">([^<]+)</g)].map((m) => m[1]),
+        ['Mark all read', 'Schedule manager', 'Merge manager'],
+    );
+});
+
+test('a scheduled run in Blocked leads its meta line with "scheduled" and why', () => {
+    /* Given */
+    const world = facts([SWEEP], [run('r', 'sweep', {status: 'limit', reason: 'its 20 min limit'})]);
+    const [entry] = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], world).values();
+
+    /* When */
+    const leads = [errandLead(entry), errandLead(errand('a'))];
+
+    /* Then */
+    assert.deepEqual(leads, ['scheduled · its 20 min limit', 'errand']);
+});
+
+test('the header strip of a scheduled run says whose run it is, "Scheduled run" in bold', () => {
+    /* Given */
+    const world = facts([SWEEP], [run('r', 'sweep', {status: 'done', endedAt: local(3, 14)})]);
+    const [entry] = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], world).values();
+
+    /* When */
+    const html = renderToStaticMarkup(createElement(ErrandStripContent, {errand: entry}));
+
+    /* Then */
+    assert.match(html, /data-kind="scheduled"/);
+    assert.match(html, /<strong>Scheduled run<\/strong> of Bugsnag sweep · done at 03:14<\/span>/);
 });

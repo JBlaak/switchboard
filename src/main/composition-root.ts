@@ -53,6 +53,9 @@ import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
 import {RemoteConnectionSupervisor} from '../application/services/remote-connection-supervisor';
 import {ScheduleService} from '../application/services/schedule-service';
+import {ScheduleManagerService} from '../application/services/schedule-manager-service';
+import {UsageCache} from '../application/services/usage-cache';
+import type {ScheduleRunStore} from '../application/ports/schedule-runs';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
 import {SessionRestoreService} from '../application/services/session-restore-service';
@@ -144,11 +147,13 @@ import {SqliteFixErrandStore} from '../infrastructure/sqlite/fix-errand-store';
 import {gitHubRepository} from '../domain/project/repo-url';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
+import {SqliteScheduleRunStore} from '../infrastructure/sqlite/schedule-runs';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
 import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
 import {PlannerCycleProvider} from '../infrastructure/planner/planner-cycle-provider';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
+import {PmsetWakeSchedule} from '../infrastructure/system/pmset-wake-schedule';
 import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {PendingUpdateFile} from '../infrastructure/system/pending-update-file';
@@ -165,7 +170,7 @@ import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
 import {BackgroundTaskService} from '../application/services/background-task-service';
-import {isRemoteProjectPath} from '../domain/project/remote-target';
+import {isRemoteProjectPath, parseRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
@@ -240,8 +245,13 @@ export interface Container {
     readonly projects: ProjectListService;
     /** Checks a folder before it is added as a project (#171). */
     readonly projectFolders: ProjectFolderService;
-    readonly usage: OAuthUsageService;
+    readonly usage: UsageCache;
+    /** The scheduler, and the Schedule manager's engine. */
     readonly schedules: ScheduleService;
+    /** Every schedule run and prompt version. */
+    readonly scheduleRuns: ScheduleRunStore;
+    /** The Schedule manager's page: facts, details, saving, drafting, the wake. */
+    readonly scheduleManager: ScheduleManagerService;
     readonly weather: WeatherService;
     /** The managers' settings (#412): Planner cycles for snoozes, Releases are tagged. */
     readonly inboxSettings: InboxSettingsService;
@@ -784,7 +794,8 @@ export function buildContainer(): Container {
     });
 
     // ── Feature services ──
-    const usage = new OAuthUsageService(log);
+    // Kept, so the Schedule manager reads the week without spending the endpoint's rate limit.
+    const usage = new UsageCache(new OAuthUsageService(log));
     const weather = new WeatherService({
         source: new OpenMeteoWeatherSource(clock, log),
         settings,
@@ -803,6 +814,7 @@ export function buildContainer(): Container {
     });
     const shellProfileId = (): string => settings.shellProfileId(null);
 
+    const scheduleRuns = new SqliteScheduleRunStore(database.db);
     const schedules = new ScheduleService({
         fs,
         transcripts,
@@ -813,8 +825,21 @@ export function buildContainer(): Container {
         log,
         commandsDir: paths.commandsDir,
         runner: new ClaudeCommandRunner({shells, terminals, log, shellProfileId}),
+        runs: scheduleRuns,
+        usage,
+        git: localWorkspace,
+        archive: (sessionId) => archiveSession(sessionId),
         // A project whose schedules run on a VM is paused here (#276 stage 5).
         runsHere: (projectPath) => vmSchedules.macRunsSchedulesOf(projectPath),
+        vmHostOf: (projectPath) => {
+            for (const [localPath, choice] of Object.entries(settings.vmSchedules().choices)) {
+                const root = localPath.replace(/\/+$/, '');
+                if (projectPath === root || projectPath.startsWith(root + '/')) {
+                    return parseRemoteProjectPath(choice.copyPath)?.host ?? null;
+                }
+            }
+            return null;
+        },
     });
     // Ask Patch (#135): one Haiku call per request typed on the empty screen.
     const claudeCaller = new ShellClaudeCaller({
@@ -965,6 +990,22 @@ export function buildContainer(): Container {
         const remote = isRemoteProjectPath(live.projectPath);
         return {folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath};
     };
+    const scheduleManager = new ScheduleManagerService({
+        engine: schedules,
+        runs: scheduleRuns,
+        archive: (sessionId) => archiveSession(sessionId),
+        fs,
+        wake: new PmsetWakeSchedule(log),
+        week: () => usage.latestWeek(),
+        cli: claudeCaller,
+        projects: () => routeCandidates(projects.list(false)),
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        renderer,
+        clock,
+        timers,
+        log,
+    });
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -1378,12 +1419,13 @@ export function buildContainer(): Container {
         });
         if (connection.connected) await selfArchiveCatchUp?.catchUp(connection);
     };
-    agents.onConnected((connection) =>
-        void catchUpSelfSessions({
-            user: connection.host.user,
-            host: connection.host.host,
-            port: Number(connection.host.port) || 22,
-        }),
+    agents.onConnected(
+        (connection) =>
+            void catchUpSelfSessions({
+                user: connection.host.user,
+                host: connection.host.host,
+                port: Number(connection.host.port) || 22,
+            }),
     );
     mergingHost = new MergingHostService({
         local: mergeManager,
@@ -1558,6 +1600,15 @@ export function buildContainer(): Container {
         timers,
         log,
     });
+
+    // Scheduled runs archive themselves once read (the Schedule manager): the
+    // same archive as the sidebar's. Hoisted, since the scheduler is built
+    // before the worktree cleanup and the tasks it ends with.
+    function archiveSession(sessionId: string): void {
+        sessionArchiver({registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup, tasks}).archive(
+            sessionId,
+        );
+    }
 
     // The session tray's links (#340): kept here, asked again behind each answer.
     const sessionLinks = new SessionLinksService({
@@ -1761,6 +1812,8 @@ export function buildContainer(): Container {
         projectFolders,
         usage,
         schedules,
+        scheduleRuns,
+        scheduleManager,
         weather,
         inboxSettings,
         updates,

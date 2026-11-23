@@ -17,6 +17,7 @@ import type {BuildInputs, OrderedEntry, SessionListLayout} from '../src/renderer
 import type {SessionListState} from '../src/renderer/state/session-list-slice';
 import type {Project} from '../src/domain/project/project';
 import type {SessionRow} from '../src/domain/session/session';
+import type {RunStatus} from '../src/domain/schedule/manager';
 
 const NOW = 1_700_000_000_000;
 const HOUR = 3600000;
@@ -40,6 +41,37 @@ function session(id: string, extra: Partial<SessionRow> = {}): SessionRow {
 
 function project(sessions: SessionRow[]): Project {
     return {projectPath: '/p', folder: '-p', sessions};
+}
+
+/** A scheduled run's session, as the errand index makes it: running, or ended and not seen yet. */
+function scheduledRun(sessionId: string, status: RunStatus = 'done', endedHoursAgo = 1): ErrandEntry {
+    const endedAt = status === 'running' ? null : NOW - endedHoursAgo * HOUR;
+    return {
+        sessionId,
+        kind: 'scheduled',
+        owner: 'schedule',
+        repository: '/p',
+        number: null,
+        title: 'Nightly ' + sessionId,
+        doing: status,
+        needsYou: status === 'failed' || status === 'limit',
+        host: null,
+        run: {
+            id: 'run-' + sessionId,
+            scheduleKey: 'nightly',
+            name: 'Nightly ' + sessionId,
+            sessionId,
+            status,
+            reason: null,
+            dueAt: NOW - 10 * HOUR,
+            startedAt: NOW - 10 * HOUR,
+            endedAt,
+            doing: status,
+            needsYou: status === 'failed' || status === 'limit',
+            projectPath: '/p',
+            host: null,
+        },
+    };
 }
 
 function errand(sessionId: string, needsYou = false): ErrandEntry {
@@ -200,6 +232,68 @@ test('the shelf puts the ones that need you first, then the newest started', () 
     assert.deepEqual(ids(laid.errands), [er('stuck'), er('new'), er('old')]);
 });
 
+test('a scheduled run goes to the shelf, out of the user’s sections, like an errand', () => {
+    /* Given */
+    const sessions = [session('a'), session('night')];
+
+    /* When */
+    const {layout: laid} = layout(sessions, [scheduledRun('night', 'running')]);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [si('a')]);
+    assert.deepEqual(ids(laid.errands), [er('night')]);
+});
+
+test('a scheduled run that needs you also asks in Blocked, below the user’s own', () => {
+    /* Given */
+    const sessions = [session('a'), session('night')];
+
+    /* When */
+    const {layout: laid} = layout(sessions, [scheduledRun('night', 'limit')], {tierOf: () => TIER_ATTENTION});
+
+    /* Then */
+    assert.deepEqual(
+        laid.visible.map((l) => [l.entry.id, l.tier]),
+        [
+            [si('a'), TIER_ATTENTION],
+            [si('night'), TIER_ATTENTION],
+        ],
+    );
+    assert.deepEqual(ids(laid.errands), [er('night')]);
+});
+
+test('a scheduled run read and done stays out of Blocked', () => {
+    /* Given */
+    const sessions = [session('a'), session('night')];
+
+    /* When */
+    const {layout: laid} = layout(sessions, [scheduledRun('night', 'done')]);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [si('a')]);
+});
+
+test('the shelf lists what runs before what ended, and the ended runs newest first', () => {
+    /* Given */
+    const sessions = [
+        session('fix', {created: at(5 * HOUR)}),
+        session('going', {created: at(HOUR)}),
+        session('older'),
+        session('newer'),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(sessions, [
+        scheduledRun('older', 'done', 5),
+        scheduledRun('newer', 'failed', 2),
+        errand('fix'),
+        scheduledRun('going', 'running'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(ids(laid.errands), [er('going'), er('fix'), er('newer'), er('older')]);
+});
+
 test('an archived errand is not on the shelf', () => {
     /* Given */
     const sessions = [session('a'), session('x', {archived: 1})];
@@ -316,15 +410,15 @@ function shelf(errands: ErrandEntry[], extra: Partial<SessionListState> = {}): S
 
 const NONE = new Set<string>();
 
-test('a folded shelf hides its rows, except the ones that need you', () => {
+test('a folded shelf is one line and hides every row, the ones that need you too', () => {
     /* Given */
     const state = shelf([errand('x', true), errand('y')]);
 
     /* When */
     const shown = shownTargets(cursorTargets(state, NONE));
 
-    /* Then: x also asks in Blocked */
-    assert.deepEqual(shown, [si('x'), si('a'), si('b'), er('x')]);
+    /* Then: x asks in Blocked instead */
+    assert.deepEqual(shown, [si('x'), si('a'), si('b')]);
 });
 
 test('an open shelf shows every row, under the list', () => {

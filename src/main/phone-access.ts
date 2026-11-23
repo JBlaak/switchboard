@@ -34,6 +34,7 @@ import type {InstallProgress} from '../domain/update/progress';
 import type {TasksUpdate} from '../domain/tasks/surface';
 import type {InboxSummary} from '../domain/inbox/model';
 import type {MergeManagerState} from '../domain/merge-manager/model';
+import type {ScheduleManagerFacts} from '../domain/schedule/manager';
 import type {ShownPage} from '../domain/session/page-tool';
 import type {BatteryGauge} from '../application/ports/battery';
 import type {Clock, Timers} from '../application/ports/clock';
@@ -225,6 +226,11 @@ export class PhoneEventTee implements RendererGateway {
     public mergeManagerChanged(state: MergeManagerState): void {
         this.inner.mergeManagerChanged(state);
         this.phones()?.errandsChanged();
+    }
+
+    // The Schedule manager is the Mac's alone.
+    public scheduleManagerChanged(facts: ScheduleManagerFacts): void {
+        this.inner.scheduleManagerChanged(facts);
     }
 
     // The freshness lines are the Mac's alone.

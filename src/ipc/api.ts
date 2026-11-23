@@ -34,6 +34,14 @@ import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
 import type {InstallProgress, InstallResult, UpdateOutcome} from '../domain/update/progress';
 import type {Usage} from '../domain/usage/usage';
+import type {
+    ScheduleActionResult,
+    ScheduleDetail,
+    ScheduleDraftResult,
+    ScheduleManagerFacts,
+    ScheduleSaveResult,
+    ScheduleSettings,
+} from '../domain/schedule/manager';
 import type {WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
 import type {AskPatchResult, CaptureTarget, RouteRequest} from '../domain/ask/model';
@@ -298,6 +306,38 @@ export interface SwitchboardApi {
     mergeManagerPage(): Promise<MergeManagerPageFacts>;
     /** Your open PRs in the projects Switchboard knows, lanes or not (Not landed), and when GitHub was last read for them. */
     mergeManagerNotLanded(): Promise<NotLandedRead>;
+    /** The Schedule manager's overview, as `onScheduleManagerChanged` pushes it. */
+    scheduleManagerFacts(): Promise<ScheduleManagerFacts>;
+    /** One schedule's page: its runs, prompt versions and stats; null when its file is gone. */
+    scheduleManagerDetail(key: string): Promise<ScheduleDetail | null>;
+    /**
+     * Write a schedule's file: a new one (`key` null, saved as
+     * `.claude/commands/schedule-<slug>.md` in its project) or an existing one.
+     * A changed prompt becomes a new version, with `note` when given. `runNow`
+     * starts a try run once it is saved.
+     */
+    scheduleManagerSave(
+        key: string | null,
+        settings: ScheduleSettings,
+        note: string | null,
+        runNow: boolean,
+    ): Promise<ScheduleSaveResult>;
+    /** Turn a schedule on or off (its file's `enabled`). */
+    scheduleManagerSetEnabled(key: string, enabled: boolean): Promise<ScheduleActionResult>;
+    /** Start a run now, whatever the time. */
+    scheduleManagerRunNow(key: string): Promise<ScheduleActionResult>;
+    /** Skip its next cron time (recorded as a skipped run when it comes). */
+    scheduleManagerSkipNext(key: string): Promise<ScheduleActionResult>;
+    /** A run opened or marked seen. */
+    scheduleManagerMarkSeen(runId: string): Promise<void>;
+    /** Every finished run marked seen. */
+    scheduleManagerMarkAllSeen(): Promise<void>;
+    /** Claude drafts a schedule from one sentence, in `projectPath` (or one it picks from the sentence, when null). */
+    scheduleManagerDraft(sentence: string, projectPath: string | null): Promise<ScheduleDraftResult>;
+    /** Claude drafts a schedule that repeats what a session did, in its project. */
+    scheduleManagerDraftFromSession(sessionId: string): Promise<ScheduleDraftResult>;
+    /** Set this Mac's repeating wake to `HH:MM` every day (asks for an admin password), or clear it (null). */
+    scheduleManagerSetWake(at: string | null): Promise<ScheduleActionResult>;
     /** Hand merging off to a VM (#442), the one offered first when none is named. */
     mergeManagerHandOff(vmKey?: string): Promise<HandOffResult>;
     /** Bring merging back from the VM: it finishes its step and stops its errands. */
@@ -737,6 +777,8 @@ export interface SwitchboardApi {
     onInboxChanged(cb: (summary: InboxSummary) => void): Unsubscribe;
     /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
     onMergeManagerChanged(cb: (state: MergeManagerState) => void): Unsubscribe;
+    /** The Schedule manager's overview changed: a run started or ended, a schedule was saved, seen, turned on or off. */
+    onScheduleManagerChanged(cb: (facts: ScheduleManagerFacts) => void): Unsubscribe;
     /** Expensive GitHub reads are held back until this time for the GraphQL budget, or no longer (null). */
     onGithubBudgetHeld(cb: (until: number | null) => void): Unsubscribe;
     /** One line of an agent install's progress, for the project whose host it is. */

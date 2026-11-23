@@ -25,6 +25,8 @@ import {sessionMap} from '../../state/session-store';
 import {canBringBackSession, canHandOffSession} from '../../state/session-list-layout';
 import {isVmCopyIn, isVmProjectIn} from '../../state/agent-host-slice';
 import {openSessionBringBack} from '../dialogs/session-bring-back-actions';
+import {openCreateSchedule} from '../schedule-manager/actions';
+import {canMakeSchedule} from '../schedule-manager/create-view';
 import {sessionStatsIn, trayIsOpen} from '../../state/session-tray-slice';
 import {useStore} from '../use-store';
 import {stopSessionOnScreen} from '../terminal/actions';
@@ -286,6 +288,10 @@ export function SessionTray(): JSX.Element | null {
             close();
             void openSessionBringBack(sessionId);
         },
+        makeSchedule: () => {
+            close();
+            openCreateSchedule(sessionId);
+        },
     };
 
     return (
@@ -321,6 +327,7 @@ export function SessionTray(): JSX.Element | null {
                 editor={mine.editor}
                 handOffHosts={handOffHosts}
                 bringBack={bringBack}
+                makeSchedule={!!row && canMakeSchedule(row)}
                 running={running}
                 copied={copied}
                 now={Date.now()}

@@ -2,7 +2,7 @@
  * The managers' inbox (#413), renderer side: both managers' unread and urgent
  * counts and which of them are set up, as main pushed them last
  * (`inboxChanged`), for the managers on the empty screen (#416), and the bugs
- * being triaged, for the Errands shelf, and how fresh each manager's items
+ * being triaged, for the Automatic shelf, and how fresh each manager's items
  * are, for its page's "Updated …" line. The pages ask main for the items
  * themselves.
  */

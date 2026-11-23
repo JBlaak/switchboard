@@ -66,6 +66,11 @@ export function isMergeManagerKey(e: KeyboardEvent): boolean {
     return e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyL';
 }
 
+/** Cmd+J: the Schedule manager page, open or closed, from anywhere, the terminal included. */
+export function isScheduleManagerKey(e: KeyboardEvent): boolean {
+    return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyJ';
+}
+
 /** Cmd+B: the Bug manager page (#414), open or closed. */
 export function isBugPageKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyB';

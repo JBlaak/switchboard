@@ -135,6 +135,20 @@ const api: SwitchboardApi = {
     mergeManagerTryAgain: (repository, number, note) =>
         ipcRenderer.invoke(INVOKE.mergeManagerTryAgain, repository, number, note),
     mergeManagerPage: () => ipcRenderer.invoke(INVOKE.mergeManagerPage),
+    scheduleManagerFacts: () => ipcRenderer.invoke(INVOKE.scheduleManagerFacts),
+    scheduleManagerDetail: (key) => ipcRenderer.invoke(INVOKE.scheduleManagerDetail, key),
+    scheduleManagerSave: (key, settings, note, runNow) =>
+        ipcRenderer.invoke(INVOKE.scheduleManagerSave, key, settings, note, runNow),
+    scheduleManagerSetEnabled: (key, enabled) => ipcRenderer.invoke(INVOKE.scheduleManagerSetEnabled, key, enabled),
+    scheduleManagerRunNow: (key) => ipcRenderer.invoke(INVOKE.scheduleManagerRunNow, key),
+    scheduleManagerSkipNext: (key) => ipcRenderer.invoke(INVOKE.scheduleManagerSkipNext, key),
+    scheduleManagerMarkSeen: (runId) => ipcRenderer.invoke(INVOKE.scheduleManagerMarkSeen, runId),
+    scheduleManagerMarkAllSeen: () => ipcRenderer.invoke(INVOKE.scheduleManagerMarkAllSeen),
+    scheduleManagerDraft: (sentence, projectPath) =>
+        ipcRenderer.invoke(INVOKE.scheduleManagerDraft, sentence, projectPath),
+    scheduleManagerDraftFromSession: (sessionId) =>
+        ipcRenderer.invoke(INVOKE.scheduleManagerDraftFromSession, sessionId),
+    scheduleManagerSetWake: (at) => ipcRenderer.invoke(INVOKE.scheduleManagerSetWake, at),
     mergeManagerNotLanded: () => ipcRenderer.invoke(INVOKE.mergeManagerNotLanded),
     mergeManagerHandOff: (vmKey) => ipcRenderer.invoke(INVOKE.mergeManagerHandOff, vmKey),
     mergeManagerBringBack: () => ipcRenderer.invoke(INVOKE.mergeManagerBringBack),
@@ -314,6 +328,7 @@ const api: SwitchboardApi = {
     onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
     onInboxChanged: (cb) => subscribe(EVENT.inboxChanged, (_e, summary) => cb(summary)),
     onMergeManagerChanged: (cb) => subscribe(EVENT.mergeManagerChanged, (_e, state) => cb(state)),
+    onScheduleManagerChanged: (cb) => subscribe(EVENT.scheduleManagerChanged, (_e, facts) => cb(facts)),
     onGithubBudgetHeld: (cb) => subscribe(EVENT.githubBudgetHeld, (_e, until) => cb(until)),
     onAgentInstallProgress: (cb) =>
         subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),

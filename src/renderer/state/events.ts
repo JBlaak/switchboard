@@ -51,6 +51,9 @@ import type {DropUploadEvent} from './drop-upload-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
 import type {MergeManagerEvent} from './merge-manager-slice';
+import type {ScheduleManagerEvent} from './schedule-manager-slice';
+import type {ScheduleCreateEvent} from './schedule-create-slice';
+import type {ScheduleManagerFacts} from '../../domain/schedule/manager';
 import type {SessionTrayEvent} from './session-tray-slice';
 import type {GrillEvent} from './grill-slice';
 import type {GrillChanged} from '../../domain/grill/model';
@@ -118,6 +121,8 @@ export type PushEvent =
     | {type: 'inboxChanged'; summary: InboxSummary}
     /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
     | {type: 'mergeManagerChanged'; state: MergeManagerState}
+    /** The Schedule manager's overview changed: runs, schedules, the wake, the week. */
+    | {type: 'scheduleManagerChanged'; facts: ScheduleManagerFacts}
     /** Expensive GitHub reads are held back until `until` for the GraphQL budget, or no longer (null). */
     | {type: 'githubBudgetHeld'; until: number | null}
     /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
@@ -410,6 +415,8 @@ export type RendererEvent =
     | PagesEvent
     | MergeQueueEvent
     | MergeManagerEvent
+    | ScheduleManagerEvent
+    | ScheduleCreateEvent
     | GrillEvent
     | SessionTrayEvent;
 

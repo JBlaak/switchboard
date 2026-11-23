@@ -44,6 +44,8 @@ import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import {installMergeManager} from '../ui/merge-manager/install-merge-manager';
 import {installMergeManagerPage} from '../ui/merge-manager/install-merge-manager-page';
 import {installBugPage} from '../ui/bug-manager/install-bug-page';
+import {installScheduleManagerPage} from '../ui/schedule-manager/install-schedule-manager-page';
+import {installScheduleCreate} from '../ui/schedule-manager/install-schedule-create';
 import {installGithubBudget} from '../ui/shared/install-github-budget';
 import {installLoopPause} from '../lib/motion/loops';
 import type {GlobalSettings} from '../../domain/settings/settings';
@@ -79,6 +81,8 @@ export function bootstrap(): void {
     installMergeManager();
     installMergeManagerPage();
     installBugPage();
+    installScheduleManagerPage();
+    installScheduleCreate();
     installGithubBudget();
     followColorSchemeInTerminals();
     installTerminalProbe();

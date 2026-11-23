@@ -31,6 +31,7 @@ import {
     itemTier,
     rowSurvivesTruncation,
 } from '../../domain/session/tiers';
+import {runTime} from '../../domain/schedule/shelf';
 import {formatDate, localDateKey} from '../lib/format';
 import type {Project} from '../../domain/project/project';
 import type {ErrandEntry} from '../../domain/session/errand-shelf';
@@ -107,7 +108,7 @@ export interface LaidEntry {
     readonly tier: number;
 }
 
-/** An errand's session on the Errands shelf. */
+/** An errand's session on the Automatic shelf. */
 export interface LaidErrand {
     readonly entry: SessionListRow;
     readonly errand: ErrandEntry;
@@ -124,9 +125,9 @@ export interface SessionListLayout {
     readonly visible: readonly LaidEntry[];
     readonly older: readonly LaidEntry[];
     /**
-     * The Errands shelf, docked under the list: every errand's session, the
-     * ones that need you first, then the rest newest started first. Empty
-     * while filtering, when errands show inline among the matches.
+     * The Automatic shelf, docked under the list: every errand's session, in
+     * its order (see `orderErrands`). Empty while filtering, when errands
+     * show inline among the matches.
      */
     readonly errands: readonly LaidErrand[];
     /** A filter or a search is on: no section labels, and nothing folded away. */
@@ -161,7 +162,7 @@ export function rowId(key: string): string {
 }
 
 /**
- * The element id of a session's row on the Errands shelf. Not `rowId`: a
+ * The element id of a session's row on the Automatic shelf. Not `rowId`: a
  * stuck errand shows both on the shelf and in Blocked, and the two rows are
  * two elements the cursor can be on.
  */
@@ -659,15 +660,28 @@ export function layoutSessionList(
 }
 
 /**
- * The Errands shelf's order: the ones that need you first, then the rest
- * newest started first. Started, not last active: an errand writes to its
- * transcript all the time, and the shelf should hold still while it works.
+ * The Automatic shelf's order, its sections top to bottom. Running: the
+ * errands and the scheduled runs going now, the ones that need you first,
+ * then the rest newest started first. Started, not last active: an errand
+ * writes to its transcript all the time, and the shelf should hold still
+ * while it works. Then Last night: the scheduled runs that ended and are not
+ * seen yet, newest ended first.
  */
 export function orderErrands(errands: readonly LaidErrand[]): LaidErrand[] {
     const started = (laid: LaidErrand): number => new Date(laid.entry.session.created).getTime();
+    const ended = (laid: LaidErrand): number => (laid.errand.run ? runTime(laid.errand.run) : 0);
     return [...errands].sort(
-        (a, b) => Number(b.errand.needsYou) - Number(a.errand.needsYou) || started(b) - started(a),
+        (a, b) =>
+            Number(isEndedRun(a.errand)) - Number(isEndedRun(b.errand)) ||
+            (isEndedRun(a.errand)
+                ? ended(b) - ended(a)
+                : Number(b.errand.needsYou) - Number(a.errand.needsYou) || started(b) - started(a)),
     );
+}
+
+/** A scheduled run that ended: the shelf lists it under Last night, until it is seen. */
+export function isEndedRun(errand: ErrandEntry): boolean {
+    return !!errand.run && errand.run.status !== 'running';
 }
 
 /**
