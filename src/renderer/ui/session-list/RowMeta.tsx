@@ -1,8 +1,9 @@
 /**
  * A row's compact meta line: what it is asking, the project, the time and
  * message count, the agents badge, the PR chips and the merge queue's pill
- * (#315). An errand's row says so first ("errand · "), since its name is
- * the PR it works on rather than anything the user typed. A Fix session's
+ * (#315). An errand's row says so first ("errand · ", or for a scheduled
+ * run "scheduled · " and why it needs you), since its name is the PR it
+ * works on or the schedule it runs rather than anything the user typed. A Fix session's
  * project reads as a bug and the repository it fixes, not its
  * `fix/bugsnag-…` worktree (#414).
  *
@@ -38,13 +39,13 @@ export interface RowMetaProps {
     asking: number;
     agents: readonly WorkingAgent[];
     now: number;
-    /** The session is an errand (see `domain/session/errand-shelf`). */
-    errand?: boolean;
+    /** What an errand's line starts with (`errandLead`); null for a session the user started. */
+    errandLead?: string | null;
     /** A click on the line when it is the Session work button. */
     onOpenWork: (e: MouseEvent<HTMLElement>) => void;
 }
 
-export function RowMeta({row, asking, agents, now, errand = false, onOpenWork}: RowMetaProps): JSX.Element {
+export function RowMeta({row, asking, agents, now, errandLead = null, onOpenWork}: RowMetaProps): JSX.Element {
     const {session} = row;
     const path = row.projectPath || session.projectPath;
     const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
@@ -53,7 +54,7 @@ export function RowMeta({row, asking, agents, now, errand = false, onOpenWork}: 
 
     const content = (
         <span className="session-meta-left">
-            {errand && <span className="session-errand-lead">errand ·</span>}
+            {errandLead && <span className="session-errand-lead">{errandLead} ·</span>}
             {/* What the session is blocked on, ahead of everything else on the line. */}
             {asking > 0 && <span className="session-asking">{askingLabel(asking)}</span>}
             <ProjectLabel path={path} />

@@ -2,7 +2,7 @@
  * The Landing shelf: the user's landed pull requests as one line under the
  * session list, so how long each still waits to merge is always in sight.
  *
- * Rendered into `#sidebar-landing`, under the Errands shelf and above the
+ * Rendered into `#sidebar-landing`, under the Automatic shelf and above the
  * footer. Folded, it is one line: a count, a dot per PR in each lane (the
  * user's filled, other people's in a queue lane hollow, lanes apart) and when
  * the next one merges. Hovered, a card lists each PR's wait and what merged

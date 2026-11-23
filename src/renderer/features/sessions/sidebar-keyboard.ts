@@ -10,7 +10,7 @@
  *
  * Where the cursor can go is read from the list's layout (`state/list-cursor`):
  * rows, group headers, the foldable section labels and the "more" toggles all take part, in the order the
- * list renders them, and then the rows of the Errands shelf: ↓ past the list's
+ * list renders them, and then the rows of the Automatic shelf: ↓ past the list's
  * last target walks into the shelf and unfolds it, and ↑ from its first row
  * comes back out. A shelf row takes the same keys as a row. The cursor itself is state, so it survives a redraw, and
  * if what it was on is gone the next arrow simply starts again from the top.

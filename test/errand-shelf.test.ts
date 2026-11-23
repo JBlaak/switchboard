@@ -6,6 +6,7 @@ import {EMPTY_MERGE_MANAGER_STATE} from '../src/domain/merge-manager/model';
 import type {LaneStage, MergeManagerState} from '../src/domain/merge-manager/model';
 import {landedPr, REPO} from './support/merge-manager-fixtures';
 import {errand} from './support/merge-queue-fixtures';
+import {facts, local, run, schedule} from './support/schedule-shelf-fixtures';
 
 function managerWith(stage: LaneStage, errandSession: string | null, merging?: MergeManagerState['merging']) {
     const pr = {...landedPr(431, 5, 'switchboard', stage, {errand: errandSession}), place: null};
@@ -214,4 +215,68 @@ test('a short title is kept whole; a long one is cut to 40 characters with an el
     assert.equal(cut[0], 'Error: out of memory');
     assert.equal(cut[1].length, 40);
     assert.ok(cut[1].endsWith('…'));
+});
+
+// ── Scheduled runs ──
+
+test('a scheduled run the shelf lists is an errand of the Schedule manager, named after its schedule', () => {
+    /* Given */
+    const schedules = facts(
+        [schedule('sweep', {settings: {name: 'Bugsnag sweep', projectPath: '/dev/switchboard'}})],
+        [run('r-1', 'sweep', {status: 'running', dueAt: local(3), endedAt: null})],
+    );
+
+    /* When */
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], schedules).get('s-r-1');
+
+    /* Then */
+    assert.equal(entry?.kind, 'scheduled');
+    assert.equal(entry?.owner, 'schedule');
+    assert.equal(entry?.title, 'Bugsnag sweep');
+    assert.equal(entry?.repository, '/dev/switchboard');
+    assert.equal(entry?.number, null);
+    assert.equal(entry?.doing, '03:00');
+    assert.equal(entry?.needsYou, false);
+    assert.equal(entry?.run?.id, 'r-1');
+});
+
+test('a scheduled run that hit its limit and is not seen needs you', () => {
+    /* Given */
+    const schedules = facts([schedule('sweep')], [run('r-1', 'sweep', {status: 'limit'})]);
+
+    /* When */
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], schedules).get('s-r-1');
+
+    /* Then */
+    assert.equal(entry?.needsYou, true);
+    assert.equal(entry?.doing, 'limit hit');
+});
+
+test('a seen run is no errand any more, and a run that never started has no session to be one', () => {
+    /* Given */
+    const schedules = facts(
+        [schedule('sweep')],
+        [run('seen', 'sweep', {seen: true}), run('missed', 'sweep', {status: 'missed', sessionId: null})],
+    );
+
+    /* When */
+    const errands = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], schedules);
+
+    /* Then */
+    assert.equal(errands.size, 0);
+});
+
+test('the header says whose scheduled run it is and how it goes', () => {
+    /* Given */
+    const schedules = facts(
+        [schedule('sweep', {settings: {name: 'Bugsnag sweep'}})],
+        [run('r-1', 'sweep', {status: 'running', startedAt: local(3, 1), endedAt: null})],
+    );
+    const entry = errandsBySession(EMPTY_MERGE_MANAGER_STATE, {}, [], schedules).get('s-r-1')!;
+
+    /* When */
+    const text = errandHeaderText(entry);
+
+    /* Then */
+    assert.equal(text, 'Scheduled run of Bugsnag sweep · running since 03:01');
 });

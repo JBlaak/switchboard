@@ -1,8 +1,10 @@
-// The Errands shelf (ErrandShelf): the sessions Switchboard started by itself
-// for a pull request, docked under the session list and above the footer, so
-// it stays put while the list scrolls. Its header reads like a foldable
-// section label; each errand is one 28px line. Never taller than a third of
-// the sidebar (which is the window's height): beyond that the rows scroll.
+// The Automatic shelf (ErrandShelf): the sessions Switchboard started by itself
+// and the runs of the user's schedules, docked under the session list and
+// above the footer, so it stays put while the list scrolls. Its header reads
+// like a foldable section label; under it, small section labels (Running, Last
+// night, Coming up), each errand or run one 28px line, and the links to the
+// managers. Never taller than a third of the sidebar (which is the window's
+// height): beyond that the rows scroll.
 //
 // Also here: an errand's glyph and lead on an ordinary sidebar row (a stuck
 // one in Blocked, any of them among a filter's matches), and the strip under
@@ -85,33 +87,26 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
 .errand-shelf-summary {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
+    min-width: 0;
     margin-left: auto;
     font-family: var(--sb-font-body);
     font-size: 11px;
     font-weight: 600;
     color: var(--sb-text-muted);
     white-space: nowrap;
-
-    &.is-needs-you {
-        color: var(--sb-yellow);
-    }
 }
 
-.errand-shelf-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--sb-accent);
-
-    .is-needs-you > & {
-        width: 6px;
-        height: 6px;
-        background: var(--sb-yellow);
-    }
+.errand-shelf-needs-you {
+    color: var(--sb-yellow);
 }
 
-/* ---- The rows: the ones that need you, then the rest folding under the header ---- */
+.errand-shelf-rest {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- The sections, folding under the header ---- */
 .errand-shelf-scroll {
     min-height: 0;
     overflow-y: auto;
@@ -163,6 +158,39 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
 }
 
+.errand-shelf-section {
+    padding: 8px 6px 2px var(--sb-row-text);
+    font-family: var(--sb-font-head);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+    opacity: 0.8;
+}
+
+.errand-shelf-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    padding: 8px 6px 2px var(--sb-row-text);
+}
+
+.errand-shelf-link {
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: var(--sb-font-body);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sb-accent);
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
 .errand-row {
     display: flex;
     align-items: center;
@@ -192,6 +220,29 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     &.kbd-cursor {
         box-shadow: inset 0 0 0 1.5px var(--sb-accent);
     }
+
+    /* A schedule's next time: no session yet, so it reads dim. */
+    &.is-coming-up {
+        opacity: 0.6;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+}
+
+/* A run not read yet; red when it needs you. */
+.errand-row-unread {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    margin-right: 4px;
+    border-radius: 50%;
+    background: var(--sb-accent);
+
+    .needs-you > & {
+        background: var(--sb-yellow);
+    }
 }
 
 /* The glyph sits in the marker gutter, so the name lands on the list's text rail. */
@@ -214,6 +265,10 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     font-size: 12.5px;
     font-weight: 600;
     color: var(--sb-text);
+
+    .needs-you > & {
+        color: var(--sb-yellow);
+    }
 }
 
 .errand-row-meta {
@@ -223,16 +278,17 @@ $fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
     white-space: nowrap;
 }
 
-/* On hover, where it runs and its age give way to PR ↗ and Stop. */
+/* On hover, where it runs and its age (or a run's unread dot) give way to PR ↗, Stop and archive. */
 .errand-row-actions {
     display: none;
     flex-shrink: 0;
     gap: 4px;
 }
 
-.errand-row:hover,
-.errand-row:focus-within {
-    .errand-row-meta {
+.errand-row:has(.errand-row-actions):hover,
+.errand-row:has(.errand-row-actions):focus-within {
+    .errand-row-meta,
+    .errand-row-unread {
         display: none;
     }
     .errand-row-actions {

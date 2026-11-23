@@ -12,7 +12,9 @@
  * `domain/session/errand-shelf`) that shows here — a stuck one in Blocked,
  * any of them among a filter's matches — reads as one: its kind's glyph in
  * place of the status dot, `#431 · fixing checks` as its name, and a meta
- * line that starts with "errand · ".
+ * line that starts with "errand · ". A scheduled run that needs you reads
+ * the same way: an hourglass, `Bugsnag sweep · limit hit`, and "scheduled ·
+ * its 20 min limit".
  */
 import {useCallback, useRef, useState} from 'react';
 import {askingCountIn} from '../../state/questions-slice';
@@ -39,7 +41,7 @@ import type {SessionListRow} from '../../state/session-list-layout';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
 import type {ErrandEntry} from '../../../domain/session/errand-shelf';
 import {ErrandGlyph} from './ErrandGlyph';
-import {errandRowName} from './errand-view';
+import {errandLead, errandRowName} from './errand-view';
 
 export interface SessionItemProps {
     row: SessionListRow;
@@ -186,7 +188,7 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
                         asking={live.asking}
                         agents={live.agents}
                         now={live.now}
-                        errand={live.errand !== null}
+                        errandLead={live.errand && errandLead(live.errand)}
                         onOpenWork={openWork}
                     />
                 </div>

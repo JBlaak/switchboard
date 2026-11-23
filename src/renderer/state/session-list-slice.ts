@@ -31,7 +31,7 @@ export type SessionListEvent =
           type: 'sessionListBuilt';
           items: readonly ListItem[];
           activeItemId: string | null;
-          /** The errands' sessions, for the Errands shelf; empty while filtering, when they are among `items`. */
+          /** The errands' sessions, for the Automatic shelf; empty while filtering, when they are among `items`. */
           errands: readonly LaidErrand[];
           /** Let the open session move to its true position too. */
           resort: boolean;
@@ -51,7 +51,7 @@ export type SessionListEvent =
     | {type: 'olderToggled'}
     /** A foldable section's label was clicked: Pinned projects or Pinned plans. */
     | {type: 'sectionToggled'; tier: number}
-    /** The Errands shelf's label was clicked, or the keyboard walked into it (`open`) or out of it. */
+    /** The Automatic shelf's label was clicked, or the keyboard walked into it (`open`) or out of it. */
     | {type: 'errandShelfToggled'; open?: boolean}
     /** The Landing shelf's line was clicked. */
     | {type: 'landingShelfToggled'}
@@ -77,7 +77,7 @@ export interface SessionListState {
     readonly olderExpanded: boolean;
     /** The section tiers folded under their label. Kept for this run of the app only. */
     readonly foldedSections: readonly number[];
-    /** The Errands shelf is unfolded. Kept for this run of the app only: it starts folded. */
+    /** The Automatic shelf is unfolded. Kept for this run of the app only: it starts folded. */
     readonly errandShelfOpen: boolean;
     /** The Landing shelf is unfolded. Kept for this run of the app only: it starts folded. */
     readonly landingShelfOpen: boolean;

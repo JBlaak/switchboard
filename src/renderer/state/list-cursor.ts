@@ -4,7 +4,7 @@
  *
  * The list renders, top to bottom: each visible entry (a row, a pinned
  * project, a pinned GitHub plan, or a slug group's header followed by its rows), then the "+ N older" toggle and the
- * entries behind it, then the Errands shelf docked under the list. `cursorTargets` walks that same order and says, for each
+ * entries behind it, then the Automatic shelf docked under the list. `cursorTargets` walks that same order and says, for each
  * thing a click would act on, whether it is on screen. The keyboard cursor
  * only lands on what is on screen; session navigation (Cmd+Shift+[ / ])
  * walks the rows in the same order, hidden ones included, as it always did.
@@ -13,9 +13,11 @@
  * (Pinned projects, Pinned plans) hides its entries, a folded group
  * hides its rows, the "+ N older" list hides its entries until opened, a
  * group's own "+ N more" never shows (an open group shows its rows instead,
- * and a folded one hides the container the toggle sits in), a folded Errands
- * shelf hides its rows except the ones that need you, which peek out, and
- * anything sliding out is skipped.
+ * and a folded one hides the container the toggle sits in), a folded
+ * Automatic shelf is one line and hides every row (the ones that need you
+ * also ask in Blocked), and anything sliding out is skipped. Of the shelf,
+ * only the rows of sessions are stops: a missed run's row and Coming up are
+ * for the mouse.
  *
  * The shelf has no key of its own: ↓ past the list's last target walks into
  * it, folded or not, and unfolds it (see `stepCursor`).
@@ -141,15 +143,15 @@ export function cursorTargets(list: SessionListState, running: ReadonlySet<strin
         targets.push({kind: 'older', name: OLDER_TARGET, shown: true});
         for (const laid of layout.older) entry(laid, list.olderExpanded);
     }
-    for (const {entry: row, errand} of layout.errands) {
+    for (const {entry: row} of layout.errands) {
         const leaving = !!list.leaving[row.id];
-        const peeks = list.errandShelfOpen || errand.needsYou;
+        const open = list.errandShelfOpen;
         targets.push({
             kind: 'errand',
             name: row.id,
-            shown: peeks && !leaving,
+            shown: open && !leaving,
             sessionId: row.session.sessionId,
-            folded: !peeks && !leaving,
+            folded: !open && !leaving,
         });
     }
     return targets;
@@ -197,9 +199,9 @@ export function stepTarget(shown: readonly string[], cursor: string | null, dire
 
 /**
  * One step of the keyboard cursor, as ↑ and ↓ take it: `stepTarget` over what
- * is on screen, with a folded Errands shelf walked as if it were open, so ↓
- * past the list's last target lands on its first row even when none of them
- * peeks out. Whoever moves the cursor onto a shelf row unfolds the shelf
+ * is on screen, with a folded Automatic shelf walked as if it were open, so ↓
+ * past the list's last target lands on its first row though the shelf shows
+ * none. Whoever moves the cursor onto a shelf row unfolds the shelf
  * (`opensShelf`); ↑ from its first row is simply the list's last target.
  */
 export function stepCursor(targets: readonly CursorTarget[], cursor: string | null, direction: -1 | 1): string | null {
@@ -207,7 +209,7 @@ export function stepCursor(targets: readonly CursorTarget[], cursor: string | nu
     return stepTarget(walk, cursor, direction);
 }
 
-/** Whether putting the cursor on `target` has to unfold the Errands shelf first. */
+/** Whether putting the cursor on `target` has to unfold the Automatic shelf first. */
 export function opensShelf(list: SessionListState, targets: readonly CursorTarget[], target: string): boolean {
     return !list.errandShelfOpen && targets.some((t) => t.kind === 'errand' && t.name === target);
 }
@@ -237,7 +239,7 @@ export function targetAfterRemoval(
 
 /**
  * The session ids of the rendered rows, in render order, hidden ones and the
- * Errands shelf's included. A stuck errand is listed in Blocked and on the
+ * Automatic shelf's included. A stuck errand is listed in Blocked and on the
  * shelf; it takes its place in Blocked only.
  */
 export function rowOrder(targets: readonly CursorTarget[]): string[] {
