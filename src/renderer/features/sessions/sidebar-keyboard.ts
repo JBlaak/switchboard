@@ -19,6 +19,7 @@
  * while the cursor is out: the focus, and scrolling the cursor into view,
  * are the parts that stay with the DOM.
  */
+import {focusPullRequestList} from '../../ui/sidebar-prs/actions';
 import {flushSync} from 'react-dom';
 import {sidebarContent} from '../../lib/dom';
 import {listCursorKey} from '../../lib/shortcut-keys';
@@ -84,6 +85,11 @@ export function isSidebarFocused(): boolean {
 export function focusSidebar(): void {
     const state = getState();
     if (state.toolbar.sidebarCollapsed) return;
+    // On the Pull requests page Cmd+L puts the cursor in that list instead.
+    if (state.sidebarPage.page === 'pullRequests') {
+        focusPullRequestList();
+        return;
+    }
     const start = startTarget(state.sessionList, targets(), highlightedSession(state.mainArea));
     if (!start) return;
     sidebarContent.focus({preventScroll: true});
