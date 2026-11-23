@@ -293,10 +293,11 @@ export class IssueSessionService {
         const origin = await this.deps.remotes.originUrl(root);
         const repository = (origin && gitHubRepository(origin)) || null;
         if (!repository) return fail('Not a GitHub repository: its origin is not on github.com');
-        if (issue.repository !== repository) {
+        // GitHub names are case-insensitive: an origin of Owner/Repo is GitHub's OWNER/repo.
+        if (issue.repository.toLowerCase() !== repository.toLowerCase()) {
             return fail(`#${issue.number} is in ${issue.repository}, not in this project's ${repository}`);
         }
-        return {ok: true, root, repository};
+        return {ok: true, root, repository: issue.repository};
     }
 }
 
