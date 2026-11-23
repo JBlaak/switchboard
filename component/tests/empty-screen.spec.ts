@@ -362,6 +362,31 @@ test.describe('managers', () => {
         await expect(page.getByRole('heading', {name: 'New schedule'})).toBeVisible();
     });
 
+    for (const [setUp, configured] of [
+        ['both inbox managers', {bug: true, issue: true}],
+        ['only the Bug manager', {bug: true, issue: false}],
+        ['only the Issue manager', {bug: false, issue: true}],
+        ['neither inbox manager', {bug: false, issue: false}],
+    ] as const) {
+        test(`all stand inside the family card's edges with ${setUp} set up`, async ({page, api}) => {
+            /* Given */
+            await expect(says(page, FIRST_LINE)).toBeVisible();
+
+            /* When */
+            await api.emit('onInboxChanged', {...summary([0, 0], 0), configured});
+
+            /* Then */
+            const card = (await page.getByTestId('patch-family').boundingBox())!;
+            const figures = page.getByTestId('patch-managers').locator('[data-manager]');
+            await expect(figures).toHaveCount(2 + Number(configured.bug) + Number(configured.issue));
+            for (const figure of await figures.all()) {
+                const box = (await figure.boundingBox())!;
+                expect(box.x).toBeGreaterThanOrEqual(card.x);
+                expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
+            }
+        });
+    }
+
     test.describe('with a project on Watch issues', () => {
         // What main answers at launch with a project on Watch issues and nothing read yet.
         test.use({
