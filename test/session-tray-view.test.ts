@@ -466,3 +466,42 @@ test('the tray leaves Make this a schedule out for a session that cannot be one'
     /* Then */
     assert.doesNotMatch(html, /Make this a schedule/);
 });
+
+// ── Land it on a PR's status line ──
+
+function landing(fields: {landing?: boolean; failure?: string | null} = {}): SessionTrayContentProps['land'] {
+    return () => ({
+        control: createElement('button', {type: 'button', className: 'land-it is-sm'}, 'Land it'),
+        landing: fields.landing ?? false,
+        failure: fields.failure ?? null,
+    });
+}
+
+test("Land it sits on the PR's status line before its ⌘ key, outside the link", () => {
+    /* When */
+    const html = tray({land: landing()});
+
+    /* Then */
+    assert.match(
+        html,
+        /<div class="tray-link has-land"><a class="tray-link-title tray-link-cover" href="https:\/\/github.com\/acme\/app\/pull\/331"[^>]*>PR 331<\/a>/,
+    );
+    assert.match(
+        html,
+        /<span class="tray-link-status">[^<]*<\/span><span class="tray-land"><button type="button" class="land-it is-sm">Land it<\/button><\/span><span class="tray-key">⌘3<\/span>/,
+    );
+    assert.doesNotMatch(html, /<a [^>]*>(?:(?!<\/a>).)*<button/);
+});
+
+test('while it lands the status line says so, and a failed land says why under the PR', () => {
+    /* When */
+    const busy = tray({land: landing({landing: true})});
+    const failed = tray({land: landing({failure: 'GitHub did not answer in time'})});
+
+    /* Then */
+    assert.match(busy, /<span class="tray-link-status">handing to the Merge manager…<\/span>/);
+    assert.match(
+        failed,
+        /<span class="tray-land-failure" role="alert">Could not land: GitHub did not answer in time<\/span>/,
+    );
+});

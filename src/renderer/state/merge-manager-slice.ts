@@ -123,6 +123,8 @@ export interface MergeManagerSliceState {
     readonly sessionPullRequests: IdRecord<readonly LinkedPr[]>;
     /** `landedKey` → the Land it or Unland under way for it. */
     readonly busy: IdRecord<LandAction>;
+    /** `landedKey` → why its last Land it failed, until it is pressed again or lands. */
+    readonly landFailures: IdRecord<string>;
     readonly toast: LandToast | null;
     /** The id the next toast takes, so a timer left over from an older one closes nothing. */
     readonly nextToastId: number;
@@ -139,6 +141,7 @@ export const initialMergeManagerState: MergeManagerSliceState = {
     state: EMPTY_MERGE_MANAGER_STATE,
     sessionPullRequests: {},
     busy: {},
+    landFailures: {},
     toast: null,
     nextToastId: 1,
     page: {
@@ -165,13 +168,24 @@ export function mergeManagerReducer(state: MergeManagerSliceState, event: Render
                 ...state,
                 sessionPullRequests: withEntry(state.sessionPullRequests, event.sessionId, event.pullRequests),
             };
-        case 'landStarted':
-            return {...state, busy: withEntry(state.busy, landedKey(event.repository, event.number), event.action)};
+        case 'landStarted': {
+            const key = landedKey(event.repository, event.number);
+            const landFailures = event.action === 'land' ? withoutEntry(state.landFailures, key) : state.landFailures;
+            return {...state, busy: withEntry(state.busy, key, event.action), landFailures};
+        }
         case 'landFinished': {
-            const busy = withoutEntry(state.busy, landedKey(event.repository, event.number));
+            const key = landedKey(event.repository, event.number);
+            const busy = withoutEntry(state.busy, key);
+            const landFailures =
+                event.action !== 'land'
+                    ? state.landFailures
+                    : event.result.ok
+                      ? withoutEntry(state.landFailures, key)
+                      : withEntry(state.landFailures, key, event.result.reason);
             const toast = finishedToast(event, state.nextToastId, state.state);
-            if (!toast) return {...state, busy, toast: closesToast(state.toast, event) ? null : state.toast};
-            return {...state, busy, toast, nextToastId: state.nextToastId + 1};
+            if (!toast)
+                return {...state, busy, landFailures, toast: closesToast(state.toast, event) ? null : state.toast};
+            return {...state, busy, landFailures, toast, nextToastId: state.nextToastId + 1};
         }
         case 'landToastClosed':
             return state.toast?.id === event.id ? {...state, toast: null} : state;
@@ -287,6 +301,11 @@ export function lanesChanged(before: MergeManagerState, after: MergeManagerState
 /** Whether a Land it or Unland is under way for a PR. */
 export function landBusy(state: MergeManagerSliceState, repository: string, number: number): LandAction | null {
     return state.busy[landedKey(repository, number)] ?? null;
+}
+
+/** Why the last Land it for a PR failed; null when it did not, or is pressed again. */
+export function landFailure(state: MergeManagerSliceState, repository: string, number: number): string | null {
+    return state.landFailures[landedKey(repository, number)] ?? null;
 }
 
 /** A re-keyed session keeps its PRs; see `rekeyState` in `root`. */

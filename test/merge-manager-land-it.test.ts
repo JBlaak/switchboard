@@ -99,6 +99,7 @@ test("the toast and the header's pill say the PR's place in its repository's lan
     /* Then */
     assert.equal(landedToastText(view!), "Landed #2 · 2nd in connect's lane");
     assert.equal(landedPillText(view!), 'Landed · 2nd in connect');
+    assert.equal(landedPillText(view!, undefined, true), 'Landed · 2nd');
 });
 
 test('a PR landed before its approval says it is held, as it has no place yet', () => {
@@ -181,4 +182,29 @@ test('a landed PR shows its stage as a pill with a menu, in place of Land it', (
     assert.match(html, /class="landed-pill"[^>]*aria-haspopup="menu"/);
     assert.match(html, /Landed · 2nd in connect/);
     assert.doesNotMatch(html, />Land it</);
+});
+
+test('while it lands the button spins and says Landing, and after a failed land it offers Try again with why', () => {
+    /* When */
+    const landing = draw({busy: 'land', size: 'sm'});
+    const failed = draw({failure: 'GitHub did not answer in time'});
+
+    /* Then */
+    assert.match(landing, /class="land-it is-sm is-busy"[^>]*disabled=""[^>]*aria-busy="true"/);
+    assert.match(landing, /<span class="land-it-spinner" aria-hidden="true"><\/span>Landing<\/button>/);
+    assert.match(failed, />Try again<\/button>/);
+    assert.match(failed, /title="Could not land: GitHub did not answer in time"/);
+    assert.doesNotMatch(failed, /disabled/);
+});
+
+test('the short landed pill leaves the lane off, and its tooltip keeps the whole stage', () => {
+    /* Given */
+    const offer = landOffer(candidate(2), lanes());
+
+    /* When */
+    const html = draw({offer, short: true});
+
+    /* Then */
+    assert.match(html, /title="Landed · 2nd in connect"/);
+    assert.match(html, /<\/span>Landed · 2nd<span class="landed-pill-caret"/);
 });
