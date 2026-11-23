@@ -109,7 +109,7 @@ export function ComingUp({
                                 </div>
                                 <div className="mm-tl-pins" aria-hidden="true">
                                     {timePins(track.blocks, laneTimes).map((pin) => (
-                                        <span key={pin.key} style={{left: pin.at * 100 + '%'}}>
+                                        <span key={pin.key} style={{width: pin.at * 100 + '%'}}>
                                             {pin.text}
                                         </span>
                                     ))}

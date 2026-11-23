@@ -172,7 +172,18 @@
 .mm-tl-track {
     position: relative;
     height: 36px;
-    border-left: 2px solid rgba(var(--sb-accent-rgb), 0.5);
+
+    // The now line, drawn over 0 itself (not as a border, which would push the
+    // blocks and ticks 2px right of the axis, the pins and the flags' poles).
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: -1px;
+        width: 2px;
+        background: rgba(var(--sb-accent-rgb), 0.5);
+    }
 }
 
 .mm-tl-tick {
@@ -232,12 +243,17 @@
     position: relative;
     height: 16px;
 
-    // Ending at its block's end, so a flag's pole there passes beside it.
+    // Ending at its block's end, so a flag's pole there passes beside it;
+    // a pin too wide for the room before it starts at now instead of
+    // spilling over the track's name.
     span {
         position: absolute;
         top: 2px;
+        left: 0;
+        box-sizing: border-box;
+        min-width: max-content;
         padding-right: 4px;
-        transform: translateX(-100%);
+        text-align: right;
         font: 700 10.5px var(--sb-font-body);
         color: var(--sb-text-muted);
         font-variant-numeric: tabular-nums;
