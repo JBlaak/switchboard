@@ -13,6 +13,7 @@ import {landOffer, landedPillText, type LandCandidate, type LandOffer} from '../
 import {landBusy, type LandAction} from '../../state/merge-manager-slice';
 import {useStore} from '../use-store';
 import {landPullRequest, unlandPullRequest} from './land-actions';
+import {rocketFrom} from '../../lib/motion/rocket';
 import {openMergeManager} from './page-actions';
 import {landedKey} from '../../../domain/merge-manager/model';
 
@@ -20,7 +21,10 @@ export interface LandItProps {
     pr: LandCandidate;
     /** `sm` in the tight places: the tray and the project page's rows. */
     size?: 'sm';
-    /** Where the rocket takes off instead of the button, or null for the button: the header's session row in the sidebar. */
+    /**
+     * Where the rocket takes off instead of the button, or null for no rocket:
+     * the session's row in the sidebar, for the header's and the tray's Land it.
+     */
     launchFrom?(): Element | null;
 }
 
@@ -34,7 +38,7 @@ export function LandIt({pr, size, launchFrom}: LandItProps): JSX.Element | null 
             offer={offer}
             busy={busy}
             size={size}
-            onLand={(button) => void landPullRequest(pr.repository, pr.number, launchFrom?.() ?? button)}
+            onLand={(button) => void landPullRequest(pr.repository, pr.number, rocketFrom(button, launchFrom))}
             onUnland={() => void unlandPullRequest(pr.repository, pr.number)}
             onOpen={() => openMergeManager(landedKey(pr.repository, pr.number))}
         />

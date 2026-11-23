@@ -7,7 +7,8 @@
  * after either (`mergeManagerChanged`), which turns every place's button into
  * the PR's stage.
  *
- * A land from a Land it button launches the rocket from it once main took it.
+ * A land from a Land it button launches the rocket once main took it: from the
+ * button, or, for a session's PR, only from the session's row in the sidebar.
  */
 import {dispatch, getState} from '../../state/app-store';
 import {sessionMap} from '../../state/session-store';
@@ -15,6 +16,7 @@ import {landOffer, sessionLandCandidate} from '../../../domain/merge-manager/lan
 import type {LinkedPr} from '../../../domain/session/links';
 import {failureReason} from './failure-reason';
 import {launchRocket} from '../../lib/motion/rocket';
+import {sidebarContent} from '../../lib/dom';
 
 /** Hand a PR to the Merge manager; a land from a button (`from`) launches the rocket from it once it is landed. */
 export async function landPullRequest(repository: string, number: number, from?: Element): Promise<void> {
@@ -36,6 +38,19 @@ export async function landPullRequest(repository: string, number: number, from?:
     } catch (err) {
         dispatch({type: 'landFinished', repository, number, action: 'land', result: failed(err)});
     }
+}
+
+/**
+ * The session's sidebar row, when it is in sight (not in a collapsed group, a
+ * hidden sidebar, or scrolled away): where a session's rocket takes off.
+ */
+export function sessionRowInSight(sessionId: string): Element | null {
+    const row = sidebarContent.querySelector(`.session-item[data-session-id="${CSS.escape(sessionId)}"]`);
+    if (!row) return null;
+    const r = row.getBoundingClientRect();
+    const list = sidebarContent.getBoundingClientRect();
+    const middle = r.top + r.height / 2;
+    return r.width > 0 && r.height > 0 && middle > list.top && middle < list.bottom ? row : null;
 }
 
 /** Take a landed PR back out of its lane. Running CI and errands are left alone. */

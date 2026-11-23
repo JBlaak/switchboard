@@ -40,6 +40,7 @@ import {trayLinks} from './tray-view';
 import {inHeaderBox, inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
 import {LandIt} from '../merge-manager/LandIt';
+import {sessionRowInSight} from '../merge-manager/land-actions';
 import type {SessionTrayActions} from './SessionTrayContent';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
 import type {LinkedPr, SessionLink} from '../../../domain/session/links';
@@ -333,7 +334,7 @@ export function SessionTray(): JSX.Element | null {
                 now={Date.now()}
                 heldUntil={heldUntil}
                 actions={actions}
-                land={trayLand}
+                land={(pr) => trayLand(sessionId, pr)}
             />
         </div>
     );
@@ -345,13 +346,18 @@ function keyboardInside(section: HTMLElement | null): boolean {
     return !!section && !!active && section.contains(active) && active.matches(':focus-visible');
 }
 
-/** Land it under a PR's link, or its landed stage; nothing for one that is neither yours and open nor landed. */
-function trayLand(pr: LinkedPr): ReactNode {
+/**
+ * Land it under a PR's link, or its landed stage; nothing for one that is
+ * neither yours and open nor landed. Its rocket takes off from the session's
+ * row in the sidebar, never from the tray.
+ */
+function trayLand(sessionId: string, pr: LinkedPr): ReactNode {
     if (!pr.status || !pr.repository) return null;
     return (
         <LandIt
             pr={{repository: pr.repository, number: pr.number, state: pr.status.state, mine: pr.status.mine}}
             size="sm"
+            launchFrom={() => sessionRowInSight(sessionId)}
         />
     );
 }
