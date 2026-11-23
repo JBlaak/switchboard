@@ -53,6 +53,11 @@ import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
 import {RemoteConnectionSupervisor} from '../application/services/remote-connection-supervisor';
 import {ScheduleService} from '../application/services/schedule-service';
+import {ScheduleManagerService} from '../application/services/schedule-manager-service';
+import {UsageCache} from '../application/services/usage-cache';
+import type {ScheduleEngine} from '../application/services/schedule-engine';
+import type {ScheduleRunStore} from '../application/ports/schedule-runs';
+import type {PromptVersion, ScheduleRun} from '../domain/schedule/manager';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
 import {SessionRestoreService} from '../application/services/session-restore-service';
@@ -149,6 +154,7 @@ import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
 import {PlannerCycleProvider} from '../infrastructure/planner/planner-cycle-provider';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
+import {PmsetWakeSchedule} from '../infrastructure/system/pmset-wake-schedule';
 import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {PendingUpdateFile} from '../infrastructure/system/pending-update-file';
@@ -240,8 +246,10 @@ export interface Container {
     readonly projects: ProjectListService;
     /** Checks a folder before it is added as a project (#171). */
     readonly projectFolders: ProjectFolderService;
-    readonly usage: OAuthUsageService;
+    readonly usage: UsageCache;
     readonly schedules: ScheduleService;
+    /** The Schedule manager's page: facts, details, saving, drafting, the wake. */
+    readonly scheduleManager: ScheduleManagerService;
     readonly weather: WeatherService;
     /** The managers' settings (#412): Planner cycles for snoozes, Releases are tagged. */
     readonly inboxSettings: InboxSettingsService;
@@ -784,7 +792,8 @@ export function buildContainer(): Container {
     });
 
     // ── Feature services ──
-    const usage = new OAuthUsageService(log);
+    // Kept, so the Schedule manager reads the week without spending the endpoint's rate limit.
+    const usage = new UsageCache(new OAuthUsageService(log));
     const weather = new WeatherService({
         source: new OpenMeteoWeatherSource(clock, log),
         settings,
@@ -965,6 +974,21 @@ export function buildContainer(): Container {
         const remote = isRemoteProjectPath(live.projectPath);
         return {folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath};
     };
+    const scheduleManager = new ScheduleManagerService({
+        engine: tempScheduleEngine(schedules),
+        runs: new TempScheduleRunStore(),
+        fs,
+        wake: new PmsetWakeSchedule(log),
+        week: () => usage.latestWeek(),
+        cli: claudeCaller,
+        projects: () => routeCandidates(projects.list(false)),
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        renderer,
+        clock,
+        timers,
+        log,
+    });
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -1378,12 +1402,13 @@ export function buildContainer(): Container {
         });
         if (connection.connected) await selfArchiveCatchUp?.catchUp(connection);
     };
-    agents.onConnected((connection) =>
-        void catchUpSelfSessions({
-            user: connection.host.user,
-            host: connection.host.host,
-            port: Number(connection.host.port) || 22,
-        }),
+    agents.onConnected(
+        (connection) =>
+            void catchUpSelfSessions({
+                user: connection.host.user,
+                host: connection.host.host,
+                port: Number(connection.host.port) || 22,
+            }),
     );
     mergingHost = new MergingHostService({
         local: mergeManager,
@@ -1761,6 +1786,7 @@ export function buildContainer(): Container {
         projectFolders,
         usage,
         schedules,
+        scheduleManager,
         weather,
         inboxSettings,
         updates,
@@ -1925,4 +1951,84 @@ export function isolateUserDataIfRequested(): void {
     // its own single-instance lock, so both can run side by side.
     if (!process.env.SWITCHBOARD_DATA_DIR) return;
     app.setPath('userData', path.resolve(process.env.SWITCHBOARD_DATA_DIR, 'electron'));
+}
+
+/**
+ * TEMP until the engine branch lands: ScheduleService implements
+ * ScheduleEngine there. Until then a ScheduleService without it answers as
+ * an engine with no schedules, so the app still starts.
+ */
+function tempScheduleEngine(schedules: ScheduleService): ScheduleEngine {
+    if ('all' in schedules) return schedules as unknown as ScheduleEngine;
+    const absent = {error: 'The scheduler cannot run schedules from the Schedule manager yet'};
+    return {
+        all: () => [],
+        runNow: () => absent,
+        skipNext: () => absent,
+        isRunning: () => false,
+        onChanged: () => () => {},
+    };
+}
+
+/** TEMP until the engine branch lands: the sqlite ScheduleRunStore replaces this in-memory one. */
+class TempScheduleRunStore implements ScheduleRunStore {
+    private readonly runs = new Map<string, ScheduleRun>();
+    private readonly versions = new Map<string, PromptVersion[]>();
+
+    public add(run: ScheduleRun): void {
+        this.runs.set(run.id, run);
+    }
+    public update(id: string, change: Partial<Omit<ScheduleRun, 'id' | 'scheduleKey'>>): void {
+        const run = this.runs.get(id);
+        if (run) this.runs.set(id, {...run, ...change});
+    }
+    public get(id: string): ScheduleRun | null {
+        return this.runs.get(id) ?? null;
+    }
+    public runsOf(scheduleKey: string, limit: number): ScheduleRun[] {
+        return this.newest()
+            .filter((r) => r.scheduleKey === scheduleKey)
+            .slice(0, limit);
+    }
+    public runsSince(since: number): ScheduleRun[] {
+        return this.newest().filter((r) => Math.max(r.startedAt ?? 0, r.endedAt ?? 0, r.dueAt ?? 0) >= since);
+    }
+    public runningRuns(): ScheduleRun[] {
+        return this.newest().filter((r) => r.status === 'running');
+    }
+    public hasRunFor(scheduleKey: string, dueAt: number): boolean {
+        return this.newest().some((r) => r.scheduleKey === scheduleKey && r.dueAt === dueAt);
+    }
+    public markAllSeen(): number {
+        const unseen = this.newest().filter((r) => !r.seen && r.status !== 'running');
+        for (const run of unseen) this.runs.set(run.id, {...run, seen: true});
+        return unseen.length;
+    }
+    public lastStatuses(scheduleKey: string, limit: number): ScheduleRun['status'][] {
+        return this.runsOf(scheduleKey, limit)
+            .reverse()
+            .map((r) => r.status);
+    }
+    public versionsOf(scheduleKey: string): PromptVersion[] {
+        return [...(this.versions.get(scheduleKey) ?? [])];
+    }
+    public versionFor(scheduleKey: string, text: string, savedAt: number, note: string | null): number {
+        const list = this.versions.get(scheduleKey) ?? [];
+        if (list[0]?.text === text) return list[0].version;
+        const version = (list[0]?.version ?? 0) + 1;
+        this.versions.set(scheduleKey, [{version, text, savedAt, note}, ...list]);
+        return version;
+    }
+    public rekey(from: string, to: string): void {
+        for (const run of this.runs.values())
+            if (run.scheduleKey === from) this.runs.set(run.id, {...run, scheduleKey: to});
+        const list = this.versions.get(from);
+        if (list) {
+            this.versions.set(to, list);
+            this.versions.delete(from);
+        }
+    }
+    private newest(): ScheduleRun[] {
+        return [...this.runs.values()].sort((a, b) => (b.startedAt ?? b.dueAt ?? 0) - (a.startedAt ?? a.dueAt ?? 0));
+    }
 }

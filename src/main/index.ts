@@ -92,6 +92,7 @@ function main(): void {
             .shutdown()
             .catch((err: Error) => container.log.warn('[phone] shutdown failed:', err.message));
         container.projectsWatcher.stop();
+        container.scheduleManager.stop();
         container.questionHook.stop();
         // Close the VM links first: their sessions keep running on the VM.
         container.agents.shutdown();
@@ -178,6 +179,7 @@ async function start(container: Container): Promise<void> {
     container.projectsWatcher.start();
     container.schedules.ensureCreatorCommand();
     container.schedules.start();
+    container.scheduleManager.start();
     // Only an installed build has a version worth comparing; a dev run would
     // always be "behind" whatever is released.
     if (app.isPackaged) container.updates.start();

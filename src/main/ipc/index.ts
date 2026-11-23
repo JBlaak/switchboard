@@ -38,6 +38,7 @@ import {registerWorkspaceHandlers} from './workspace-handlers';
 import {registerBugsnagHandlers} from './bugsnag-handlers';
 import {registerInboxHandlers} from './inbox-handlers';
 import {registerMergeManagerHandlers} from './merge-manager-handlers';
+import {registerScheduleManagerHandlers} from './schedule-manager-handlers';
 import {registerGithubHandlers} from './github-handlers';
 import type {Container} from '../composition-root';
 
@@ -75,5 +76,6 @@ export function registerIpcHandlers(app: Container): void {
     registerBugsnagHandlers(ipc, app);
     registerInboxHandlers(ipc, app);
     registerMergeManagerHandlers(ipc, app);
+    registerScheduleManagerHandlers(ipc, app);
     registerGithubHandlers(ipc, app);
 }
