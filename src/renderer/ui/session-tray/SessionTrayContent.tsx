@@ -5,7 +5,7 @@
  * - Ask: the saved prompts with their ⌘ keys, and Edit (the Settings editor).
  * - Links: the session's PRs, issues, artifacts, latest page, Bugsnag error and task;
  *   the PRs with the ⌘ keys that open them, numbered on after the prompts'.
- * - Workspace: Editor, Finder, Shell here, Hand off….
+ * - Workspace: Editor, Finder, Shell here, Hand off…, Make this a schedule.
  * - Session: context used with its meter, shell · running time · messages,
  *   Copy session id, Archive and Stop.
  *
@@ -51,6 +51,8 @@ export interface SessionTrayActions {
     handOffClicked(): void;
     /** Bring back (#276): a VM session's dialog to bring it back to this Mac. */
     bringBack(): void;
+    /** Make this a schedule: the create form, drafted from what the session did. */
+    makeSchedule(): void;
 }
 
 export interface SessionTrayContentProps {
@@ -68,6 +70,8 @@ export interface SessionTrayContentProps {
     handOffHosts: readonly HandoffHost[] | null;
     /** The session runs on a VM copy of a local project, so it can be brought back. */
     bringBack: boolean;
+    /** A local Claude session in a project, so it can be made a schedule. */
+    makeSchedule?: boolean;
     running: boolean;
     /** Copy session id was just pressed. */
     copied: boolean;
@@ -230,7 +234,14 @@ function LinkChipDot({dot}: {dot: LinkDot | null}): JSX.Element | null {
     return <span className={'tray-dot is-' + dot} aria-hidden="true" />;
 }
 
-function WorkspaceGroup({editor, handOffHosts, bringBack, sessionId, actions}: SessionTrayContentProps): JSX.Element {
+function WorkspaceGroup({
+    editor,
+    handOffHosts,
+    bringBack,
+    makeSchedule,
+    sessionId,
+    actions,
+}: SessionTrayContentProps): JSX.Element {
     const available = editor?.available === true;
     const why = editor && !editor.available ? editor.reason : undefined;
     const app = editor?.available ? editor.app : null;
@@ -298,6 +309,17 @@ function WorkspaceGroup({editor, handOffHosts, bringBack, sessionId, actions}: S
                             rect={{x: 2, y: 3, width: 12, height: 8, rx: 1.5}}
                         />
                         Bring back…
+                    </button>
+                )}
+                {makeSchedule && (
+                    <button
+                        type="button"
+                        className="tray-row"
+                        title="Make this a schedule: Claude drafts one from what this session did"
+                        aria-label="Make this a schedule"
+                        onClick={actions.makeSchedule}>
+                        <Icon d="M8 5v3l2 1.5" rect={{x: 2.5, y: 2.5, width: 11, height: 11, rx: 5.5}} />
+                        Make this a schedule…
                     </button>
                 )}
             </div>
