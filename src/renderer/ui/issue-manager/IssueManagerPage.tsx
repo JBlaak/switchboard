@@ -44,6 +44,7 @@ import {
     stepSelection,
     toggleFocus,
 } from './actions';
+import {RepoMark} from '../shared/RepoMark';
 
 export function IssueManagerPage(): JSX.Element | null {
     const open = useStore((state) => state.mainArea.route.kind === 'issueManager');
@@ -220,6 +221,7 @@ function IssueManagerView(): JSX.Element {
                     {groups.map((group) => (
                         <div key={group.repository} role="group" aria-label={group.repository}>
                             <div className="im-group">
+                                <RepoMark name={group.repository} />
                                 <span>{group.repository}</span>
                                 <GroupCounts items={group.items} />
                             </div>
