@@ -48,7 +48,12 @@ export type DialogRequest =
      * Bring a VM session back to this Mac (#276). What it shows lives in the
      * session Bring back slice; one cancelled while it waited closes it.
      */
-    | {readonly kind: 'bringBackSession'; readonly sessionId: string};
+    | {readonly kind: 'bringBackSession'; readonly sessionId: string}
+    /**
+     * Create a schedule: blank, or drafted from a session. What it shows lives
+     * in the schedule-create slice; it opens on `scheduleCreateRequested`.
+     */
+    | {readonly kind: 'createSchedule'};
 
 export interface DialogState {
     readonly open: DialogRequest | null;
@@ -66,6 +71,8 @@ export function dialogReducer(state: DialogState, event: RendererEvent): DialogS
     switch (event.type) {
         case 'dialogOpened':
             return {open: event.request, seq: state.seq + 1};
+        case 'scheduleCreateRequested':
+            return {open: {kind: 'createSchedule'}, seq: state.seq + 1};
         case 'dialogClosed':
             return state.open && event.seq === state.seq ? {...state, open: null} : state;
         case 'sessionHandoffPhase':

@@ -121,6 +121,17 @@ test('a running schedule is Running, an off one Paused, a new one New', () => {
     assert.equal(fresh, 'new');
 });
 
+test('a new schedule whose file says it is off is still New, not Paused', () => {
+    /* Given: as the slash command writes one */
+    const fromCommand = file({isNew: true, settings: {enabled: false}});
+
+    /* When */
+    const group = scheduleGroup(fromCommand, null, false);
+
+    /* Then */
+    assert.equal(group, 'new');
+});
+
 test('the summary shows the last 14 runs oldest first and the next time', () => {
     /* Given: 20 runs, newest first */
     const runs = Array.from({length: 20}, (_, i) =>

@@ -8,6 +8,7 @@ import type {CommandEnding, CommandRunner} from '../src/application/ports/claude
 import type {TimerHandle, Timers} from '../src/application/ports/clock';
 import type {GitWrite} from '../src/application/ports/git-workspace';
 import {KILL_GRACE_MS, ScheduleService} from '../src/application/services/schedule-service';
+import {SCHEDULE_CREATOR_TEMPLATE} from '../src/domain/schedule/creator-template';
 import type {ScheduleServiceDeps} from '../src/application/services/schedule-service';
 import {MemoryScheduleRunStore} from '../src/application/services/support/memory-schedule-runs';
 import {encodeProjectPath} from '../src/domain/project/project-path';
@@ -597,4 +598,25 @@ test('on start, runs a quit left running are failed', () => {
     /* Then */
     const run = s.runs.get('left');
     assert.deepEqual([run?.status, run?.reason, run?.endedAt], ['failed', 'Switchboard quit during the run', THREE_AM]);
+});
+
+test('an old creator command that still points at the brain tab is replaced, an edited one is kept', () => {
+    /* Given */
+    const old = world({});
+    const commandsDir = path.join(old.home, '.claude', 'commands');
+    fs.mkdirSync(commandsDir, {recursive: true});
+    fs.writeFileSync(path.join(commandsDir, 'create-switchboard-schedule.md'), 'It will appear in the brain tab.');
+    const edited = world({});
+    const editedDir = path.join(edited.home, '.claude', 'commands');
+    fs.mkdirSync(editedDir, {recursive: true});
+    fs.writeFileSync(path.join(editedDir, 'create-switchboard-schedule.md'), 'My own version.');
+
+    /* When */
+    service(old).engine.ensureCreatorCommand();
+    service(edited).engine.ensureCreatorCommand();
+
+    /* Then */
+    const replaced = fs.readFileSync(path.join(commandsDir, 'create-switchboard-schedule.md'), 'utf8');
+    assert.equal(replaced, SCHEDULE_CREATOR_TEMPLATE);
+    assert.equal(fs.readFileSync(path.join(editedDir, 'create-switchboard-schedule.md'), 'utf8'), 'My own version.');
 });

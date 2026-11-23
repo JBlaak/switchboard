@@ -625,7 +625,10 @@ export class ScheduleService implements ScheduleEngine {
         const {fs, log} = this.deps;
         try {
             const commandPath = this.creatorCommandPath();
-            if (fs.exists(commandPath)) return;
+            // An install from before the Schedule manager still points at the
+            // brain tab and its schedules ran unseen: it is replaced. Any other
+            // copy may be the user's own edit and is left alone.
+            if (fs.exists(commandPath) && !fs.readText(commandPath).includes('brain tab')) return;
             fs.makeDir(this.deps.commandsDir);
             fs.writeText(commandPath, SCHEDULE_CREATOR_TEMPLATE);
         } catch (err) {

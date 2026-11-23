@@ -60,8 +60,9 @@ export function runNeedsYou(run: ScheduleRun): boolean {
 export function scheduleGroup(file: ScheduleFileFacts, newest: ScheduleRun | null, running: boolean): ScheduleGroup {
     if (newest && runNeedsYou(newest)) return 'needsYou';
     if (running || newest?.status === 'running') return 'running';
-    if (!file.settings.enabled) return 'paused';
+    // Written outside Switchboard: New until turned on here, whatever its file says.
     if (file.isNew) return 'new';
+    if (!file.settings.enabled) return 'paused';
     return 'scheduled';
 }
 

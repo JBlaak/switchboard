@@ -24,6 +24,8 @@ import {initialIssueManagerState, issueManagerReducer} from './issue-manager-sli
 import {initialMergeManagerState, mergeManagerReducer, rekeyMergeManager} from './merge-manager-slice';
 import {initialScheduleManagerState, scheduleManagerReducer} from './schedule-manager-slice';
 import type {ScheduleManagerSliceState} from './schedule-manager-slice';
+import {initialScheduleCreateState, scheduleCreateReducer} from './schedule-create-slice';
+import type {ScheduleCreateState} from './schedule-create-slice';
 import {bugPageReducer, initialBugPageState} from './bug-page-slice';
 import {githubReducer, initialGithubState} from './github-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
@@ -129,6 +131,8 @@ export interface RendererState {
     readonly issueManager: IssueManagerState;
     readonly mergeManager: MergeManagerSliceState;
     readonly scheduleManager: ScheduleManagerSliceState;
+    /** The create-a-schedule dialog: its step, sentence, draft and save. */
+    readonly scheduleCreate: ScheduleCreateState;
     /** The Bug manager page (#414): its items, tab, filter, cursor and Bugsnag reads. */
     readonly bugPage: BugPageState;
     /** GitHub's GraphQL budget: until when expensive reads are held back, for the freshness lines. */
@@ -175,6 +179,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         issueManager: initialIssueManagerState,
         mergeManager: initialMergeManagerState,
         scheduleManager: initialScheduleManagerState,
+        scheduleCreate: initialScheduleCreateState,
         bugPage: initialBugPageState,
         github: initialGithubState,
     };
@@ -227,6 +232,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const issueManager = issueManagerReducer(state.issueManager, event);
     const mergeManager = mergeManagerReducer(state.mergeManager, event);
     const scheduleManager = scheduleManagerReducer(state.scheduleManager, event);
+    const scheduleCreate = scheduleCreateReducer(state.scheduleCreate, event);
     const bugPage = bugPageReducer(state.bugPage, event);
     const github = githubReducer(state.github, event);
 
@@ -269,6 +275,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         issueManager,
         mergeManager,
         scheduleManager,
+        scheduleCreate,
         bugPage,
         github,
     });
@@ -349,6 +356,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         // Lanes of PRs, and each session's PRs for Land it.
         mergeManager: rekeyMergeManager(state.mergeManager, oldId, newId),
         scheduleManager: state.scheduleManager,
+        // The session a draft is asked for goes with the request made under its old id.
+        scheduleCreate: state.scheduleCreate,
         // Keyed by inbox key; a Fix session is found by its worktree.
         bugPage: state.bugPage,
         // Names no session.
