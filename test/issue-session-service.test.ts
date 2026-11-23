@@ -424,6 +424,21 @@ test('an issue from another repository is refused', async () => {
     assert.match(result.ok ? '' : result.reason, /#22 is in JBlaak\/James, not in this project's JBlaak\/switchboard/);
 });
 
+test('an issue whose repository differs from the origin only in case starts', async () => {
+    /* Given */
+    const {service} = harness({origin: 'git@github.com:jblaak/Switchboard.git'});
+
+    /* When */
+    const result = await service.prepareIssueWorktree({
+        projectPath: ROOT,
+        issue: key(114),
+        plan: plan([issue(114, 'Stage')]),
+    });
+
+    /* Then */
+    assert.equal(result.ok, true);
+});
+
 // ── Ownership (S1) ──
 
 test("a session whose transcripts were on an issue's branch owns it", async () => {
