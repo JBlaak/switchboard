@@ -1,7 +1,7 @@
 /**
- * The managers on the empty screen (#416, #440): four in a row on the family
- * card's floor, the Bug manager, Patch, the Issue manager and the Merge
- * manager.
+ * The managers on the empty screen (#416, #440): in a row on the family
+ * card's floor, the Schedule manager, the Bug manager, Patch, the Issue
+ * manager and the Merge manager.
  *
  * The inbox managers stand there only once they are set up (main says so
  * with the inbox counts); their pose and unread tag follow the counts as main
@@ -10,8 +10,9 @@
  * (`mergeFigureOf`), and its bubble says what merged lately (`mergedBubble`).
  * Choosing a manager, by click or by focus and Enter, opens its page; the
  * Merge manager's right-click menu also hands merging off to a VM and brings
- * it back (#442). The Schedule manager stands there once there is a
- * schedule; its pose and counter follow the facts (`scheduleFigureOf`). Patch
+ * it back (#442). The Schedule manager always stands there too, calm with no
+ * schedules, since its page is where the first one is made; its pose and
+ * counter follow the facts (`scheduleFigureOf`). Patch
  * gets a name label too, so the managers read as a row.
  *
  * Where they stand is the stylesheet's: on the floor beside Patch, or beside
@@ -50,7 +51,6 @@ export function EmptyScreenManagers(): JSX.Element {
     const issue = useStore((state) => managerFigureOf(state.inbox, 'issue'), sameFigure);
     const merge = useStore((state) => mergeFigureOf(state.mergeManager.state), sameMergeFigure);
     const lanes = useStore((state) => state.mergeManager.state);
-    const schedules = useStore((state) => (state.scheduleManager.facts?.schedules.length ?? 0) > 0);
     const schedule = useStore((state) => scheduleFigureOf(state.scheduleManager.facts), sameScheduleFigure);
     const scheduleSceneNow = scheduleScene(schedule);
     const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
@@ -83,13 +83,7 @@ export function EmptyScreenManagers(): JSX.Element {
                     {menu && <MergeFigureMenu at={menu} host={lanes.merging} onClose={() => setMenu(null)} />}
                 </>
             </Manager>
-            {schedules && (
-                <Manager
-                    kind={scheduleSceneNow.kind}
-                    scene={scheduleSceneNow}
-                    onSelect={() => openScheduleManager(null)}
-                />
-            )}
+            <Manager kind={scheduleSceneNow.kind} scene={scheduleSceneNow} onSelect={() => openScheduleManager(null)} />
         </div>
     );
 }

@@ -339,6 +339,29 @@ test.describe('managers', () => {
         await expect(row.getByRole('status')).toHaveText('#2 merged');
     });
 
+    test('the Schedule manager stands there with no schedules yet, and opens where the first one is made', async ({
+        page,
+    }) => {
+        /* Given */
+        await expect(says(page, FIRST_LINE)).toBeVisible();
+
+        /* When */
+        await manager(page, 'Schedule manager').click();
+
+        /* Then */
+        const overview = page.getByRole('region', {name: 'Schedule manager'});
+        await expect(overview).toContainText('No schedules yet.');
+
+        /* When */
+        await overview
+            .getByRole('button', {name: /New schedule/})
+            .first()
+            .click();
+
+        /* Then */
+        await expect(page.getByRole('heading', {name: 'New schedule'})).toBeVisible();
+    });
+
     test.describe('with a project on Watch issues', () => {
         // What main answers at launch with a project on Watch issues and nothing read yet.
         test.use({
