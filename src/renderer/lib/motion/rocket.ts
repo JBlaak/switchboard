@@ -34,6 +34,15 @@ export function rocketPath(t: number): {dx: number; dy: number} {
     return {dx: DRIFT_PX * eased, dy: -CLIMB_PX * eased};
 }
 
+/**
+ * Where a Land it press launches its rocket: from `launchFrom`'s answer when
+ * it is given, so none when it has nothing in sight, else from the button.
+ */
+export function rocketFrom(button: Element, launchFrom?: () => Element | null): Element | undefined {
+    if (!launchFrom) return button;
+    return launchFrom() ?? undefined;
+}
+
 export function launchRocket(x: number, y: number): void {
     if (typeof window === 'undefined' || reducedMotion()) return;
     const layer = document.createElement('div');
