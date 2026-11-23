@@ -22,6 +22,7 @@ import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
 import type {InboxSummary} from '../../domain/inbox/model';
 import type {MergeManagerState} from '../../domain/merge-manager/model';
+import type {ScheduleManagerFacts} from '../../domain/schedule/manager';
 
 export interface RendererGateway {
     /** True while there is a window listening; every send is a no-op without one. */
@@ -117,6 +118,10 @@ export interface RendererGateway {
     // ── The Merge manager (#434) ──
     /** The landed PRs' lanes changed after a poll or an action: every lane, and how many PRs need you. */
     mergeManagerChanged(state: MergeManagerState): void;
+
+    // ── The Schedule manager ──
+    /** A run started or ended, a schedule was saved, seen, turned on or off, or the wake changed: the whole overview. */
+    scheduleManagerChanged(facts: ScheduleManagerFacts): void;
 
     // ── GitHub's GraphQL budget ──
     /** Expensive GitHub reads are held back until this time for the budget, or no longer (null). */

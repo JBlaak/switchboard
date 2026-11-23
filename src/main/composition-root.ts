@@ -53,6 +53,9 @@ import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
 import {RemoteConnectionSupervisor} from '../application/services/remote-connection-supervisor';
 import {ScheduleService} from '../application/services/schedule-service';
+import {ScheduleManagerService} from '../application/services/schedule-manager-service';
+import {UsageCache} from '../application/services/usage-cache';
+import type {ScheduleRunStore} from '../application/ports/schedule-runs';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
 import {SessionRestoreService} from '../application/services/session-restore-service';
@@ -150,6 +153,7 @@ import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
 import {PlannerCycleProvider} from '../infrastructure/planner/planner-cycle-provider';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
+import {PmsetWakeSchedule} from '../infrastructure/system/pmset-wake-schedule';
 import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {PendingUpdateFile} from '../infrastructure/system/pending-update-file';
@@ -194,7 +198,6 @@ import type {PhoneAccessService} from '../application/services/phone-access-serv
 import type {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import type {DeviceRegistry, ServiceAdvertiser} from '../application/ports/phone-access';
 import type {RendererGateway} from '../application/ports/renderer-gateway';
-import type {ScheduleRunStore} from '../application/ports/schedule-runs';
 import type {Encryption} from '../infrastructure/phone/identity-store';
 
 import type {BrowserWindow} from 'electron';
@@ -242,11 +245,13 @@ export interface Container {
     readonly projects: ProjectListService;
     /** Checks a folder before it is added as a project (#171). */
     readonly projectFolders: ProjectFolderService;
-    readonly usage: OAuthUsageService;
+    readonly usage: UsageCache;
     /** The scheduler, and the Schedule manager's engine. */
     readonly schedules: ScheduleService;
     /** Every schedule run and prompt version. */
     readonly scheduleRuns: ScheduleRunStore;
+    /** The Schedule manager's page: facts, details, saving, drafting, the wake. */
+    readonly scheduleManager: ScheduleManagerService;
     readonly weather: WeatherService;
     /** The managers' settings (#412): Planner cycles for snoozes, Releases are tagged. */
     readonly inboxSettings: InboxSettingsService;
@@ -789,7 +794,8 @@ export function buildContainer(): Container {
     });
 
     // ── Feature services ──
-    const usage = new OAuthUsageService(log);
+    // Kept, so the Schedule manager reads the week without spending the endpoint's rate limit.
+    const usage = new UsageCache(new OAuthUsageService(log));
     const weather = new WeatherService({
         source: new OpenMeteoWeatherSource(clock, log),
         settings,
@@ -983,6 +989,21 @@ export function buildContainer(): Container {
         const remote = isRemoteProjectPath(live.projectPath);
         return {folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath};
     };
+    const scheduleManager = new ScheduleManagerService({
+        engine: schedules,
+        runs: scheduleRuns,
+        fs,
+        wake: new PmsetWakeSchedule(log),
+        week: () => usage.latestWeek(),
+        cli: claudeCaller,
+        projects: () => routeCandidates(projects.list(false)),
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        renderer,
+        clock,
+        timers,
+        log,
+    });
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -1781,6 +1802,7 @@ export function buildContainer(): Container {
         usage,
         schedules,
         scheduleRuns,
+        scheduleManager,
         weather,
         inboxSettings,
         updates,
