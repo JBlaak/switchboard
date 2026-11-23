@@ -320,6 +320,16 @@
     left: calc(50% + 250px);
 }
 
+/* The Schedule manager, once there is a schedule: on Patch's left, past the
+   Bug manager when it stands there. */
+.placeholder-manager.is-schedule {
+    right: calc(50% + 92px);
+}
+
+.placeholder-manager.is-bug ~ .placeholder-manager.is-schedule {
+    right: calc(50% + 250px);
+}
+
 /* What merged lately (#440), over the Merge manager's cap, on the same paper
    as Patch's bubble (below). */
 .placeholder-manager-bubble {

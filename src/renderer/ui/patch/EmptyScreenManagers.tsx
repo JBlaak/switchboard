@@ -10,8 +10,9 @@
  * (`mergeFigureOf`), and its bubble says what merged lately (`mergedBubble`).
  * Choosing a manager, by click or by focus and Enter, opens its page; the
  * Merge manager's right-click menu also hands merging off to a VM and brings
- * it back (#442). Patch
- * gets a name label too, so the four read as a row.
+ * it back (#442). The Schedule manager stands there once there is a
+ * schedule; its pose and counter follow the facts (`scheduleFigureOf`). Patch
+ * gets a name label too, so the managers read as a row.
  *
  * Where they stand is the stylesheet's: on the floor beside Patch, or beside
  * the ask box in a window too short for the family card. Like Patch, each
@@ -32,6 +33,9 @@ import type {MergingHostView} from '../../../domain/merge-manager/merging-host';
 import {bringMergingBack, handOffMerging} from '../merge-manager/merging-actions';
 import {dispatch} from '../../state/app-store';
 import type {ManagerFigure} from '../../state/inbox-slice';
+import {scheduleFigureOf} from '../../../domain/schedule/page';
+import {SCHEDULE_FIGURE_DRAWN, sameScheduleFigure, scheduleScene} from '../schedule-manager/figure-scene';
+import {openScheduleManager} from '../schedule-manager/actions';
 
 function sameFigure(a: ManagerFigure | null, b: ManagerFigure | null): boolean {
     return a === b || (a !== null && b !== null && a.pose === b.pose && a.count === b.count);
@@ -46,6 +50,9 @@ export function EmptyScreenManagers(): JSX.Element {
     const issue = useStore((state) => managerFigureOf(state.inbox, 'issue'), sameFigure);
     const merge = useStore((state) => mergeFigureOf(state.mergeManager.state), sameMergeFigure);
     const lanes = useStore((state) => state.mergeManager.state);
+    const schedules = useStore((state) => (state.scheduleManager.facts?.schedules.length ?? 0) > 0);
+    const schedule = useStore((state) => scheduleFigureOf(state.scheduleManager.facts), sameScheduleFigure);
+    const scheduleSceneNow = scheduleScene(schedule);
     const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
     return (
         <div className="placeholder-managers" data-testid="patch-managers">
@@ -76,6 +83,13 @@ export function EmptyScreenManagers(): JSX.Element {
                     {menu && <MergeFigureMenu at={menu} host={lanes.merging} onClose={() => setMenu(null)} />}
                 </>
             </Manager>
+            {schedules && SCHEDULE_FIGURE_DRAWN && (
+                <Manager
+                    kind={scheduleSceneNow.kind}
+                    scene={scheduleSceneNow}
+                    onSelect={() => openScheduleManager(null)}
+                />
+            )}
         </div>
     );
 }
