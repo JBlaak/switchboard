@@ -7,3 +7,8 @@ import {dispatch} from '../../state/app-store';
 export function openScheduleManager(key: string | null = null): void {
     dispatch({type: 'scheduleManagerPageRequested', key});
 }
+
+/** The create form: blank, or drafted from what a session did. */
+export function openCreateSchedule(sessionId: string | null = null): void {
+    dispatch({type: 'scheduleCreateRequested', sessionId});
+}

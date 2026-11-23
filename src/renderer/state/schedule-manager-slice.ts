@@ -13,7 +13,12 @@ export type ScheduleManagerEvent =
     /** The page asked for: its figure, its shortcut, a shelf link, a run row. `key` opens that schedule's page. */
     | {type: 'scheduleManagerPageRequested'; key: string | null}
     /** Esc on the overview. */
-    | {type: 'scheduleManagerPageClosed'};
+    | {type: 'scheduleManagerPageClosed'}
+    /**
+     * The create form asked for: N or New schedule on the page, or Make this a
+     * schedule from a session (`sessionId`, drafted from what it did).
+     */
+    | {type: 'scheduleCreateRequested'; sessionId: string | null};
 
 export interface ScheduleManagerSliceState {
     /** Null until main first answers. */
