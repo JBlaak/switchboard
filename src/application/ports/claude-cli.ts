@@ -17,9 +17,36 @@ export interface UsageService {
     fetch(): Promise<Usage>;
 }
 
-/** Runs one non-interactive `claude` invocation, for the scheduler. */
+/** How one scheduled `claude` process ended. */
+export interface CommandEnding {
+    /** Null when a signal ended it, or it never started. */
+    exitCode: number | null;
+    signal: string | null;
+    /** What it printed: the `--output-format json` result, after anything the shell printed first. */
+    stdout: string;
+    /** The end of what it printed to stderr, where a failing run says why. */
+    stderr: string;
+    /** It could not be started at all, and why; null when it ran. */
+    startError: string | null;
+}
+
+/** A scheduled run going now. */
+export interface RunningCommand {
+    /** Signal the run; its time limit sends SIGTERM, then SIGKILL when that is ignored. */
+    kill(signal: 'SIGTERM' | 'SIGKILL'): void;
+}
+
+/**
+ * Runs one non-interactive `claude` invocation, for the scheduler. `onDone`
+ * is called exactly once, however the run ends, also when it never started.
+ */
 export interface CommandRunner {
-    run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void;
+    run(
+        claudeArgs: readonly string[],
+        cwd: string,
+        name: string,
+        onDone: (ending: CommandEnding) => void,
+    ): RunningCommand;
 }
 
 /** How long a warm process may wait for its request before it is killed (S2). */

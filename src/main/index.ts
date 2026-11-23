@@ -168,6 +168,8 @@ async function start(container: Container): Promise<void> {
     // A shutdown may take the sessions down before the app hears it is quitting;
     // they were still running, so they come back after the reboot.
     powerMonitor.on('shutdown', () => container.sessionRestore.freeze());
+    // A cron time the Mac slept through is run once now, or recorded missed.
+    powerMonitor.on('resume', () => container.schedules.catchUp('wake'));
     // Before the window, so its first poll already finds them running.
     void restoreSessions(container);
     openWindow(container);

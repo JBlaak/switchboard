@@ -19,14 +19,19 @@
  * agent's group; systemd's stop of the whole unit still ends it. Nobody
  * watches a run, so what it prints goes to the agent's log, the journal:
  * stdout is the run's final answer, stderr says why one failed. Both are
- * capped, since the real record of a run is the transcript it writes.
+ * capped there, since the real record of a run is the transcript it writes;
+ * the scheduler is handed the end of each, where the result JSON and the
+ * reason for a failure are.
  */
 import {spawn} from 'node:child_process';
 
-import type {CommandRunner} from '../../application/ports/claude-cli';
+import type {ChildProcess} from 'node:child_process';
+
+import type {CommandEnding, CommandRunner, RunningCommand} from '../../application/ports/claude-cli';
 import type {Logger} from '../../application/ports/logger';
 import {withHostInstructions} from '../../domain/agent/host-instructions';
 import {headlessEnv} from '../../domain/launch/terminal-env';
+import {outputTail, STDERR_TAIL_CHARS, STDOUT_TAIL_CHARS} from '../claude-cli/support/output-tail';
 
 /** The most of a run's stdout and of its stderr kept for the journal. */
 export const SCHEDULE_OUTPUT_CAP_CHARS = 16 * 1024;
@@ -46,20 +51,29 @@ export interface NodeScheduleRunnerDeps {
 export class NodeScheduleRunner implements CommandRunner {
     constructor(private readonly deps: NodeScheduleRunnerDeps) {}
 
-    public run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void {
+    public run(
+        claudeArgs: readonly string[],
+        cwd: string,
+        name: string,
+        onDone: (ending: CommandEnding) => void,
+    ): RunningCommand {
         const {env, log} = this.deps;
         const command = this.deps.command ?? 'claude';
         const args = withHostInstructionsArgs(claudeArgs, this.deps.hostInstructions());
         log.info(`[schedule] running ${name} in ${cwd}`);
 
+        const stdout = capped();
+        const stderr = capped();
+        const stdoutTail = outputTail(STDOUT_TAIL_CHARS);
+        const stderrTail = outputTail(STDERR_TAIL_CHARS);
         let finished = false;
-        const done = () => {
+        const done = (ending: Omit<CommandEnding, 'stdout' | 'stderr'>) => {
             if (finished) return;
             finished = true;
-            onDone();
+            onDone({...ending, stdout: stdoutTail.text(), stderr: stderrTail.text()});
         };
 
-        let child;
+        let child: ChildProcess;
         try {
             child = spawn(command, args, {
                 cwd,
@@ -69,26 +83,41 @@ export class NodeScheduleRunner implements CommandRunner {
             });
         } catch (err) {
             log.error(`[schedule] ${name} could not start:`, errorText(err));
-            done();
-            return;
+            done({exitCode: null, signal: null, startError: errorText(err)});
+            return {kill: () => {}};
         }
 
-        const stdout = capped();
-        const stderr = capped();
-        child.stdout.on('data', (chunk: Buffer) => stdout.add(chunk));
-        child.stderr.on('data', (chunk: Buffer) => stderr.add(chunk));
+        child.stdout?.on('data', (chunk: Buffer) => {
+            stdout.add(chunk);
+            stdoutTail.add(chunk);
+        });
+        child.stderr?.on('data', (chunk: Buffer) => {
+            stderr.add(chunk);
+            stderrTail.add(chunk);
+        });
 
         // 'close' comes after the streams are drained, so the output is whole.
         child.on('close', (code, signal) => {
             if (stdout.text().trim()) log.info(`[schedule] ${name} output:\n${stdout.text().trim()}`);
             if (stderr.text().trim()) log.error(`[schedule] ${name} stderr:\n${stderr.text().trim()}`);
             log.info(`[schedule] ${name} finished (${signal ? `signal ${signal}` : `exit ${code}`})`);
-            done();
+            done({exitCode: code, signal, startError: null});
         });
         child.on('error', (err: Error) => {
             log.error(`[schedule] ${name} error:`, err.message);
-            done();
+            done({exitCode: null, signal: null, startError: err.message});
         });
+
+        return {
+            kill: (signal) => {
+                try {
+                    // Its own process group (detached), so what it started goes too.
+                    if (child.pid) process.kill(-child.pid, signal);
+                } catch {
+                    // Already gone.
+                }
+            },
+        };
     }
 }
 

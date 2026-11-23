@@ -183,10 +183,42 @@ const TABLES = [
     count INTEGER NOT NULL,
     at INTEGER NOT NULL
   )`,
+    // The Schedule manager's runs: one row per run of a schedule, started,
+    // skipped or missed. schedule_key is the schedule file's absolute path;
+    // the times are epoch ms, the week columns percent, seen 0 or 1.
+    `CREATE TABLE IF NOT EXISTS schedule_runs (
+    id TEXT PRIMARY KEY,
+    schedule_key TEXT NOT NULL,
+    session_id TEXT,
+    trigger TEXT NOT NULL,
+    due_at INTEGER,
+    started_at INTEGER,
+    ended_at INTEGER,
+    status TEXT NOT NULL,
+    reason TEXT,
+    prompt_version INTEGER NOT NULL,
+    report TEXT,
+    week_before REAL,
+    week_after REAL,
+    worktree TEXT,
+    seen INTEGER NOT NULL DEFAULT 0
+  )`,
+    // Every version of a schedule's prompt, numbered from 1 per schedule.
+    // Epoch ms for saved_at.
+    `CREATE TABLE IF NOT EXISTS schedule_prompt_versions (
+    schedule_key TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    saved_at INTEGER NOT NULL,
+    note TEXT,
+    PRIMARY KEY (schedule_key, version)
+  )`,
 ];
 
 const INDEXES = [
     'CREATE INDEX IF NOT EXISTS idx_lane_savings_at ON lane_savings(at)',
+    'CREATE INDEX IF NOT EXISTS idx_schedule_runs_key ON schedule_runs(schedule_key)',
+    'CREATE INDEX IF NOT EXISTS idx_schedule_runs_status ON schedule_runs(status)',
     'CREATE INDEX IF NOT EXISTS idx_session_cache_folder ON session_cache(folder)',
     'CREATE INDEX IF NOT EXISTS idx_session_cache_slug ON session_cache(slug)',
     'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',

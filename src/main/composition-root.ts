@@ -144,6 +144,7 @@ import {SqliteFixErrandStore} from '../infrastructure/sqlite/fix-errand-store';
 import {gitHubRepository} from '../domain/project/repo-url';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
+import {SqliteScheduleRunStore} from '../infrastructure/sqlite/schedule-runs';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
 import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
@@ -165,7 +166,7 @@ import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
 import {BackgroundTaskService} from '../application/services/background-task-service';
-import {isRemoteProjectPath} from '../domain/project/remote-target';
+import {isRemoteProjectPath, parseRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
@@ -193,6 +194,7 @@ import type {PhoneAccessService} from '../application/services/phone-access-serv
 import type {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import type {DeviceRegistry, ServiceAdvertiser} from '../application/ports/phone-access';
 import type {RendererGateway} from '../application/ports/renderer-gateway';
+import type {ScheduleRunStore} from '../application/ports/schedule-runs';
 import type {Encryption} from '../infrastructure/phone/identity-store';
 
 import type {BrowserWindow} from 'electron';
@@ -241,7 +243,10 @@ export interface Container {
     /** Checks a folder before it is added as a project (#171). */
     readonly projectFolders: ProjectFolderService;
     readonly usage: OAuthUsageService;
+    /** The scheduler, and the Schedule manager's engine. */
     readonly schedules: ScheduleService;
+    /** Every schedule run and prompt version. */
+    readonly scheduleRuns: ScheduleRunStore;
     readonly weather: WeatherService;
     /** The managers' settings (#412): Planner cycles for snoozes, Releases are tagged. */
     readonly inboxSettings: InboxSettingsService;
@@ -803,6 +808,7 @@ export function buildContainer(): Container {
     });
     const shellProfileId = (): string => settings.shellProfileId(null);
 
+    const scheduleRuns = new SqliteScheduleRunStore(database.db);
     const schedules = new ScheduleService({
         fs,
         transcripts,
@@ -813,8 +819,20 @@ export function buildContainer(): Container {
         log,
         commandsDir: paths.commandsDir,
         runner: new ClaudeCommandRunner({shells, terminals, log, shellProfileId}),
+        runs: scheduleRuns,
+        usage,
+        git: localWorkspace,
         // A project whose schedules run on a VM is paused here (#276 stage 5).
         runsHere: (projectPath) => vmSchedules.macRunsSchedulesOf(projectPath),
+        vmHostOf: (projectPath) => {
+            for (const [localPath, choice] of Object.entries(settings.vmSchedules().choices)) {
+                const root = localPath.replace(/\/+$/, '');
+                if (projectPath === root || projectPath.startsWith(root + '/')) {
+                    return parseRemoteProjectPath(choice.copyPath)?.host ?? null;
+                }
+            }
+            return null;
+        },
     });
     // Ask Patch (#135): one Haiku call per request typed on the empty screen.
     const claudeCaller = new ShellClaudeCaller({
@@ -1378,12 +1396,13 @@ export function buildContainer(): Container {
         });
         if (connection.connected) await selfArchiveCatchUp?.catchUp(connection);
     };
-    agents.onConnected((connection) =>
-        void catchUpSelfSessions({
-            user: connection.host.user,
-            host: connection.host.host,
-            port: Number(connection.host.port) || 22,
-        }),
+    agents.onConnected(
+        (connection) =>
+            void catchUpSelfSessions({
+                user: connection.host.user,
+                host: connection.host.host,
+                port: Number(connection.host.port) || 22,
+            }),
     );
     mergingHost = new MergingHostService({
         local: mergeManager,
@@ -1761,6 +1780,7 @@ export function buildContainer(): Container {
         projectFolders,
         usage,
         schedules,
+        scheduleRuns,
         weather,
         inboxSettings,
         updates,
