@@ -69,10 +69,15 @@ export interface ScheduleManagerServiceDeps {
     locate: (sessionId: string) => {folder: string | null; projectPath: string} | null;
     transcripts: Pick<TranscriptQueries, 'readHeadLines' | 'readTail'>;
     renderer: Pick<RendererGateway, 'scheduleManagerChanged'>;
+    /** Archive a session: Mark all read puts the runs' sessions away with them. */
+    archive?: (sessionId: string) => void;
     clock: Clock;
     timers: Timers;
     log: Logger;
 }
+
+/** How far back Mark all read looks for sessions to archive: as far as the shelf shows runs. */
+const MARK_ALL_WINDOW_MS = 36 * 60 * 60 * 1000;
 
 export class ScheduleManagerService {
     private unsubscribe: (() => void) | null = null;
@@ -233,8 +238,19 @@ export class ScheduleManagerService {
         this.push();
     }
 
+    /**
+     * Every finished run seen, and the sessions of those not seen until now
+     * archived: they were read on the shelf, not opened. A run opened from the
+     * shelf is left as it is, since the user is looking at it.
+     */
     public markAllSeen(): void {
-        if (this.deps.runs.markAllSeen() > 0) this.push();
+        const {runs, clock, archive} = this.deps;
+        const unseen = runs
+            .runsSince(clock.now() - MARK_ALL_WINDOW_MS)
+            .filter((run) => !run.seen && run.status !== 'running' && run.sessionId);
+        if (runs.markAllSeen() === 0) return;
+        for (const run of unseen) archive?.(run.sessionId!);
+        this.push();
     }
 
     // ── Drafting ──

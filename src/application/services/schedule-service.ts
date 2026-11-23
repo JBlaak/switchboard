@@ -103,6 +103,11 @@ export interface ScheduleServiceDeps {
     runs?: ScheduleRunStore;
     /** The usage endpoint, for the week's share before and after a run. Absent, the week is unknown. */
     usage?: Pick<UsageService, 'fetch'>;
+    /**
+     * Archive a session, as the sidebar's archive does. A run that found
+     * nothing to do is archived as it ends, so quiet nights don't fill Recent.
+     */
+    archive?: (sessionId: string) => void;
     /** For a run's own worktree. Absent, every run works in the project, as before. */
     git?: Pick<GitWorkspace, 'worktreeRoot' | 'defaultBranch' | 'commitSha'> &
         Pick<GitWorktrees, 'fetchBranch' | 'addWorktree'>;
@@ -397,6 +402,8 @@ export class ScheduleService implements ScheduleEngine {
             weekAfter,
             ...(outcome.sessionId ? {sessionId: outcome.sessionId} : {}),
         });
+        const sessionId = this.runs.get(live.runId)?.sessionId;
+        if (outcome.status === 'done' && outcome.seen && sessionId) this.deps.archive?.(sessionId);
     }
 
     private finish(key: string, live: LiveRun, change: Partial<Omit<ScheduleRun, 'id' | 'scheduleKey'>>): void {

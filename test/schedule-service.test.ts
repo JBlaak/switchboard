@@ -125,6 +125,7 @@ function service(
     const runner = handRunner();
     const timers = new HandTimers();
     const usageReads: number[] = [];
+    const archived: string[] = [];
     let clock = THREE_AM;
     const week = options.week === undefined ? 40 : options.week;
     const usage = {
@@ -146,6 +147,7 @@ function service(
         runs,
         usage,
         git: options.git,
+        archive: (sessionId) => archived.push(sessionId),
     });
     const changes: number[] = [];
     engine.onChanged(() => changes.push(1));
@@ -155,6 +157,7 @@ function service(
         runner,
         timers,
         usageReads,
+        archived,
         changes,
         setNow: (at: number) => void (clock = at),
         /** Turn a schedule on the way the manager does: record its prompt's first version. */
@@ -292,6 +295,22 @@ test('a run that found nothing to do arrives seen', async () => {
     /* Then */
     const [run] = s.runs.runsOf(w.keyOf('nightly'), 10);
     assert.deepEqual([run.status, run.seen], ['done', true]);
+    assert.deepEqual(s.archived, [run.sessionId]);
+});
+
+test('a run that did something is not archived', async () => {
+    /* Given */
+    const w = world({nightly: NIGHTLY});
+    const s = service(w);
+    s.turnOn('nightly');
+    await tickAtThree(s);
+
+    /* When */
+    s.runner.started[0].end({stdout: resultJson('Opened PR #12.')});
+    await flush();
+
+    /* Then */
+    assert.deepEqual(s.archived, []);
 });
 
 test('a run that exits non-zero is failed, with the exit and the last line of stderr', async () => {

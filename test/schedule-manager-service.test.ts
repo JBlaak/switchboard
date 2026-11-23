@@ -235,6 +235,7 @@ function setup(
     const runs = new MemoryRuns();
     const {fs, store} = memoryFs(options.files ?? {}, options.dirs);
     const pushed: ScheduleManagerFacts[] = [];
+    const archived: string[] = [];
     const wakeCalls: (string | null)[] = [];
     let wakeAt = options.wake ?? null;
     let wakeReads = 0;
@@ -276,6 +277,7 @@ function setup(
             readTail: () => options.transcript?.tail ?? '',
         },
         renderer: {scheduleManagerChanged: (facts) => pushed.push(facts)},
+        archive: (sessionId) => archived.push(sessionId),
         clock: {now: () => now.value},
         timers,
         log: silentLog,
@@ -287,6 +289,7 @@ function setup(
         runs,
         store,
         pushed,
+        archived,
         wakeCalls,
         claudeCalls,
         timers,
@@ -623,6 +626,21 @@ test('marking all seen pushes only when something changed', async () => {
 
     /* Then */
     assert.equal(world.pushed.length, 1);
+});
+
+test('mark all read archives the sessions of the runs it marks, and only those', async () => {
+    /* Given */
+    const world = setup({entries: [entry()]});
+    world.runs.add(run({id: 'unread', sessionId: 'night-run', status: 'failed', seen: false}));
+    world.runs.add(run({id: 'opened', sessionId: 'opened-run', seen: true}));
+    world.runs.add(run({id: 'going', sessionId: 'going-run', status: 'running', seen: false, endedAt: null}));
+
+    /* When */
+    world.service.markAllSeen();
+    await settle();
+
+    /* Then */
+    assert.deepEqual(world.archived, ['night-run']);
 });
 
 // ── Drafting ──

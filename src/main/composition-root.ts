@@ -828,6 +828,7 @@ export function buildContainer(): Container {
         runs: scheduleRuns,
         usage,
         git: localWorkspace,
+        archive: (sessionId) => archiveSession(sessionId),
         // A project whose schedules run on a VM is paused here (#276 stage 5).
         runsHere: (projectPath) => vmSchedules.macRunsSchedulesOf(projectPath),
         vmHostOf: (projectPath) => {
@@ -992,6 +993,7 @@ export function buildContainer(): Container {
     const scheduleManager = new ScheduleManagerService({
         engine: schedules,
         runs: scheduleRuns,
+        archive: (sessionId) => archiveSession(sessionId),
         fs,
         wake: new PmsetWakeSchedule(log),
         week: () => usage.latestWeek(),
@@ -1598,6 +1600,15 @@ export function buildContainer(): Container {
         timers,
         log,
     });
+
+    // Scheduled runs archive themselves once read (the Schedule manager): the
+    // same archive as the sidebar's. Hoisted, since the scheduler is built
+    // before the worktree cleanup and the tasks it ends with.
+    function archiveSession(sessionId: string): void {
+        sessionArchiver({registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup, tasks}).archive(
+            sessionId,
+        );
+    }
 
     // The session tray's links (#340): kept here, asked again behind each answer.
     const sessionLinks = new SessionLinksService({
