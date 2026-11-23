@@ -282,8 +282,9 @@
 }
 
 /* The managers (ui/patch/EmptyScreenManagers, #416, #440): the Bug manager
-   to Patch's left, the Issue manager to its right and the Merge manager
-   after it, four in a row, hung off a row under Patch. The
+   to Patch's left with the Schedule manager past it, the Issue manager to
+   its right and the Merge manager after it, five in a row, hung off a row
+   under Patch. The
    Merge manager always stands there, so the row is always out; without the
    Issue manager it takes the Issue manager's place. With the family card, all three stand on the card's
    floor with their feet on Patch's: the floor grows to hold them and Patch's
@@ -386,17 +387,28 @@
         margin-top: -320px;
     }
 
-    /* The Merge manager stands at the right end, so the row steps left half
-       a figure to stay centred on the card: Patch just left of centre. Only
-       the Bug manager and the Merge manager flank Patch evenly. */
-    #placeholder:has(.placeholder-family):not(:has(.is-bug ~ .is-merge:not(.is-issue ~ .is-merge)))
+    /* The Schedule manager always stands at the left end and the Merge
+       manager at the right, so the row is even around Patch with both inbox
+       managers or neither. With only one, the row steps half a figure away
+       from it to stay centred on the card. */
+    #placeholder:has(.placeholder-family):has(.placeholder-manager.is-issue):not(:has(.placeholder-manager.is-bug))
         .placeholder-family
         + .placeholder-patch,
-    #placeholder:has(.placeholder-family):not(:has(.is-bug ~ .is-merge:not(.is-issue ~ .is-merge)))
+    #placeholder:has(.placeholder-family):has(.placeholder-manager.is-issue):not(:has(.placeholder-manager.is-bug))
         .placeholder-family
         + .placeholder-patch
         + .placeholder-managers {
         translate: -79px 0;
+    }
+
+    #placeholder:has(.placeholder-family):has(.placeholder-manager.is-bug):not(:has(.placeholder-manager.is-issue))
+        .placeholder-family
+        + .placeholder-patch,
+    #placeholder:has(.placeholder-family):has(.placeholder-manager.is-bug):not(:has(.placeholder-manager.is-issue))
+        .placeholder-family
+        + .placeholder-patch
+        + .placeholder-managers {
+        translate: 79px 0;
     }
 }
 
