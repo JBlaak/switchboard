@@ -277,3 +277,19 @@ test('the Merge manager page takes the main area, and Esc goes back to the sessi
     /* Then */
     assert.deepEqual(closed.mainArea.route, {kind: 'session', sessionId: 'a'});
 });
+
+test("the Schedule manager takes the main area, a schedule's page is its own route, and Esc closes from the overview", () => {
+    /* Given */
+    const state = onScreen('a');
+
+    /* When */
+    const schedule = run(state, {type: 'scheduleManagerPageRequested', key: '/p/.claude/commands/schedule-x.md'});
+    const overview = run(schedule, {type: 'scheduleManagerPageRequested', key: null});
+    const closed = run(overview, {type: 'scheduleManagerPageClosed'});
+
+    /* Then */
+    assert.deepEqual(schedule.mainArea.route, {kind: 'scheduleManager', key: '/p/.claude/commands/schedule-x.md'});
+    assert.equal(highlightedSession(schedule.mainArea), null);
+    assert.deepEqual(overview.mainArea.route, {kind: 'scheduleManager', key: null});
+    assert.deepEqual(closed.mainArea.route, {kind: 'session', sessionId: 'a'});
+});
