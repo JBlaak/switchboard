@@ -53,6 +53,7 @@ import type {MergeQueueEvent} from './merge-queue-slice';
 import type {MergeManagerEvent} from './merge-manager-slice';
 import type {ScheduleManagerEvent} from './schedule-manager-slice';
 import type {ScheduleCreateEvent} from './schedule-create-slice';
+import type {SidebarPageEvent} from './sidebar-page-slice';
 import type {ScheduleManagerFacts} from '../../domain/schedule/manager';
 import type {SessionTrayEvent} from './session-tray-slice';
 import type {GrillEvent} from './grill-slice';
@@ -417,6 +418,7 @@ export type RendererEvent =
     | MergeManagerEvent
     | ScheduleManagerEvent
     | ScheduleCreateEvent
+    | SidebarPageEvent
     | GrillEvent
     | SessionTrayEvent;
 
