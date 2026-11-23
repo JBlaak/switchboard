@@ -55,11 +55,13 @@ export function repositoryName(repository: string): string {
 /**
  * The header's landed pill: "Landed · 2nd in switchboard", "Landed · held ·
  * approval", "Merged". With its lane, a stacked PR's base is named as every
- * place names it ("held · on #433", #441).
+ * place names it ("held · on #433", #441). `short` leaves the lane's name off
+ * its place ("Landed · 2nd"), for the session tray's status line.
  */
-export function landedPillText(view: LandedView, lane?: LaneView): string {
+export function landedPillText(view: LandedView, lane?: LaneView, short = false): string {
     const words = lane ? landedWords({pullRequest: view, lane}) : stageWords(view.stage, view.place);
     if (view.stage.kind === 'merged') return words.label;
+    if (view.place !== null && short) return `Landed · ${ordinal(view.place)}`;
     if (view.place !== null) return `Landed · ${ordinal(view.place)} in ${repositoryName(view.repository)}`;
     return `Landed · ${words.pill}`;
 }

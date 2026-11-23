@@ -18,7 +18,7 @@
  * wanders off.
  */
 import {useCallback, useEffect, useRef, useState} from 'react';
-import type {JSX, ReactNode} from 'react';
+import type {JSX} from 'react';
 import {dispatch} from '../../state/app-store';
 import {shallowEqual} from '../../state/store';
 import {sessionMap} from '../../state/session-store';
@@ -41,7 +41,8 @@ import {inHeaderBox, inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
 import {LandIt} from '../merge-manager/LandIt';
 import {sessionRowInSight} from '../merge-manager/land-actions';
-import type {SessionTrayActions} from './SessionTrayContent';
+import type {SessionTrayActions, TrayLand} from './SessionTrayContent';
+import {landBusy, landFailure, type MergeManagerSliceState} from '../../state/merge-manager-slice';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
 import type {LinkedPr, SessionLink} from '../../../domain/session/links';
 import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
@@ -61,7 +62,7 @@ const EMPTY: TrayData = {sessionId: null, prompts: [], links: [], editor: null};
 const COPIED_MS = 1200;
 
 export function SessionTray(): JSX.Element | null {
-    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy, heldUntil} = useStore(
+    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy, heldUntil, lands} = useStore(
         (state) => {
             const id = state.terminal.onScreen;
             const page = id ? state.pages.bySession[id] : undefined;
@@ -78,6 +79,7 @@ export function SessionTray(): JSX.Element | null {
                 isVm: isVmProjectIn(state.agentHost, path),
                 isCopy: isVmCopyIn(state.agentHost, path),
                 heldUntil: state.github.heldUntil,
+                lands: state.mergeManager,
             };
         },
         shallowEqual,
@@ -308,6 +310,9 @@ export function SessionTray(): JSX.Element | null {
                 const to = e.relatedTarget as Node | null;
                 // Switching apps is not leaving the tray; nor is the host menu.
                 if (!document.hasFocus() || holding.current) return;
+                // The focused control turned disabled or went (Land it as it lands): not leaving either.
+                const from = e.target as HTMLElement;
+                if (!to && (!from.isConnected || from.matches(':disabled'))) return;
                 if (to && (e.currentTarget.contains(to) || document.getElementById('terminal-header')?.contains(to)))
                     return;
                 close();
@@ -334,7 +339,7 @@ export function SessionTray(): JSX.Element | null {
                 now={Date.now()}
                 heldUntil={heldUntil}
                 actions={actions}
-                land={(pr) => trayLand(sessionId, pr)}
+                land={(pr) => trayLand(sessionId, pr, lands)}
             />
         </div>
     );
@@ -347,17 +352,22 @@ function keyboardInside(section: HTMLElement | null): boolean {
 }
 
 /**
- * Land it under a PR's link, or its landed stage; nothing for one that is
- * neither yours and open nor landed. Its rocket takes off from the session's
- * row in the sidebar, never from the tray.
+ * Land it on a PR's status line, or its landed stage, short; nothing for one
+ * that is neither yours and open nor landed. Its rocket takes off from the
+ * session's row in the sidebar, never from the tray.
  */
-function trayLand(sessionId: string, pr: LinkedPr): ReactNode {
+function trayLand(sessionId: string, pr: LinkedPr, lands: MergeManagerSliceState): TrayLand | null {
     if (!pr.status || !pr.repository) return null;
-    return (
-        <LandIt
-            pr={{repository: pr.repository, number: pr.number, state: pr.status.state, mine: pr.status.mine}}
-            size="sm"
-            launchFrom={() => sessionRowInSight(sessionId)}
-        />
-    );
+    return {
+        control: (
+            <LandIt
+                pr={{repository: pr.repository, number: pr.number, state: pr.status.state, mine: pr.status.mine}}
+                size="sm"
+                short
+                launchFrom={() => sessionRowInSight(sessionId)}
+            />
+        ),
+        landing: landBusy(lands, pr.repository, pr.number) === 'land',
+        failure: landFailure(lands, pr.repository, pr.number),
+    };
 }

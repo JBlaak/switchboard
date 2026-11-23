@@ -126,3 +126,35 @@ test('Land it shows up for a PR the session opened while it is on screen, once t
     await expect(header.getByText('PR #1320')).toBeVisible();
     await expect(header.getByRole('button', {name: 'Land it'})).toBeVisible();
 });
+
+test('Land it in the tray keeps the tray open while it lands, then shows the short landed pill there', async ({
+    page,
+    api,
+}) => {
+    /* Given main holds the land until let go */
+    api.answer('getSessionLinks', [pr(1320)]);
+    let letGo = (): void => {};
+    api.handle('mergeManagerLand', async () => {
+        await new Promise<void>((resolve) => (letGo = resolve));
+        await api.emit('onMergeManagerChanged', LANES);
+        return {ok: true as const, landed: landedView(LANES, landedKey(REPO, 1320))!};
+    });
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+    const tray = page.getByRole('region', {name: 'Session tools'});
+    const links = tray.getByRole('group', {name: 'Links'});
+
+    /* When */
+    await links.getByRole('button', {name: 'Land it'}).click();
+
+    /* Then it lands in place, the tray still up */
+    await expect(links.getByRole('button', {name: 'Landing'})).toBeDisabled();
+    await expect(links.getByText('handing to the Merge manager…')).toBeVisible();
+    await expect(tray).toHaveClass(/is-open/);
+    letGo();
+    await expect(links.getByRole('button', {name: 'Landed · 2nd', exact: false})).toHaveAttribute(
+        'title',
+        'Landed · 2nd in api',
+    );
+    await expect(tray).toHaveClass(/is-open/);
+});

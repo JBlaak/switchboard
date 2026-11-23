@@ -45,6 +45,69 @@
         opacity: 0.45;
         cursor: not-allowed;
     }
+
+    /* Landing: the same width as Land it, a spinner, and a slow sweep across it. */
+    &.is-busy {
+        justify-content: center;
+        min-width: 74px;
+        box-sizing: border-box;
+        background-color: rgba(var(--sb-purple-rgb), 0.14);
+        background-image: linear-gradient(
+            90deg,
+            rgba(var(--sb-purple-rgb), 0) 0%,
+            rgba(var(--sb-purple-rgb), 0.28) 50%,
+            rgba(var(--sb-purple-rgb), 0) 100%
+        );
+        background-size: 60% 100%;
+        background-repeat: no-repeat;
+        animation: land-it-sweep 1.4s ease-in-out infinite;
+        animation-play-state: var(--loop-state, running);
+
+        &:disabled {
+            opacity: 1;
+            cursor: progress;
+        }
+    }
+}
+
+.land-it.is-sm {
+    justify-content: center;
+    min-width: 74px;
+    box-sizing: border-box;
+}
+
+.land-it-spinner {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid rgba(var(--sb-purple-rgb), 0.3);
+    border-top-color: var(--sb-purple);
+    animation: land-it-spin 0.8s linear infinite;
+    animation-play-state: var(--loop-state, running);
+}
+
+@keyframes land-it-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes land-it-sweep {
+    from {
+        background-position: 120% 0;
+    }
+    to {
+        background-position: -20% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .land-it.is-busy {
+        animation: none;
+        background-image: none;
+    }
 }
 
 .landed-pill {
@@ -136,10 +199,58 @@
     white-space: nowrap;
 }
 
-/* ---- The session tray: under its PR's link ---- */
+/* ---- The session tray: on its PR's status line, before the ⌘ key ---- */
+/* The row is a box; its title is the link, stretched over the whole row. */
+.tray-link.has-land {
+    position: relative;
+    cursor: default;
+
+    &:has(.tray-link-cover:focus-visible) {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: -2px;
+    }
+}
+
+.tray-link-cover {
+    text-decoration: none;
+    outline: none;
+
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+    }
+}
+
+.tray-link-status {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Above the stretched link, so it takes its own clicks. */
 .tray-land {
-    display: flex;
-    padding: 0 10px 6px;
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    flex: none;
+    margin-left: auto;
+
+    & + .tray-key {
+        margin-left: 0;
+    }
+
+    /* Its open menu over the rows below, and their own Land it. */
+    &:has(.landed-menu) {
+        z-index: 2;
+    }
+}
+
+.tray-land-failure {
+    font-size: 12px;
+    color: var(--sb-red);
 }
 
 /* ---- The sidebar row: its stage pill, and the Land it button ---- */

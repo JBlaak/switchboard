@@ -14,7 +14,6 @@
  *
  * Kept apart from the store so a test can draw it; `SessionTray` feeds it.
  */
-import {Fragment} from 'react';
 import type {CSSProperties, JSX, MouseEvent, ReactNode} from 'react';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
 import type {LinkedPr, SessionLink} from '../../../domain/session/links';
@@ -79,8 +78,17 @@ export interface SessionTrayContentProps {
     /** Until when GitHub's reads are held back (`state.github.heldUntil`); null or absent when they are not. */
     heldUntil?: number | null;
     actions: SessionTrayActions;
-    /** What goes under a PR's link: Land it, or its landed stage (#436); a slot so the markup draws without the store. */
-    land?: (pr: LinkedPr) => ReactNode;
+    /** Land it, or its landed stage (#436), on a PR's status line; a slot so the markup draws without the store. */
+    land?: (pr: LinkedPr) => TrayLand | null;
+}
+
+/** A PR's Land it in the tray, and how its land is going. */
+export interface TrayLand {
+    control: ReactNode;
+    /** Being handed to the Merge manager: the status line says so. */
+    landing: boolean;
+    /** Why the last Land it failed, shown under the PR. */
+    failure: string | null;
 }
 
 export function SessionTrayContent(props: SessionTrayContentProps): JSX.Element {
@@ -167,22 +175,59 @@ function LinksGroup({links, prompts, now, heldUntil, actions, land}: SessionTray
                         </>
                     );
                     const url = linkUrl(link);
-                    if (url) {
-                        const under = link.kind === 'pr' ? land?.(link) : null;
+                    const landing = link.kind === 'pr' && url ? land?.(link) : null;
+                    if (url && landing) {
+                        // Land it sits on the status line, so the row is a box with the
+                        // title as its link, stretched over the row, and the button above it.
                         return (
-                            <Fragment key={link.key}>
+                            <div key={link.key} className="tray-link has-land">
                                 <a
-                                    className="tray-link"
+                                    className="tray-link-title tray-link-cover"
                                     href={url}
                                     title={url}
                                     onClick={(e: MouseEvent<HTMLAnchorElement>) => {
                                         e.preventDefault();
                                         actions.openLink(link);
                                     }}>
-                                    {inside}
+                                    {link.title}
                                 </a>
-                                {under && <div className="tray-land">{under}</div>}
-                            </Fragment>
+                                <span className="tray-link-meta">
+                                    <span className="tray-chip">
+                                        <LinkChipDot dot={meta.dot} />
+                                        {meta.chip}
+                                    </span>
+                                    <span className="tray-link-status">
+                                        {landing.landing ? 'handing to the Merge manager…' : meta.text}
+                                    </span>
+                                    <span className="tray-land">{landing.control}</span>
+                                    {key !== undefined && <span className="tray-key">{'⌘' + key}</span>}
+                                </span>
+                                {landing.failure && (
+                                    <span className="tray-land-failure" role="alert">
+                                        Could not land: {landing.failure}
+                                    </span>
+                                )}
+                                {freshness && (
+                                    <span className="tray-link-freshness" data-testid="tray-link-freshness">
+                                        {freshness}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    }
+                    if (url) {
+                        return (
+                            <a
+                                key={link.key}
+                                className="tray-link"
+                                href={url}
+                                title={url}
+                                onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                                    e.preventDefault();
+                                    actions.openLink(link);
+                                }}>
+                                {inside}
+                            </a>
                         );
                     }
                     return (

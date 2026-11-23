@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     initialMergeManagerState,
     landBusy,
+    landFailure,
     lanesChanged,
     mergeManagerReducer,
     needsYouCount,
@@ -87,6 +88,56 @@ test('a land that main refused says why', () => {
 
     /* Then */
     assert.deepEqual(next.toast, {id: 1, kind: 'failed', text: 'Could not land #7: Mark it ready for review first'});
+});
+
+test('a failed land is kept for its Try again, until it is pressed again', () => {
+    /* Given */
+    const failed = mergeManagerReducer(initialMergeManagerState, {
+        type: 'landFinished',
+        repository: REPO,
+        number: 7,
+        action: 'land',
+        result: {ok: false, reason: 'GitHub did not answer in time'},
+    });
+
+    /* When */
+    const again = mergeManagerReducer(failed, {type: 'landStarted', repository: REPO, number: 7, action: 'land'});
+
+    /* Then */
+    assert.equal(landFailure(failed, REPO, 7), 'GitHub did not answer in time');
+    assert.equal(landFailure(failed, REPO, 8), null);
+    assert.equal(landFailure(again, REPO, 7), null);
+});
+
+test('a land that goes through forgets the failure before it, and an unland never sets one', () => {
+    /* Given */
+    const failed = mergeManagerReducer(initialMergeManagerState, {
+        type: 'landFinished',
+        repository: REPO,
+        number: 7,
+        action: 'land',
+        result: {ok: false, reason: 'GitHub did not answer in time'},
+    });
+
+    /* When */
+    const landed = mergeManagerReducer(failed, {
+        type: 'landFinished',
+        repository: REPO,
+        number: 7,
+        action: 'land',
+        result: {ok: true, landed: null},
+    });
+    const unlandFailed = mergeManagerReducer(initialMergeManagerState, {
+        type: 'landFinished',
+        repository: REPO,
+        number: 7,
+        action: 'unland',
+        result: {ok: false, reason: 'No'},
+    });
+
+    /* Then */
+    assert.equal(landFailure(landed, REPO, 7), null);
+    assert.equal(landFailure(unlandFailed, REPO, 7), null);
 });
 
 test("unlanding the PR the toast landed puts the toast away; another PR's leaves it", () => {
