@@ -156,3 +156,22 @@ test('a fence that is never closed runs to the end of the text', () => {
         {kind: 'code', lang: null, text: 'x = 1\n\ny = 2'},
     ]);
 });
+
+test('a label line straight above its bullets reads as a paragraph then a list', () => {
+    /* Given */
+    const text = '**Skipped**\n- one\n- two\n  carried on\nAfter';
+
+    /* When */
+    const blocks = markdownBlocks(text);
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'strong', text: 'Skipped'}]]},
+        {
+            kind: 'list',
+            ordered: false,
+            items: [[{kind: 'text', text: 'one'}], [{kind: 'text', text: 'two carried on'}]],
+        },
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'After'}]]},
+    ]);
+});
