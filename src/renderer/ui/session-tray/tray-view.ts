@@ -4,7 +4,9 @@
  * the facts a saved prompt is filled from, and the ⌘ keys its PRs open
  * with. Pure, so it is tested in node.
  */
-import {LINKS_GITHUB_TTL_MS, type SessionLink} from '../../../domain/session/links';
+import {LINKS_GITHUB_TTL_MS, type LinkedPr, type SessionLink} from '../../../domain/session/links';
+import {pullRequestLabel} from '../../../domain/session/pull-requests';
+import type {SessionPullRequest} from '../../../domain/session/session';
 import {freshnessText} from '../shared/freshness-text';
 import type {SessionStats} from '../../../domain/session/stats';
 import {SAVED_PROMPT_KEYS} from '../../../domain/settings/saved-prompts';
@@ -205,4 +207,35 @@ export function pullRequestForKey(
     const keys = pullRequestKeys(prompts, links);
     for (const link of links) if (link.kind === 'pr' && keys.get(link.key) === key) return link;
     return null;
+}
+
+/**
+ * The PRs the Links group lists before main's first answer for the session:
+ * the ones its sidebar row already read off the transcript, newest first as
+ * main lists them, each as the last answer had it (with GitHub's title and
+ * status) where there was one, else as `owner/repo#12` without a status.
+ */
+export function seededPullRequests(
+    rowPullRequests: readonly SessionPullRequest[],
+    known: readonly LinkedPr[],
+): LinkedPr[] {
+    const byUrl = new Map(known.map((pr) => [pr.url, pr]));
+    // Newest by where each was first linked, as main orders them.
+    const first = new Map<string, SessionPullRequest>();
+    for (const pr of rowPullRequests) if (!first.has(pr.url)) first.set(pr.url, pr);
+    const prs: LinkedPr[] = [];
+    for (const pr of [...first.values()].reverse()) {
+        prs.push(
+            byUrl.get(pr.url) ?? {
+                kind: 'pr',
+                key: 'pr:' + pr.url,
+                title: pullRequestLabel(pr),
+                url: pr.url,
+                repository: pr.repository,
+                number: pr.number,
+                status: null,
+            },
+        );
+    }
+    return prs;
 }

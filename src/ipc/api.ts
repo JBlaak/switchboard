@@ -88,7 +88,7 @@ import type {ExistingBranchChoice} from '../domain/project/branch-worktree';
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
-import type {SessionLink} from '../domain/session/links';
+import type {LinksWait, SessionLink} from '../domain/session/links';
 import type {SessionStats} from '../domain/session/stats';
 import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/inbox-settings-service';
 import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model';
@@ -432,10 +432,12 @@ export interface SwitchboardApi {
      * What the session produced or refers to, for the session tray's Links
      * group: its PRs, issues, artifacts, pages and task, in that order and
      * each kind newest first (see `domain/session/links`). Answers from what
-     * main has kept and never waits on `gh` or BlaakTasks: what has gone stale
-     * is asked again behind the answer, so the next call has it.
+     * main has kept: what has gone stale is asked again behind the answer, so
+     * the next call has it. `wait` (`LinksWait`) says what the answer waits
+     * for besides the transcript; by default only `gh` confirming the issues
+     * of a session that mentioned some, the first time.
      */
-    getSessionLinks(sessionId: string): Promise<SessionLink[]>;
+    getSessionLinks(sessionId: string, wait?: LinksWait): Promise<SessionLink[]>;
     /** The parsed diff of one item (`SessionWorkItem.id`) of the open page, and where it came from. */
     getSessionWorkDiff(request: {sessionId: string; itemId: string}): Promise<SessionWorkDiff>;
     /**

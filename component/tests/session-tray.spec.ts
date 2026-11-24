@@ -113,6 +113,58 @@ test('the PRs take the ⌘ keys after the saved prompts, and ⌘2 opens the firs
     expect(api.callsTo('sendInput').some(([, data]) => String(data).includes(PROMPT))).toBe(false);
 });
 
+test('the PRs the sidebar row knows show at once, with Loading until main has answered', async ({page, api}) => {
+    /* Given */
+    // The tray's own asks (they say what to wait for) are held until answered here; others get none.
+    const answers: ((links: SessionLink[]) => void)[] = [];
+    api.handle('getSessionLinks', (_id, wait) =>
+        wait ? new Promise<SessionLink[]>((resolve) => answers.push(resolve)) : [],
+    );
+    await openSession(page, api, LABEL.loginFix, S.loginFix);
+    const tray = page.getByRole('region', {name: 'Session tools'});
+    const loading = tray.getByTestId('tray-links-loading');
+
+    /* When */
+    await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+
+    /* Then */
+    await expect(tray).toHaveClass(/is-open/);
+    await expect(tray.locator('.tray-link-title')).toHaveText(['acme/api#1320', 'acme/api#1312', 'acme/api#1309']);
+    await expect(loading).toBeVisible();
+
+    /* When */
+    await expect.poll(() => answers.length).toBe(1);
+    answers[0]!([
+        {
+            kind: 'pr',
+            key: 'pr:https://github.com/acme/api/pull/1320',
+            title: 'Fix the login redirect',
+            url: 'https://github.com/acme/api/pull/1320',
+            repository: 'acme/api',
+            number: 1320,
+            status: null,
+        },
+    ]);
+
+    /* Then */
+    await expect(tray.locator('.tray-link-title')).toHaveText(['Fix the login redirect']);
+    await expect(loading).toBeVisible();
+
+    /* When */
+    await expect.poll(() => answers.length).toBe(2);
+    answers[1]!([]);
+
+    /* Then */
+    await expect(loading).toBeHidden();
+    await expect(tray.getByText('Nothing yet')).toBeVisible();
+    expect(
+        api
+            .callsTo('getSessionLinks')
+            .map(([, wait]) => wait)
+            .filter(Boolean),
+    ).toEqual(['nothing', 'everything']);
+});
+
 test('holding ⌘ shows the tray after 150 ms, letting go hides it, and a quick ⌘ shortcut never does', async ({
     page,
     api,

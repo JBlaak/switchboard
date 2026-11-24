@@ -22,6 +22,7 @@ import {
     LINKS_GITHUB_TTL_MS,
     sessionLinks,
     type BugLinkFacts,
+    type LinksWait,
     type SessionLink,
     type TaskFacts,
 } from '../../domain/session/links';
@@ -35,7 +36,7 @@ import type {Logger} from '../ports/logger';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import type {TranscriptProducts} from '../ports/transcript-store';
 
-export {LINKS_GITHUB_TTL_MS};
+export {LINKS_GITHUB_TTL_MS, type LinksWait};
 
 /** How long a task's detail is used before BlaakTasks is asked again. */
 export const LINKS_TASK_TTL_MS = 60_000;
@@ -114,13 +115,21 @@ export class SessionLinksService {
     /**
      * The session's links, from what is known now. Anything stale is asked
      * again behind the answer (see `refresh`), so the next call has it.
+     *
+     * `wait` says what the answer waits for besides the transcript:
+     * - `issues` (the default): `gh`, once, for a session that mentioned
+     *   issues, since they only list once `gh` has confirmed them;
+     * - `nothing`: never `gh` or BlaakTasks, for an answer as soon as can be;
+     * - `everything`: whatever is stale, asked again first, so the answer is
+     *   as fresh as it gets (the tray's second answer, after a `nothing`).
      */
-    public async links(sessionId: string): Promise<SessionLink[]> {
+    public async links(sessionId: string, wait: LinksWait = 'issues'): Promise<SessionLink[]> {
         const entry = this.entry(sessionId);
         if (!entry.transcript) await this.readTranscript(sessionId, entry);
-        // Mentions only list once `gh` has said which are issues (`sessionLinks`), so the
-        // first answer for a session that has any waits for it rather than leave them out.
-        if (!entry.github && (entry.transcript?.mentions.length ?? 0) > 0) await this.refresh(sessionId);
+        const firstWithMentions = !entry.github && (entry.transcript?.mentions.length ?? 0) > 0;
+        if (wait === 'everything' && (entry.refreshing || this.isStale(sessionId, entry)))
+            await this.refresh(sessionId);
+        else if (wait === 'issues' && firstWithMentions) await this.refresh(sessionId);
         else if (this.isStale(sessionId, entry)) void this.refresh(sessionId);
         return this.assemble(sessionId, entry);
     }

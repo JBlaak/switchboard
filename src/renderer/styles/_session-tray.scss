@@ -211,6 +211,20 @@ $tray-height: 240px;
     }
 }
 
+/* The Links group is still being asked for: a quiet spinner at the label's end. */
+.tray-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    font-family: var(--sb-font-body);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sb-text-dimmest);
+}
+
 .tray-empty {
     margin: 0;
     padding: 7px 10px;
