@@ -13,7 +13,7 @@ import {savedPromptForKey} from '../../../domain/settings/saved-prompts';
 import {loadSavedPrompts, sendSavedPrompt} from './saved-prompts';
 import {promptFacts, pullRequestForKey} from './tray-view';
 import {openLink} from '../pr-view/actions';
-import type {SessionLink} from '../../../domain/session/links';
+import type {LinksWait, SessionLink} from '../../../domain/session/links';
 import type {SessionStats} from '../../../domain/session/stats';
 import type {SavedPrompt, SavedPromptFacts} from '../../../domain/settings/saved-prompts';
 
@@ -30,10 +30,15 @@ export async function loadSessionStats(sessionId: string): Promise<SessionStats 
 
 /** The session's links, or none when main could not say. */
 export async function loadSessionLinks(sessionId: string): Promise<SessionLink[]> {
+    return (await askSessionLinks(sessionId)) ?? [];
+}
+
+/** The session's links, waiting on what `wait` says (`LinksWait`); null when main could not say. */
+export async function askSessionLinks(sessionId: string, wait?: LinksWait): Promise<SessionLink[] | null> {
     try {
-        return await window.api.getSessionLinks(sessionId);
+        return await window.api.getSessionLinks(sessionId, wait);
     } catch {
-        return [];
+        return null;
     }
 }
 

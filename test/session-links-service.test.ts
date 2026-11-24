@@ -265,6 +265,60 @@ test('the first answer for a session that mentioned issues waits for gh to confi
     );
 });
 
+test('an answer that waits for nothing comes before gh, even for a session that mentioned issues', async () => {
+    /* Given */
+    const w = world();
+    w.mentions = [{repository: '', number: 7}];
+    w.prAnswer = () => new Promise(() => {});
+    w.issueAnswer = () => new Promise(() => {});
+    const service = new SessionLinksService(w.deps);
+
+    /* When */
+    const links = await service.links(SESSION, 'nothing');
+
+    /* Then */
+    assert.deepEqual(
+        links.map((link) => [link.key, link.status]),
+        [['pr:' + PR.url, null]],
+    );
+    assert.equal(w.ghCalls, 1);
+});
+
+test('an answer that waits for everything has the status gh gave, asked behind a quick answer', async () => {
+    /* Given */
+    const w = world();
+    let answer: (statuses: PullRequestStatus[]) => void = () => {};
+    w.prAnswer = () => new Promise((resolve) => (answer = resolve));
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION, 'nothing');
+
+    /* When */
+    const settled = service.links(SESSION, 'everything');
+    answer([openStatus]);
+
+    /* Then */
+    assert.deepEqual(
+        (await settled).map((link) => [link.title, link.kind === 'pr' ? link.status?.state : null]),
+        [['Add the tray', 'open']],
+    );
+    assert.equal(w.ghCalls, 1);
+});
+
+test('an answer that waits for everything does not ask gh again while its answer is fresh', async () => {
+    /* Given */
+    const w = world();
+    w.prAnswer = async () => [openStatus];
+    const service = new SessionLinksService(w.deps);
+    await service.links(SESSION, 'everything');
+
+    /* When */
+    const links = await service.links(SESSION, 'everything');
+
+    /* Then */
+    assert.equal(links[0]?.title, 'Add the tray');
+    assert.equal(w.ghCalls, 1);
+});
+
 test('the task shows before BlaakTasks answers, by its id alone', async () => {
     /* Given */
     const w = world();

@@ -28,6 +28,14 @@ import type {SessionPullRequest} from './session';
 /** How long what `gh` said about a session's links is used before it is asked again. */
 export const LINKS_GITHUB_TTL_MS = 60_000;
 
+/**
+ * What an answer for a session's links waits for besides its transcript:
+ * `issues`, `gh` once for a session that mentioned issues (the default);
+ * `nothing`, an answer as soon as can be; `everything`, whatever is stale
+ * asked again first.
+ */
+export type LinksWait = 'issues' | 'nothing' | 'everything';
+
 /** The kinds of link, in the order the list gives them. */
 export type SessionLinkKind = 'pr' | 'issue' | 'artifact' | 'page' | 'bug' | 'task';
 

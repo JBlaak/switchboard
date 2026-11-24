@@ -62,6 +62,8 @@ export interface SessionTrayContentProps {
     sent: string | null;
     prompts: readonly ResolvedSavedPrompt[];
     links: readonly TrayLink[];
+    /** The links are still being asked for: the Links group says so. */
+    linksLoading?: boolean;
     stats: SessionStats | null;
     /** The IDE Editor opens; null until asked. */
     editor: WorkspaceEditorInfo | null;
@@ -140,7 +142,15 @@ function AskGroup({prompts, sent, actions}: SessionTrayContentProps): JSX.Elemen
     );
 }
 
-function LinksGroup({links, prompts, now, heldUntil, actions, land}: SessionTrayContentProps): JSX.Element {
+function LinksGroup({
+    links,
+    linksLoading,
+    prompts,
+    now,
+    heldUntil,
+    actions,
+    land,
+}: SessionTrayContentProps): JSX.Element {
     const keys = pullRequestKeys(
         prompts,
         links.map((row) => row.link),
@@ -149,9 +159,15 @@ function LinksGroup({links, prompts, now, heldUntil, actions, land}: SessionTray
         <div className="tray-card tray-links" role="group" aria-labelledby="tray-links-label" style={order(1)}>
             <div className="tray-label" id="tray-links-label">
                 Links
+                {linksLoading && (
+                    <span className="tray-loading" role="status" data-testid="tray-links-loading">
+                        <span className="freshness-spinner" aria-hidden="true" />
+                        Loading
+                    </span>
+                )}
             </div>
             <div className="tray-card-body">
-                {links.length === 0 && <p className="tray-empty">Nothing yet</p>}
+                {links.length === 0 && <p className="tray-empty">{linksLoading ? 'Loading…' : 'Nothing yet'}</p>}
                 {links.map(({link, opens}) => {
                     const meta = linkMeta(link, now);
                     const key = keys.get(link.key);

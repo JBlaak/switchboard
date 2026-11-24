@@ -33,10 +33,10 @@ import {stopSessionOnScreen} from '../terminal/actions';
 import {archiveActiveSession} from '../../features/sessions/sidebar-keyboard';
 import {openTaskTab} from '../session-task/actions';
 import {loadSavedPrompts} from './saved-prompts';
-import {factsFor, loadSessionLinks, loadSessionStats, projectOf, sendTrayPrompt} from './actions';
+import {askSessionLinks, factsFor, loadSessionStats, projectOf, sendTrayPrompt} from './actions';
 import {openSavedPromptsSettings} from '../settings/open-saved-prompts';
 import {focusTray, focusTrayHint} from './focus';
-import {trayLinks} from './tray-view';
+import {seededPullRequests, trayLinks} from './tray-view';
 import {inHeaderBox, inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
 import {LandIt} from '../merge-manager/LandIt';
@@ -52,18 +52,21 @@ import {openLink as followLink} from '../pr-view/actions';
 interface TrayData {
     sessionId: string | null;
     prompts: readonly ResolvedSavedPrompt[];
-    links: readonly SessionLink[];
+    /** Null until main's first answer: until then the sidebar row's PRs stand in. */
+    links: readonly SessionLink[] | null;
+    /** Main has not given its settled answer for this open yet. */
+    linksLoading: boolean;
     editor: WorkspaceEditorInfo | null;
 }
 
-const EMPTY: TrayData = {sessionId: null, prompts: [], links: [], editor: null};
+const EMPTY: TrayData = {sessionId: null, prompts: [], links: null, linksLoading: false, editor: null};
 
 /** How long Copy session id says it copied. */
 const COPIED_MS = 1200;
 
 export function SessionTray(): JSX.Element | null {
-    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy, heldUntil, lands} = useStore(
-        (state) => {
+    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy, heldUntil, lands, knownPrs} =
+        useStore((state) => {
             const id = state.terminal.onScreen;
             const page = id ? state.pages.bySession[id] : undefined;
             const path = id ? sessionMap.get(id)?.projectPath : undefined;
@@ -79,11 +82,11 @@ export function SessionTray(): JSX.Element | null {
                 isVm: isVmProjectIn(state.agentHost, path),
                 isCopy: isVmCopyIn(state.agentHost, path),
                 heldUntil: state.github.heldUntil,
+                // The last answer's PRs, so the row's stand in with their titles and status.
+                knownPrs: id ? state.mergeManager.sessionPullRequests[id] : undefined,
                 lands: state.mergeManager,
             };
-        },
-        shallowEqual,
-    );
+        }, shallowEqual);
     const open = trayIsOpen(phase);
     const shown = phase !== 'closed';
 
@@ -223,12 +226,22 @@ export function SessionTray(): JSX.Element | null {
             .catch(() => [])
             .then((prompts) => update({prompts}));
         if (shown) {
-            void loadSessionLinks(sessionId).then((links) => {
+            // Main's quick answer (never waiting on gh), then its settled one, with
+            // what was stale asked again; the PRs the row knows show until the first.
+            const answered = (links: SessionLink[] | null): void => {
+                if (!live || !links) return;
                 update({links});
                 // The header's Land it reads them too (#436).
                 const pullRequests = links.filter((link): link is LinkedPr => link.kind === 'pr');
                 dispatch({type: 'sessionPullRequestsLoaded', sessionId, pullRequests});
-            });
+            };
+            update({linksLoading: true});
+            void (async () => {
+                answered(await askSessionLinks(sessionId, 'nothing'));
+                if (!live) return;
+                answered(await askSessionLinks(sessionId, 'everything'));
+                update({linksLoading: false});
+            })();
             void loadSessionStats(sessionId);
             void window.api
                 .workspaceEditor({sessionId})
@@ -252,10 +265,11 @@ export function SessionTray(): JSX.Element | null {
     const handOffHosts = row && hosts && canHandOffSession(row, hosts.length) ? hosts : null;
     const bringBack = !!row && canBringBackSession(row, {vm: isVm, copy: isCopy});
     const close = (): void => dispatch({type: 'trayClosed'});
+    const links = mine.links ?? seededPullRequests(row?.pullRequests ?? [], knownPrs ?? []);
 
     const actions: SessionTrayActions = {
         sendPrompt: (prompt) => {
-            sendTrayPrompt(sessionId, prompt, factsFor(sessionId, mine.links, stats?.branch ?? null));
+            sendTrayPrompt(sessionId, prompt, factsFor(sessionId, links, stats?.branch ?? null));
         },
         editPrompts: () => {
             close();
@@ -328,7 +342,8 @@ export function SessionTray(): JSX.Element | null {
                 open={open}
                 sent={sent}
                 prompts={mine.prompts}
-                links={trayLinks(mine.links, kept)}
+                links={trayLinks(links, kept)}
+                linksLoading={mine.linksLoading}
                 stats={stats}
                 editor={mine.editor}
                 handOffHosts={handOffHosts}

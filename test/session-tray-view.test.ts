@@ -14,10 +14,11 @@ import {
     pullRequestForKey,
     pullRequestKeys,
     runningTimeLabel,
+    seededPullRequests,
     sessionMetaLine,
     trayLinks,
 } from '../src/renderer/ui/session-tray/tray-view';
-import {LINKS_GITHUB_TTL_MS, type SessionLink} from '../src/domain/session/links';
+import {LINKS_GITHUB_TTL_MS, type LinkedPr, type SessionLink} from '../src/domain/session/links';
 import type {SessionStats} from '../src/domain/session/stats';
 
 const NOW = Date.parse('2026-11-06T12:00:00.000Z');
@@ -504,4 +505,48 @@ test('while it lands the status line says so, and a failed land says why under t
         failed,
         /<span class="tray-land-failure" role="alert">Could not land: GitHub did not answer in time<\/span>/,
     );
+});
+
+test('before main answers, the tray lists the row’s PRs newest first, as the last answer had them where it did', () => {
+    /* Given */
+    const row = [
+        {number: 40, url: 'https://github.com/acme/api/pull/40', repository: 'acme/api'},
+        {number: 41, url: 'https://github.com/acme/api/pull/41', repository: 'acme/api'},
+        {number: 40, url: 'https://github.com/acme/api/pull/40', repository: 'acme/api'},
+    ];
+    const known: LinkedPr[] = [
+        {
+            kind: 'pr',
+            key: 'pr:https://github.com/acme/api/pull/40',
+            title: 'Fix the login loop',
+            url: 'https://github.com/acme/api/pull/40',
+            repository: 'acme/api',
+            number: 40,
+            status: {state: 'open', checks: 'passing', dot: 'green', mine: true},
+        },
+    ];
+
+    /* When */
+    const prs = seededPullRequests(row, known);
+
+    /* Then */
+    assert.deepEqual(
+        prs.map((pr) => [pr.key, pr.title, pr.status?.state ?? null]),
+        [
+            ['pr:https://github.com/acme/api/pull/41', 'acme/api#41', null],
+            ['pr:https://github.com/acme/api/pull/40', 'Fix the login loop', 'open'],
+        ],
+    );
+});
+
+test('the Links group says it is loading while the links are asked for', () => {
+    /* When */
+    const loading = tray({links: [], linksLoading: true});
+    const done = tray({links: []});
+
+    /* Then */
+    assert.match(loading, /tray-links-loading/);
+    assert.match(loading, /Loading…/);
+    assert.doesNotMatch(done, /tray-links-loading/);
+    assert.match(done, /Nothing yet/);
 });

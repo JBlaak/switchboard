@@ -192,7 +192,7 @@ const api: SwitchboardApi = {
     canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),
 
     // ── Session links ──
-    getSessionLinks: (sessionId) => ipcRenderer.invoke(INVOKE.sessionLinks, sessionId),
+    getSessionLinks: (sessionId, wait) => ipcRenderer.invoke(INVOKE.sessionLinks, sessionId, wait),
     getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
     sessionWorkImage: (request) => ipcRenderer.invoke(INVOKE.sessionWorkImage, request),
     sessionWorkComment: (request) => ipcRenderer.invoke(INVOKE.sessionWorkComment, request),
