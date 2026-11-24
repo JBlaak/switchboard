@@ -5,10 +5,9 @@
  * Rendered into `#sidebar-landing`, under the Automatic shelf and above the
  * footer. Folded, it is one line: a count, a dot per PR in each lane (the
  * user's filled, other people's in a queue lane hollow, lanes apart) and when
- * the next one merges. Hovered, a card lists each PR's wait and what merged
- * today; a row there opens it in the Merge manager. Clicked, it unfolds into
- * the same rows, which open the PR's session (or its fix errand). Both the
- * card and the unfolded rows carry a link to the Merge manager's page.
+ * the next one merges. Clicked, it unfolds into a row per PR, which opens the
+ * PR's session (or its fix errand), what merged today, which opens it in the
+ * Merge manager, and a link to the Merge manager's page.
  *
  * The colours are every place's (`stageTone`): purple merging or merged,
  * green ready, yellow in progress or needs you, grey held, red an error.
@@ -55,11 +54,11 @@ export function LandingShelf(): JSX.Element | null {
 /** What the shelf's controls do; the view takes them so it draws without the store. */
 export interface LandingShelfActions {
     toggle(): void;
-    /** A card row: the PR on the Merge manager's page. */
+    /** A Just merged row: the PR on the Merge manager's page. */
     show(key: string): void;
     /** A shelf row: its session, or its fix errand's. */
     open(row: LandingRow): void;
-    /** The card's and the unfolded rows' link: the Merge manager's page. */
+    /** The unfolded rows' link: the Merge manager's page. */
     manager(): void;
 }
 
@@ -85,21 +84,6 @@ export function LandingShelfView({strip, open, now, actions}: LandingShelfViewPr
             className={'landing-shelf' + (open ? '' : ' is-folded')}
             data-testid="landing-shelf"
             aria-label="Landing">
-            {!open && (
-                <div className="landing-card" role="tooltip" data-testid="landing-card">
-                    <div className="landing-card-head">
-                        <span className="landing-card-title">Your pull requests</span>
-                        {strip.allMerged && (
-                            <span className="landing-card-total">
-                                all merged in <b>{etaText(strip.allMerged)}</b>
-                            </span>
-                        )}
-                    </div>
-                    <Lanes strip={strip} onRow={(row) => actions.show(row.key)} />
-                    <Merged strip={strip} now={now} onRow={(pr) => actions.show(pr.key)} />
-                    <ManagerLink onClick={actions.manager} />
-                </div>
-            )}
             <button
                 type="button"
                 className="landing-shelf-header"
@@ -257,7 +241,7 @@ function Merged({
     );
 }
 
-/** The way to the Merge manager's page, under the card's and the unfolded shelf's rows. */
+/** The way to the Merge manager's page, under the unfolded shelf's rows. */
 function ManagerLink({onClick}: {onClick: () => void}): JSX.Element {
     return (
         <button type="button" className="landing-manager-link" onClick={onClick}>
