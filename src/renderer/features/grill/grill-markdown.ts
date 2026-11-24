@@ -95,15 +95,39 @@ function proseBlocks(text: string): Block[] {
 /** A chunk's lines, with any table in it lifted out between what comes before and after. */
 function chunkBlocks(lines: string[]): Block[] {
     const start = lines.findIndex((line, i) => i + 1 < lines.length && isTableStart(line, lines[i + 1]!));
-    if (start < 0) return [linesBlock(lines)];
+    if (start < 0) return runs(lines).map(linesBlock);
     let end = start + 2;
     while (end < lines.length && lines[end]!.includes('|')) end++;
     const before = lines.slice(0, start);
     return [
-        ...(before.length > 0 ? [linesBlock(before)] : []),
+        ...runs(before).map(linesBlock),
         tableBlock(lines.slice(start, end)),
         ...(end < lines.length ? chunkBlocks(lines.slice(end)) : []),
     ];
+}
+
+type LineKind = 'bullet' | 'numbered' | 'text';
+
+function lineKind(line: string): LineKind {
+    return BULLET.test(line) ? 'bullet' : NUMBERED.test(line) ? 'numbered' : 'text';
+}
+
+/**
+ * A chunk's lines split where they turn from prose to a list or back, so a
+ * label line straight above its bullets (`**Skipped**` then `- …`) reads as a
+ * paragraph and a list. An indented line under an item carries that item on.
+ */
+function runs(lines: string[]): string[][] {
+    const out: {kind: LineKind; lines: string[]}[] = [];
+    for (const line of lines) {
+        const last = out[out.length - 1];
+        const kind = lineKind(line);
+        if (last && kind === 'text' && last.kind !== 'text' && /^\s/.test(line)) {
+            last.lines[last.lines.length - 1] += ` ${line.trim()}`;
+        } else if (last && last.kind === kind) last.lines.push(line);
+        else out.push({kind, lines: [line]});
+    }
+    return out.map((run) => run.lines);
 }
 
 function linesBlock(lines: string[]): Block {

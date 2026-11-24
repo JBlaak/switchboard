@@ -27,6 +27,7 @@ import type {ScheduleDetail, ScheduleRun} from '../../../domain/schedule/manager
 import {carryOn, markSeen, openScheduleManager, runNow, setEnabled, skipNext, toggleRun, tuneFromRun} from './actions';
 import {PromptCard} from './PromptCard';
 import {SettingsCard} from './SettingsCard';
+import {BlockMarkdown} from '../grill/Markdown';
 
 /** The runs shown before Show older. */
 const FIRST_RUNS = 15;
@@ -296,7 +297,7 @@ function RunRow({
                     {run.report && (
                         <div className="sm-run-full">
                             <span className="sm-label is-report">The run&rsquo;s report</span>
-                            <p>{run.report}</p>
+                            <BlockMarkdown className="sm-run-prose" text={run.report} />
                         </div>
                     )}
                     <div className="sm-run-facts">

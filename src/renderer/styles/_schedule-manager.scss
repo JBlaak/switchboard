@@ -671,13 +671,45 @@
     border-radius: 12px;
     background: var(--sb-bg-raised);
 
-    p {
+}
+
+/* The report is Claude's Markdown: labels in bold over their bullets, a gap between sections. */
+.sm-run-prose {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--sb-text);
+    overflow-wrap: anywhere;
+    max-width: 78ch;
+
+    > p,
+    > ul,
+    > ol,
+    > pre {
         margin: 0;
-        font-size: 13px;
-        line-height: 1.6;
-        color: var(--sb-text);
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
+    }
+    > * + :is(p, ul, ol, pre, div) {
+        margin-top: 12px;
+    }
+    > p + ul,
+    > p + ol {
+        margin-top: 4px;
+    }
+    ul,
+    ol {
+        padding-left: 20px;
+    }
+    li + li {
+        margin-top: 4px;
+    }
+    strong {
+        font-weight: 650;
+        color: var(--sb-text-strong);
+    }
+    code {
+        font-size: 12px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: rgba(var(--sb-overlay-rgb), 0.07);
     }
 }
 
