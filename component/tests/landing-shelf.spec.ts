@@ -1,7 +1,7 @@
 /**
  * The Landing shelf: the user's landed PRs as one line under the session
- * list, with when the next one merges; hovered, a card with each PR's wait;
- * clicked, the same rows unfolded; and when one merges, the line says so.
+ * list, with when the next one merges; clicked, a row per PR with its wait;
+ * and when one merges, the line says so.
  *
  * The times, the dots and the colours are unit tested
  * (test/merge-manager-landing.test.ts).
@@ -40,10 +40,7 @@ const HELD = landedPr(1330, 'Rate-limit webhooks', 30, {
 // Merged an hour ago, 20 minutes after it landed: the lane's cycle.
 const EARLIER = landedPr(1290, 'Retry the cookie refresh', 80, {kind: 'merged', at: FIXTURE_NOW - 60 * MIN});
 
-test('the shelf shows how long until the next merge, each wait on hover, and the rows when unfolded', async ({
-    page,
-    api,
-}) => {
+test('the shelf shows how long until the next merge, and each wait when unfolded', async ({page, api}) => {
     /* Given */
     const shelf = page.getByTestId('landing-shelf');
     await expect(shelf).toHaveCount(0);
@@ -57,22 +54,26 @@ test('the shelf shows how long until the next merge, each wait on hover, and the
     await expect(page.getByTestId('landing-eta')).toHaveText('1m');
 
     /* When */
-    await line.hover();
-
-    /* Then: each one's wait, the held one without one, and what merged */
-    const card = page.getByTestId('landing-card');
-    await expect(card).toBeVisible();
-    await expect(card.getByRole('button', {name: /Paginate the export #1320/})).toContainText('21m');
-    await expect(card.getByRole('button', {name: /Rate-limit webhooks #1330/})).toContainText('Held · @ana');
-    await expect(card.getByRole('button', {name: /Retry the cookie refresh #1290/})).toContainText('1h ago');
-
-    /* When */
     await line.click();
 
-    /* Then */
+    /* Then: each one's wait, the held one without one, and what merged */
     await expect(line).toHaveAttribute('aria-expanded', 'true');
-    await expect(card).toHaveCount(0);
-    await expect(shelf.locator('#landing-shelf-body').getByRole('button', {name: /Paginate the export/})).toBeVisible();
+    const body = shelf.locator('#landing-shelf-body');
+    await expect(body.getByRole('button', {name: /Paginate the export #1320/})).toContainText('21m');
+    await expect(body.getByRole('button', {name: /Rate-limit webhooks #1330/})).toContainText('Held · @ana');
+    await expect(body.getByRole('button', {name: /Retry the cookie refresh #1290/})).toContainText('1h ago');
+});
+
+test('hovering the folded line shows no card', async ({page, api}) => {
+    /* Given */
+    await api.emit('onMergeManagerChanged', mergeManagerState([HEAD, WAITING], new Map()));
+    const line = page.getByTestId('landing-shelf').getByRole('button', {name: /^Landing/});
+
+    /* When */
+    await line.hover();
+
+    /* Then */
+    await expect(page.getByTestId('landing-shelf').getByRole('tooltip')).toHaveCount(0);
 });
 
 test('when the head merges the line says so, and it tops Just merged', async ({page, api}) => {
@@ -88,22 +89,10 @@ test('when the head merges the line says so, and it tops Just merged', async ({p
     await expect(page.getByTestId('landing-eta')).toHaveText('✓ #1300');
     const line = page.getByTestId('landing-shelf').getByRole('button', {name: /^Landing/});
     await expect(line).toHaveAttribute('aria-label', 'Landing: 1 pull request, #1300 just merged');
-    await line.hover();
+    await line.click();
     await expect(
-        page.getByTestId('landing-card').getByRole('button', {name: /Stop the login redirect loop #1300/}),
+        page.locator('#landing-shelf-body').getByRole('button', {name: /Stop the login redirect loop #1300/}),
     ).toContainText('just now');
-});
-
-test('the hover card opens the Merge manager', async ({page, api}) => {
-    /* Given */
-    await api.emit('onMergeManagerChanged', mergeManagerState([HEAD, WAITING], new Map()));
-    await page.getByTestId('landing-shelf').getByRole('button', {name: /^Landing/}).hover();
-
-    /* When */
-    await page.getByTestId('landing-card').getByRole('button', {name: 'Open Merge manager'}).click();
-
-    /* Then */
-    await expect(page.getByRole('region', {name: 'Merge manager'})).toBeVisible();
 });
 
 test('the unfolded shelf opens the Merge manager', async ({page, api}) => {
