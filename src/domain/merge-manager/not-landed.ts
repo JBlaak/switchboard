@@ -12,6 +12,7 @@
  * newest first by when the PR was opened.
  */
 import {landedKey, type MergeManagerState} from './model';
+import {sameRepository} from '../project/repo-url';
 
 /** One of the user's open PRs, as main read it for Not landed. */
 export interface OpenPullRequest {
@@ -181,5 +182,5 @@ export function notLandedRepositories(rows: readonly OpenPullRequest[]): {reposi
 /** The rows a project chip leaves; all of them for none. */
 export function inRepository(rows: readonly OpenPullRequest[], repository: string | null): OpenPullRequest[] {
     if (repository === null) return [...rows];
-    return rows.filter((pr) => pr.repository.toLowerCase() === repository.toLowerCase());
+    return rows.filter((pr) => sameRepository(pr.repository, repository));
 }

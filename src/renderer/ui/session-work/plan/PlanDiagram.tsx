@@ -17,6 +17,7 @@ import {issueIn, issueUrl, levelStatus, nodeMiniLine, planQueuePill, shortRef, S
 import {readyOnLevel} from './start-level';
 import type {MergeManagerState} from '../../../../domain/merge-manager/model';
 import type {IssueActions, PlanHandlers, PlanUi} from './types';
+import {sameRepository} from '../../../../domain/project/repo-url';
 
 export function PlanDiagram({
     plan,
@@ -241,7 +242,7 @@ export function PlanLegend({wayfinder = false}: {wayfinder?: boolean}): JSX.Elem
 
 /** A ghost's short label: `#7`, or `repo#7` without the owner, which the title gives in full. */
 function ghostRef(plan: Plan, issue: IssueKey): string {
-    return issue.repository === plan.repository
+    return sameRepository(issue.repository, plan.repository)
         ? '#' + issue.number
         : issue.repository.split('/').pop() + '#' + issue.number;
 }

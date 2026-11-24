@@ -24,6 +24,7 @@ import {useIssueActions} from '../session-work/plan/issue-actions';
 import {backToProject, closeProject} from '../project-page/actions';
 import {isIssuePlanPinned, toggleIssuePlanPin} from '../session-list/actions';
 import type {PlanPage as Plan} from './actions';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 export function PlanPage(): JSX.Element | null {
     const page = useStore((state) => projectPlan(state.mainArea), samePlan);
@@ -131,6 +132,10 @@ function isBackKey(e: KeyboardEvent<HTMLElement>): boolean {
 function samePlan(a: Plan | null, b: Plan | null): boolean {
     return (
         a === b ||
-        (!!a && !!b && a.projectPath === b.projectPath && a.repository === b.repository && a.number === b.number)
+        (!!a &&
+            !!b &&
+            a.projectPath === b.projectPath &&
+            sameRepository(a.repository, b.repository) &&
+            a.number === b.number)
     );
 }

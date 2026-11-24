@@ -9,7 +9,7 @@
 import {dispatch, getState} from '../../state/app-store';
 import type {RendererEvent} from '../../state/events';
 import {nextAfter, visibleRows} from '../../state/issue-manager-slice';
-import {issueKeyString} from '../../../domain/plan/model';
+import {issueOwner} from '../../../domain/plan/issue-session';
 import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
 import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {jumpToSession} from '../session-work/plan/actions';
@@ -230,7 +230,7 @@ export async function startIssue(key: string): Promise<void> {
 export async function openIssueSession(item: InboxItem): Promise<void> {
     if (item.facts.kind !== 'issue') return;
     const owners = await window.api.issueSessions(item.facts.repository).catch(() => ({}) as Record<string, string>);
-    const owner = owners[issueKeyString({repository: item.facts.repository, number: item.facts.number})];
+    const owner = issueOwner(owners, {repository: item.facts.repository, number: item.facts.number});
     for (const sessionId of [owner, item.work?.sessionId]) {
         if (sessionId && (await jumpToSession(sessionId))) return;
     }

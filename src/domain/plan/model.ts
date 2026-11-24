@@ -8,6 +8,7 @@
  */
 
 import type {AutomergeStatus} from '../project/merge-queue';
+import {sameRepository} from '../project/repo-url';
 
 /** The label that makes an issue with no parent and no sub-issues a plan of its own. */
 export const STANDALONE_PLAN_LABEL = 'ready-for-agent';
@@ -110,6 +111,14 @@ export function issueKeyString(issue: IssueKey): string {
     return issue.repository + '#' + issue.number;
 }
 
+/**
+ * `owner/repo#n` in lower case: the key of an issue in a map that may be
+ * filled and read with differently-cased spellings of its repository.
+ */
+export function issueMatchKey(issue: IssueKey): string {
+    return issueKeyString(issue).toLowerCase();
+}
+
 export function sameIssue(a: IssueKey, b: IssueKey): boolean {
-    return a.repository === b.repository && a.number === b.number;
+    return sameRepository(a.repository, b.repository) && a.number === b.number;
 }

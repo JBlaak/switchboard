@@ -18,6 +18,7 @@ import type {PageLane} from '../../../domain/merge-manager/page';
 import type {LaneTimes, Timeline} from '../../../domain/merge-manager/times';
 import {openNotLandedPage} from './not-landed-actions';
 import {clock, comingUpFooter, countText, flagText, laneFacts, repositoryName, timePins} from './status-view';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 export function ComingUp({
     line,
@@ -66,7 +67,7 @@ export function ComingUp({
                 {line.tracks.map((track) => {
                     const laneTimes = times.get(track.repository);
                     const facts = laneFacts(
-                        lanes.find((lane) => lane.repository === track.repository),
+                        lanes.find((lane) => sameRepository(lane.repository, track.repository)),
                         laneTimes,
                     );
                     const counts = notLandedCounts(groups, track.repository);

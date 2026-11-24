@@ -17,6 +17,7 @@ import {formatBytes} from './image-compare/image-meta';
 import type {ImageMode} from './image-compare/modes/types';
 import type {Background} from './image-compare/types';
 import {pullRequestPageRef} from '../../../domain/session-work/pull-request-link';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -150,7 +151,7 @@ export function closedIssues(item: SessionWorkItem, repository: string): Array<{
     return item.pr.closes.map((issue) => {
         const repo = issue.repository || item.pr.repository || repository;
         const label =
-            issue.repository && issue.repository !== repository
+            issue.repository && !sameRepository(issue.repository, repository)
                 ? `${issue.repository}#${issue.number}`
                 : '#' + issue.number;
         return {label, url: repo ? `https://github.com/${repo}/issues/${issue.number}` : null};

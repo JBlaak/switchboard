@@ -25,6 +25,7 @@ import type {
     LaneView,
     MergeManagerState,
 } from '../../../domain/merge-manager/model';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 /** The overview's merge queue for `projectPath`; null while there is none to show (no answer, no queue). */
 export function mergeQueueOf(page: ProjectPageState, projectPath: string): MergeQueue | null {
@@ -197,7 +198,7 @@ export function landedFixStatus(
     repository: string,
     numbers: readonly number[],
 ): LandedFixStatus | null {
-    const lane = state.lanes.find((candidate) => candidate.repository.toLowerCase() === repository.toLowerCase());
+    const lane = state.lanes.find((candidate) => sameRepository(candidate.repository, repository));
     for (const pr of lane?.pullRequests ?? []) {
         if (!numbers.includes(pr.number)) continue;
         if (pr.stage.kind === 'fixing') return {kind: 'fixing', number: pr.number, sessionId: pr.errand};

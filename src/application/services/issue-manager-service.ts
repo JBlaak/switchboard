@@ -38,6 +38,7 @@ import type {GitHubCli, IssueManagerCalls} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
 import type {InboxService} from './inbox-service';
 import type {IssueSessionService} from './issue-session-service';
+import {sameRepository} from '../../domain/project/repo-url';
 
 /** How often the started issues' PRs are read. */
 export const ISSUE_WORK_POLL_MS = 2 * 60_000;
@@ -279,7 +280,7 @@ export class IssueManagerService {
                     continue;
                 }
                 for (const item of started) {
-                    if (item.source !== repository || item.facts.kind !== 'issue') continue;
+                    if (!sameRepository(item.source, repository) || item.facts.kind !== 'issue') continue;
                     const found = issueWorkStage(pullRequests, item.facts);
                     if (!found) continue;
                     const work = item.work ?? {branch: '', sessionId: null, pullRequest: null};

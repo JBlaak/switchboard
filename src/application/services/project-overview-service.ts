@@ -45,7 +45,7 @@
  * project, VM or not.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
-import {gitHubRepository} from '../../domain/project/repo-url';
+import {gitHubRepository, sameRepository} from '../../domain/project/repo-url';
 import {groupOverview, type OverviewPlanSource} from '../../domain/plan/project-overview';
 import {medianRunMs, mergeQueue, usesMergeQueue, type QueuePullRequest} from '../../domain/project/merge-queue';
 import type {LaneKind} from '../../domain/merge-manager/model';
@@ -469,7 +469,7 @@ function projectIssue(issue: RepositoryIssue, repository: string): ProjectIssue 
     const {parent, subIssues, ...rest} = issue;
     return {
         ...rest,
-        parent: parent && parent.repository === repository ? parent.number : null,
+        parent: parent && sameRepository(parent.repository, repository) ? parent.number : null,
         subIssueCount: subIssues,
     };
 }
@@ -478,7 +478,7 @@ function projectPullRequest(pr: RepositoryPullRequest, repository: string): Proj
     const {queue: _queue, ...rest} = pr;
     return {
         ...rest,
-        closes: pr.closes.filter((issue) => issue.repository === repository).map((issue) => issue.number),
+        closes: pr.closes.filter((issue) => sameRepository(issue.repository, repository)).map((issue) => issue.number),
     };
 }
 

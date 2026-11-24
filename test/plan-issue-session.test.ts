@@ -1,7 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {issueOwners, runningOnPlan, startBase, type IssueOwnerCandidate} from '../src/domain/plan/issue-session';
+import {
+    issueOwner,
+    issueOwners,
+    runningOnPlan,
+    startBase,
+    type IssueOwnerCandidate,
+} from '../src/domain/plan/issue-session';
 import type {IssueKey, Plan, PlanIssue, PlanPullRequest} from '../src/domain/plan/model';
 
 const REPO = 'JBlaak/switchboard';
@@ -222,4 +228,38 @@ test('a plan known by its summary alone counts only its own owner', () => {
 
     /* Then */
     assert.deepEqual(running, ['planner']);
+});
+
+test('an issue its PR spells in another case is owned under the repository it was asked for', () => {
+    /* Given */
+    const sessions = [candidate('a', {closes: [{repository: 'jblaak/SWITCHBOARD', number: 114}]})];
+
+    /* When */
+    const owners = issueOwners(sessions, REPO);
+
+    /* Then */
+    assert.deepEqual(owners, {[REPO + '#114']: 'a'});
+});
+
+test("an issue's owner is found whatever case its repository is spelled in", () => {
+    /* Given */
+    const owners = {'NOHrD/app#7': 'worker'};
+
+    /* When */
+    const owner = issueOwner(owners, {repository: 'NOHRD/app', number: 7});
+
+    /* Then */
+    assert.equal(owner, 'worker');
+});
+
+test('a plan whose owners are recorded in another case still has its running session', () => {
+    /* Given */
+    const plan = {repository: 'NOHRD/app', number: 1, issues: [{repository: 'NOHRD/app', number: 2}]};
+    const owners = {'NOHrD/app#2': 'worker'};
+
+    /* When */
+    const running = runningOnPlan(plan, owners, new Set(['worker']));
+
+    /* Then */
+    assert.deepEqual(running, ['worker']);
 });

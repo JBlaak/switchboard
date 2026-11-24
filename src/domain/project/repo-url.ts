@@ -20,6 +20,15 @@ export function repoWebUrl(remote: string): string | null {
     return null;
 }
 
+/**
+ * Whether two `owner/repo` names are the same GitHub repository. GitHub names
+ * are case-insensitive, and an origin keeps whatever case it was cloned with:
+ * `NOHrD/app` and `NOHRD/app` are one repository.
+ */
+export function sameRepository(a: string, b: string): boolean {
+    return a.toLowerCase() === b.toLowerCase();
+}
+
 /** `owner/repo` of a remote on github.com; '' for any other remote. */
 export function gitHubRepository(remote: string): string {
     const web = repoWebUrl(remote);

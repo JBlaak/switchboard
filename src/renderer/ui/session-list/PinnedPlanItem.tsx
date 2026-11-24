@@ -21,13 +21,17 @@ import {followPinnedPlan} from './pinned-plan-progress';
 import {pinnedPlanStaleText} from './pinned-plan-freshness';
 import {FRESHNESS_SEPARATOR} from '../shared/freshness-text';
 import type {SessionListPlan} from '../../state/session-list-layout';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
     const {id, projectPath, repository, number, title} = plan;
     const active = useStore((s) => {
         const shown = projectPlan(s.mainArea);
         return (
-            !!shown && shown.projectPath === projectPath && shown.repository === repository && shown.number === number
+            !!shown &&
+            shown.projectPath === projectPath &&
+            sameRepository(shown.repository, repository) &&
+            shown.number === number
         );
     });
     const cursor = useStore((s) => s.sessionList.cursor === id);

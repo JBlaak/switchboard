@@ -9,6 +9,7 @@ import {QUEUE_LABELS} from '../project/merge-queue';
 import type {IssueLabel, RepositoryPullRequest} from '../project/overview';
 import type {IssueKey} from '../plan/model';
 import type {InboxItem, InboxStage} from './model';
+import {sameRepository} from '../project/repo-url';
 
 // ── The thread ──
 
@@ -175,7 +176,9 @@ export function issueWorkStage(
     issue: IssueKey,
 ): {stage: InboxStage; pullRequest: number} | null {
     const closing = pullRequests
-        .filter((pr) => pr.closes.some((key) => key.repository === issue.repository && key.number === issue.number))
+        .filter((pr) =>
+            pr.closes.some((key) => sameRepository(key.repository, issue.repository) && key.number === issue.number),
+        )
         .filter((pr) => pr.state !== 'closed')
         .sort((a, b) => b.number - a.number);
     const merged = closing.find((pr) => pr.state === 'merged');

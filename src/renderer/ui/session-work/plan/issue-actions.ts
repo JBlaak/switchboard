@@ -17,6 +17,7 @@ import {sessionMap} from '../../../state/session-store';
 import {useStore} from '../../use-store';
 import {headerNameFor} from '../../../features/sessions/terminal-header';
 import {layOutPlan} from '../../../../domain/plan/layout';
+import {issueOwner} from '../../../../domain/plan/issue-session';
 import {issueKeyString, sameIssue} from '../../../../domain/plan/model';
 import type {IssueKey, Plan} from '../../../../domain/plan/model';
 import type {IdRecord} from '../../../state/records';
@@ -46,7 +47,7 @@ export function issueSession(
     issue: IssueKey,
     nameOf: (sessionId: string) => string | null,
 ): IssueSession | null {
-    const id = owners[issueKeyString(issue)];
+    const id = issueOwner(owners, issue);
     if (!id) return null;
     return {id, name: nameOf(id) || 'Untitled session', working: busy[id] === true};
 }

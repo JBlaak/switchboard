@@ -7,6 +7,8 @@
  * alone, its diff, its threads and your review, and hands nothing to Claude.
  */
 
+import {sameRepository} from '../project/repo-url';
+
 /** Which pull request: `owner/repo` and its number. */
 export interface PullRequestRef {
     repository: string;
@@ -58,5 +60,5 @@ export function isPullRequestPageId(pageId: string): boolean {
 
 /** Two refs name the same PR. GitHub's owner and repo names are case-insensitive. */
 export function samePullRequest(a: PullRequestRef, b: PullRequestRef): boolean {
-    return a.number === b.number && a.repository.toLowerCase() === b.repository.toLowerCase();
+    return a.number === b.number && sameRepository(a.repository, b.repository);
 }

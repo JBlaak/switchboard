@@ -80,6 +80,7 @@ import {openMergeManager} from '../merge-manager/page-actions';
 import {findLanded, landedWords, type StageWords} from '../../../domain/merge-manager/stage-words';
 import {bumpedRuns, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import {pullRequestSession} from './project-sessions';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 interface Context {
     readonly projectPath: string;
@@ -128,9 +129,7 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
                         Clears in about <strong>{clears.text.slice(1)}</strong>
                     </span>
                 )}
-                <OpenInMergeManager
-                    lane={merge.lanes.find((lane) => lane.repository.toLowerCase() === repository.toLowerCase())}
-                />
+                <OpenInMergeManager lane={merge.lanes.find((lane) => sameRepository(lane.repository, repository))} />
             </div>
             <div className="pp-card pp-mq-card">
                 {isEmptyQueue(queue) && <div className="pp-quiet">Nothing queued.</div>}

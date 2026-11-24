@@ -4,6 +4,7 @@
  */
 import {titleSlug} from '../project/branch-worktree';
 import type {IssueKey} from './model';
+import {sameRepository} from '../project/repo-url';
 
 /**
  * `<number>-<slug>`: the slug is the title's first few words, lower case, so
@@ -19,7 +20,9 @@ export function issueBranchName(issue: IssueKey & {title: string}): string {
  * PR to target that PR's branch.
  */
 export function issueSessionPrompt(issue: IssueKey, plan: IssueKey, stackedOn?: number): string {
-    const planRef = plan.repository === issue.repository ? '#' + plan.number : plan.repository + '#' + plan.number;
+    const planRef = sameRepository(plan.repository, issue.repository)
+        ? '#' + plan.number
+        : plan.repository + '#' + plan.number;
     let prompt =
         `Work on #${issue.number}, part of ${planRef}. Read the epic and the issue first. ` +
         `Open a PR titled with a short summary of what you implemented, with "Closes #${issue.number}" in its description.`;
@@ -32,7 +35,9 @@ export function issueSessionPrompt(issue: IssueKey, plan: IssueKey, stackedOn?: 
  * work so far is on it, so it is read before anything new is done.
  */
 export function issueContinuePrompt(issue: IssueKey, plan: IssueKey): string {
-    const planRef = plan.repository === issue.repository ? '#' + plan.number : plan.repository + '#' + plan.number;
+    const planRef = sameRepository(plan.repository, issue.repository)
+        ? '#' + plan.number
+        : plan.repository + '#' + plan.number;
     return (
         `Continue work on #${issue.number}, part of ${planRef}: this branch already has earlier work on it. ` +
         'Read the epic and the issue, then what the branch has so far (its commits, and any uncommitted changes) before going on. ' +
@@ -119,7 +124,7 @@ export function mapLauncherPrompt(launcher: MapLauncher, plan: IssueKey): string
 
 /** An issue as a skill takes it: its number in the map's repository, its URL in another. */
 function skillRef(issue: IssueKey, plan: IssueKey): string {
-    return issue.repository === plan.repository
+    return sameRepository(issue.repository, plan.repository)
         ? String(issue.number)
         : `https://github.com/${issue.repository}/issues/${issue.number}`;
 }
@@ -138,7 +143,7 @@ export interface LevelAgent {
  * agent per issue, each in the worktree made for it, all at once.
  */
 export function levelSessionPrompt(plan: IssueKey, level: number, agents: readonly LevelAgent[]): string {
-    const planRef = agents.every((agent) => agent.issue.repository === plan.repository)
+    const planRef = agents.every((agent) => sameRepository(agent.issue.repository, plan.repository))
         ? '#' + plan.number
         : plan.repository + '#' + plan.number;
     const lines = [

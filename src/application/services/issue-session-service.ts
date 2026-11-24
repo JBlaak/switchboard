@@ -8,7 +8,7 @@
  * this only prepares the worktree and the prompt Claude starts with.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
-import {gitHubRepository} from '../../domain/project/repo-url';
+import {gitHubRepository, sameRepository} from '../../domain/project/repo-url';
 import {
     issueLabel,
     issueOwners,
@@ -99,7 +99,8 @@ export class IssueSessionService {
         const candidates: {session: IssueSessionCandidate; branches: string[]}[] = [];
         for (const session of this.deps.sessions()) {
             if (session.archived || this.agentless(session.projectPath)) continue;
-            if ((await this.repositoryOf(session.projectPath)) !== repository) continue;
+            const own = await this.repositoryOf(session.projectPath);
+            if (!own || !sameRepository(own, repository)) continue;
             candidates.push({session, branches: await this.worktrees.branchesOf(session)});
         }
 
@@ -294,7 +295,7 @@ export class IssueSessionService {
         const repository = (origin && gitHubRepository(origin)) || null;
         if (!repository) return fail('Not a GitHub repository: its origin is not on github.com');
         // GitHub names are case-insensitive: an origin of Owner/Repo is GitHub's OWNER/repo.
-        if (issue.repository.toLowerCase() !== repository.toLowerCase()) {
+        if (!sameRepository(issue.repository, repository)) {
             return fail(`#${issue.number} is in ${issue.repository}, not in this project's ${repository}`);
         }
         return {ok: true, root, repository: issue.repository};

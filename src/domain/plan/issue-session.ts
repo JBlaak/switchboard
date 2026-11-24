@@ -7,8 +7,17 @@
  * make. Which branch the worktree starts from is `startBase`; which session
  * owns an issue is `issueOwners`.
  */
-import {issueKeyString, sameIssue, type IssueKey, type Plan, type PlanIssue, type PlanPullRequest} from './model';
+import {
+    issueKeyString,
+    issueMatchKey,
+    sameIssue,
+    type IssueKey,
+    type Plan,
+    type PlanIssue,
+    type PlanPullRequest,
+} from './model';
 import {issueFromBranch} from '../session-work/issues';
+import {sameRepository} from '../project/repo-url';
 import type {ExistingBranch, ExistingBranchChoice} from '../project/branch-worktree';
 
 /** What the renderer hands main to prepare an issue's worktree. */
@@ -87,7 +96,7 @@ export function startBase(plan: Plan, issue: IssueKey): StartBase {
 
 /** `#118` in the issue's own repository, `owner/repo#118` elsewhere. */
 export function issueLabel(issue: IssueKey, repository: string): string {
-    return issue.repository === repository ? '#' + issue.number : issueKeyString(issue);
+    return sameRepository(issue.repository, repository) ? '#' + issue.number : issueKeyString(issue);
 }
 
 /** A session as ownership sees it: the branches it worked on and the issues its PRs close. */
@@ -110,7 +119,8 @@ export interface IssueOwnerCandidate {
 export function issueOwners(candidates: readonly IssueOwnerCandidate[], repository: string): Record<string, string> {
     const owners = new Map<string, IssueOwnerCandidate>();
     const claim = (issue: IssueKey, candidate: IssueOwnerCandidate) => {
-        const key = issueKeyString(issue);
+        // One key per issue, in `repository`'s spelling when GitHub spells it in another case.
+        const key = issueKeyString(sameRepository(issue.repository, repository) ? {...issue, repository} : issue);
         const current = owners.get(key);
         if (!current || candidate.activeAt > current.activeAt) owners.set(key, candidate);
     };
@@ -124,6 +134,14 @@ export function issueOwners(candidates: readonly IssueOwnerCandidate[], reposito
     const record: Record<string, string> = {};
     for (const [key, owner] of owners) record[key] = owner.sessionId;
     return record;
+}
+
+/** The session `issueOwners` found owning this issue, whatever case either spells its repository in. */
+export function issueOwner(owners: Readonly<Record<string, string>>, issue: IssueKey): string | undefined {
+    const exact = owners[issueKeyString(issue)];
+    if (exact !== undefined) return exact;
+    const wanted = issueMatchKey(issue);
+    return Object.entries(owners).find(([key]) => key.toLowerCase() === wanted)?.[1];
 }
 
 /**
@@ -140,7 +158,7 @@ export function runningOnPlan(
 ): string[] {
     const found: string[] = [];
     for (const issue of [plan, ...(plan.issues ?? [])]) {
-        const owner = owners[issueKeyString(issue)];
+        const owner = issueOwner(owners, issue);
         if (owner && running.has(owner) && !found.includes(owner)) found.push(owner);
     }
     return found;

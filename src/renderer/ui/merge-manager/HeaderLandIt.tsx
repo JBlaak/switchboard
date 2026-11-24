@@ -18,6 +18,7 @@ import {landOffer, sessionLandCandidate} from '../../../domain/merge-manager/lan
 import {useStore} from '../use-store';
 import {LandIt} from './LandIt';
 import {loadSessionPullRequests, sessionRowInSight} from './land-actions';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 export function HeaderLandIt({sessionId}: {sessionId: string}): JSX.Element | null {
     const prs = useStore((state) => state.mergeManager.sessionPullRequests[sessionId]);
@@ -30,7 +31,7 @@ export function HeaderLandIt({sessionId}: {sessionId: string}): JSX.Element | nu
 
     const candidate = prs ? sessionLandCandidate(prs) : null;
     if (!candidate || !landOffer(candidate, lanes)) return null;
-    const pr = prs!.find((p) => p.number === candidate.number && p.repository === candidate.repository)!;
+    const pr = prs!.find((p) => p.number === candidate.number && sameRepository(p.repository, candidate.repository))!;
     return (
         <span className="header-land" data-testid="header-land">
             <a

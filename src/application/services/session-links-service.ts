@@ -15,7 +15,7 @@
  * already knows them. A PR status from our own `gh` read says how fresh it
  * is (`LinkedPr.read`); when an ask fails, the last good status stays.
  */
-import {gitHubRepository} from '../../domain/project/repo-url';
+import {gitHubRepository, sameRepository} from '../../domain/project/repo-url';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {byRepository} from '../../domain/session-work/issues';
 import {
@@ -308,7 +308,7 @@ export class SessionLinksService {
                 // A failed ask keeps the last good status of this repository's PRs, marked as old.
                 const wanted = new Set(numbers);
                 for (const status of known?.pullRequests ?? []) {
-                    if ((status.repository || repository) === repo && wanted.has(status.number))
+                    if (sameRepository(status.repository || repository, repo) && wanted.has(status.number))
                         pullRequests.push(status);
                 }
             } else pullRequests.push(...answer);

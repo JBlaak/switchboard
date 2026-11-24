@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {gitHubRepository, repoWebUrl} from '../src/domain/project/repo-url';
+import {gitHubRepository, repoWebUrl, sameRepository} from '../src/domain/project/repo-url';
 
 test('turns an scp-style ssh remote into its web page', () => {
     /* When */
@@ -66,4 +66,17 @@ test('a github.com remote names its owner/repo; any other remote names none', ()
     assert.equal(https, 'JBlaak/James');
     assert.equal(gitlab, '');
     assert.equal(local, '');
+});
+
+test('two spellings of a repository that differ only in case are the same repository', () => {
+    /* Given */
+    const origin = 'NOHrD/app';
+
+    /* When */
+    const same = sameRepository(origin, 'NOHRD/app');
+    const other = sameRepository(origin, 'NOHRD/website');
+
+    /* Then */
+    assert.equal(same, true);
+    assert.equal(other, false);
 });

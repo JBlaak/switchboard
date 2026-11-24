@@ -10,7 +10,8 @@
  * extra fields (labels, checks, review state) included.
  */
 import {layOutPlan} from './layout';
-import {issueKeyString, type IssueKey, type NodeState, type Plan, type PlanIssue} from './model';
+import {issueOwner} from './issue-session';
+import {issueMatchKey, type IssueKey, type NodeState, type Plan, type PlanIssue} from './model';
 
 /** An open issue of the repository, as the overview needs it. */
 export interface OverviewIssue {
@@ -147,7 +148,7 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
 ): ProjectOverviewGroups<I, P> {
     const {repository, sessions} = input;
     const keyOf = (number: number): IssueKey => ({repository, number});
-    const owner = (issue: IssueKey): string | null => sessions.owners[issueKeyString(issue)] ?? null;
+    const owner = (issue: IssueKey): string | null => issueOwner(sessions.owners, issue) ?? null;
     const isRunning = (sessionId: string | null): sessionId is string =>
         sessionId !== null && sessions.running.has(sessionId);
 
@@ -155,14 +156,14 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
     const prFor = new Map<string, P>();
     for (const pr of [...input.pullRequests].sort((a, b) => b.number - a.number)) {
         for (const number of pr.closes) {
-            const key = issueKeyString(keyOf(number));
+            const key = issueMatchKey(keyOf(number));
             if (!prFor.has(key)) prFor.set(key, pr);
         }
     }
 
     const facts = (issue: IssueKey, open: boolean, waitsOn: IssueKey[]): IssueRowFacts<P> => {
         const session = owner(issue);
-        const pullRequest = prFor.get(issueKeyString(issue)) ?? null;
+        const pullRequest = prFor.get(issueMatchKey(issue)) ?? null;
         const status: IssueRowStatus<P> = isRunning(session)
             ? {kind: 'running', sessionId: session}
             : open && waitsOn.length > 0
@@ -182,17 +183,17 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
         const planKey: IssueKey = {repository: plan.repository, number: plan.number};
         const layout = layOutPlan(plan);
         const known = new Map<string, PlanIssue>();
-        for (const issue of [...plan.outside, ...plan.issues]) known.set(issueKeyString(issue), issue);
-        const byKey = new Map(plan.issues.map((issue) => [issueKeyString(issue), issue]));
-        const levelOrder = layout.levels.flat().map((key) => byKey.get(issueKeyString(key))!);
+        for (const issue of [...plan.outside, ...plan.issues]) known.set(issueMatchKey(issue), issue);
+        const byKey = new Map(plan.issues.map((issue) => [issueMatchKey(issue), issue]));
+        const levelOrder = layout.levels.flat().map((key) => byKey.get(issueMatchKey(key))!);
 
         const rows = levelOrder.map((issue): PlanIssueRow<P> => {
             const open = issue.state === 'open';
             // A claimed wayfinder ticket is someone's already: it is not offered to start.
             const takeable = open && layout.stateOf(issue) !== 'claimed';
             const waitsOn = issue.blockedBy
-                .filter((blocker) => issueKeyString(blocker) !== issueKeyString(issue))
-                .map((blocker) => known.get(issueKeyString(blocker)))
+                .filter((blocker) => issueMatchKey(blocker) !== issueMatchKey(issue))
+                .map((blocker) => known.get(issueMatchKey(blocker)))
                 .filter((blocker): blocker is PlanIssue => blocker !== undefined && blocker.state === 'open')
                 .map((blocker) => ({repository: blocker.repository, number: blocker.number}));
             return {
@@ -204,8 +205,8 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
             };
         });
 
-        planOf.set(issueKeyString(planKey), planKey);
-        for (const issue of plan.issues) planOf.set(issueKeyString(issue), planKey);
+        planOf.set(issueMatchKey(planKey), planKey);
+        for (const issue of plan.issues) planOf.set(issueMatchKey(issue), planKey);
 
         const lastActivity = [source.updatedAt, ...plan.issues.map((issue) => issue.updatedAt)].sort(newestFirst)[0];
         plans.push(
@@ -225,9 +226,9 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
     // An issue with sub-issues is a plan before anyone has levelled it.
     for (const issue of input.issues) {
         const planKey = keyOf(issue.number);
-        if (issue.subIssueCount === 0 || planOf.has(issueKeyString(planKey))) continue;
+        if (issue.subIssueCount === 0 || planOf.has(issueMatchKey(planKey))) continue;
         const children = input.issues
-            .filter((child) => child.parent === issue.number && !planOf.has(issueKeyString(keyOf(child.number))))
+            .filter((child) => child.parent === issue.number && !planOf.has(issueMatchKey(keyOf(child.number))))
             .sort((a, b) => a.number - b.number);
         const rows = children.map((child): PlanIssueRow<P> => {
             const key = keyOf(child.number);
@@ -239,8 +240,8 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
                 ...row,
             };
         });
-        planOf.set(issueKeyString(planKey), planKey);
-        for (const child of children) planOf.set(issueKeyString(keyOf(child.number)), planKey);
+        planOf.set(issueMatchKey(planKey), planKey);
+        for (const child of children) planOf.set(issueMatchKey(keyOf(child.number)), planKey);
         const closed = Math.max(0, issue.subIssueCount - children.length);
         const segments: NodeState[] = [...Array<NodeState>(closed).fill('closed'), ...rows.map((row) => row.segment)];
         const lastActivity = [issue.updatedAt, ...children.map((child) => child.updatedAt)].sort(newestFirst)[0];
@@ -261,16 +262,16 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
     // PRs, each tied to its issues and the plan of the first that has one.
     const pullRequests = input.pullRequests.map((pr): OverviewPullRequestRow<P> => {
         const closes = pr.closes.map(keyOf);
-        const plan = closes.map((key) => planOf.get(issueKeyString(key))).find((key) => key !== undefined) ?? null;
+        const plan = closes.map((key) => planOf.get(issueMatchKey(key))).find((key) => key !== undefined) ?? null;
         return {pullRequest: pr, closes, plan};
     });
     for (const plan of plans) {
-        const planKey = issueKeyString(plan.plan);
+        const planKey = issueMatchKey(plan.plan);
         plan.pullRequests = pullRequests
             .filter((row) =>
                 row.closes.some((key) => {
-                    const owner = planOf.get(issueKeyString(key));
-                    return owner !== undefined && issueKeyString(owner) === planKey;
+                    const owner = planOf.get(issueMatchKey(key));
+                    return owner !== undefined && issueMatchKey(owner) === planKey;
                 }),
             )
             .map((row) => row.pullRequest)
@@ -280,7 +281,7 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
     const loose = input.issues
         .filter(
             (issue) =>
-                issue.parent === null && issue.subIssueCount === 0 && !planOf.has(issueKeyString(keyOf(issue.number))),
+                issue.parent === null && issue.subIssueCount === 0 && !planOf.has(issueMatchKey(keyOf(issue.number))),
         )
         .sort((a, b) => newestFirst(a.updatedAt, b.updatedAt) || b.number - a.number)
         .map((issue): LooseIssueRow<I, P> => ({issue, ...facts(keyOf(issue.number), true, [])}));

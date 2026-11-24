@@ -30,6 +30,7 @@ import {openIssueOnGitHub, openProjectPlan, startPageIssueSession} from './actio
 import {dispatch} from '../../state/app-store';
 import type {SectionProps} from './slots';
 import {SectionSkeleton} from './SectionSkeleton';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 export function PlansSection({projectPath}: SectionProps): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
@@ -264,7 +265,7 @@ function IssueStatus({
                 <span className="pp-waits">
                     waits on{' '}
                     {status.on
-                        .map((on) => (on.repository === repository ? '#' + on.number : issueKeyString(on)))
+                        .map((on) => (sameRepository(on.repository, repository) ? '#' + on.number : issueKeyString(on)))
                         .join(', ')}
                 </span>
             );
