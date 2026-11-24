@@ -16,6 +16,7 @@ import type {LinkedPr} from '../session/links';
 import type {StatusDot} from '../session-work/status';
 import type {SessionPullRequest} from '../session/session';
 import type {PhoneLand} from './protocol';
+import {sameRepository} from '../project/repo-url';
 
 /** The button's words on your own open PR. */
 export const LAND_IT = 'Land it';
@@ -62,7 +63,7 @@ export function phoneLand(
 }
 
 function statusDot(checked: readonly LinkedPr[] | undefined, pr: LandCandidate): StatusDot | undefined {
-    const read = checked?.find((link) => link.number === pr.number && link.repository === pr.repository);
+    const read = checked?.find((link) => link.number === pr.number && sameRepository(link.repository, pr.repository));
     return read?.status?.dot;
 }
 

@@ -27,6 +27,7 @@ import {pollActiveSessions} from '../../features/sessions/session-poller';
 import {celebrateFrom, isLeaving, leave} from './leave';
 import {offerArchiveUndo, sessionOnScreen} from '../archive-undo/actions';
 import type {SessionRow} from '../../../domain/session/session';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 // ── Opening and the empty space ──
 
@@ -104,7 +105,7 @@ export async function toggleIssuePlanPin(
     for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
         if (project.projectPath !== projectPath) continue;
         const others = (project.pinnedIssuePlans ?? []).filter(
-            (p) => p.repository !== repository || p.number !== number,
+            (p) => !sameRepository(p.repository, repository) || p.number !== number,
         );
         project.pinnedIssuePlans = pinned ? [...others, {repository, number, title, pinnedAt: Date.now()}] : others;
     }
@@ -139,7 +140,7 @@ export function isIssuePlanPinned(projectPath: string, repository: string, numbe
     return [...view.cachedProjects, ...view.cachedAllProjects].some(
         (project) =>
             project.projectPath === projectPath &&
-            !!project.pinnedIssuePlans?.some((p) => p.repository === repository && p.number === number),
+            !!project.pinnedIssuePlans?.some((p) => sameRepository(p.repository, repository) && p.number === number),
     );
 }
 

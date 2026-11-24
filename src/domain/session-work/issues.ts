@@ -10,6 +10,7 @@
  */
 import {parseTranscriptLine} from '../session/transcript';
 import type {IssueRef, IssueStatus} from './model';
+import {sameRepository} from '../project/repo-url';
 
 /**
  * `#123` or `owner/repo#123`, not preceded by anything that makes it part of a
@@ -126,7 +127,7 @@ export function standaloneIssues(mentions: readonly IssueRef[], claimed: readonl
         claimed.some(
             (other) =>
                 other.number === issue.number &&
-                (other.repository === issue.repository || !other.repository || !issue.repository),
+                (sameRepository(other.repository, issue.repository) || !other.repository || !issue.repository),
         );
     const found = new Map<string, IssueRef>();
     for (const issue of mentions) {

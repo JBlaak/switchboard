@@ -455,6 +455,21 @@ test("a session whose transcripts were on an issue's branch owns it", async () =
     assert.deepEqual(owners, {[REPO + '#114']: 'a'});
 });
 
+test('a session in a project whose origin spells the repository in another case owns its issue', async () => {
+    /* Given */
+    const {service} = harness({
+        origin: 'git@github.com:jblaak/Switchboard.git',
+        sessions: [session('a')],
+        locations: {a: [at('114-zoom-pan-stage')]},
+    });
+
+    /* When */
+    const owners = await service.issueSessions(REPO);
+
+    /* Then */
+    assert.deepEqual(owners, {[REPO + '#114']: 'a'});
+});
+
 test("a session just started, with no transcript yet, owns the issue its directory's branch is named after", async () => {
     /* Given */
     const worktree = ROOT + '/.claude/worktrees/114-stage';

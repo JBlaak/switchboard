@@ -70,6 +70,7 @@ import type {IdGenerator} from '../ports/ids';
 import type {Logger} from '../ports/logger';
 import type {FoldedLane, MergeManagerService} from './merge-manager-service';
 import {WORKTREES_DIR} from './support/branch-worktrees';
+import {sameRepository} from '../../domain/project/repo-url';
 
 /** How much of a failing check's log the prompt carries. */
 export const ERRAND_LOG_TAIL_LINES = 80;
@@ -135,10 +136,10 @@ export class FixErrandService {
 
     /** A lane read was folded in: start the errands it wants, and forget those of PRs that left. */
     public laneRead(lane: FoldedLane): void {
-        const repository = lane.repository.toLowerCase();
+        const repository = lane.repository;
         const keys = new Set(lane.landed.map((pr) => pr.key));
         const gone = this.errands()
-            .filter((errand) => errand.repository.toLowerCase() === repository && !keys.has(errand.key))
+            .filter((errand) => sameRepository(errand.repository, repository) && !keys.has(errand.key))
             .map((errand) => errand.id);
         if (gone.length) this.deps.store.remove(gone);
 

@@ -87,6 +87,7 @@ import {
     typeTryAgainNote,
     unlandFromPage,
 } from './page-actions';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 /** The letters the page's keys use (`page-keys`). */
 const PAGE_LETTERS = new Set(['j', 'k', 't', 'n', 'u', 'o', 'l']);
@@ -345,7 +346,7 @@ function MergeManagerView(): JSX.Element {
                 {selected && (
                     <Detail
                         row={selected}
-                        lane={lanes.find((l) => l.repository === selected.repository)!}
+                        lane={lanes.find((l) => sameRepository(l.repository, selected.repository))!}
                         times={times.get(selected.repository) ?? NO_TIMES}
                         page={page}
                         now={now}

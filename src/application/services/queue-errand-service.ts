@@ -54,6 +54,7 @@ import type {QueueErrandStore} from '../ports/queue-errand-store';
 import type {SessionPrompter} from '../ports/session-prompter';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import {BranchWorktrees, type BranchSessionCandidate, type BranchWorktreesDeps} from './support/branch-worktrees';
+import {sameRepository} from '../../domain/project/repo-url';
 
 /** An errand whose session the renderer never said it started is given up on after this long. */
 export const ERRAND_START_TIMEOUT_MS = 10 * 60_000;
@@ -138,7 +139,7 @@ export class QueueErrandService {
             (errand) =>
                 errand.kind === 'nudge' &&
                 errand.settledAt === null &&
-                errand.repository === repository &&
+                sameRepository(errand.repository, repository) &&
                 errand.number === pr.number &&
                 errand.reviewer === reviewer,
         );
@@ -156,7 +157,7 @@ export class QueueErrandService {
             if (
                 errand.kind === 'nudge' &&
                 errand.settledAt === null &&
-                errand.repository === repository &&
+                sameRepository(errand.repository, repository) &&
                 errand.number === number &&
                 errand.reviewer === reviewer
             ) {
@@ -172,7 +173,8 @@ export class QueueErrandService {
      */
     public settleNudges(repository: string, held: readonly {number: number; reviewer: string}[]): void {
         for (const errand of this.deps.store.all()) {
-            if (errand.kind !== 'nudge' || errand.settledAt !== null || errand.repository !== repository) continue;
+            if (errand.kind !== 'nudge' || errand.settledAt !== null || !sameRepository(errand.repository, repository))
+                continue;
             if (held.some((entry) => entry.number === errand.number && entry.reviewer === errand.reviewer)) continue;
             this.deps.store.settle(errand.id, this.deps.clock.now());
         }
@@ -199,7 +201,7 @@ export class QueueErrandService {
         const busy = this.views().find(
             (errand) =>
                 errand.kind === 'fix' &&
-                errand.repository === repository &&
+                sameRepository(errand.repository, repository) &&
                 errand.number === pr.number &&
                 errand.state !== 'done',
         );

@@ -11,6 +11,7 @@ import {laneKindLabel, type PageLane, type PageRow} from '../../../domain/merge-
 import {ordinal} from '../../../domain/merge-manager/stage-words';
 import {durationText, type LaneTimes, type Timeline, type TimelineFlag} from '../../../domain/merge-manager/times';
 import type {GroupCount, StatusGroup, StatusGroupId, StatusItem} from '../../../domain/merge-manager/status';
+import {sameRepository} from '../../../domain/project/repo-url';
 
 /** "14:02", in the local time. */
 export function clock(at: number): string {
@@ -137,7 +138,7 @@ export function comingUpFooter(
 export function itemKind(item: StatusItem, lanes: readonly PageLane[]): string {
     if (item.kind === 'notLanded') return 'Not landed';
     const row: PageRow = item.row;
-    const lane = lanes.find((candidate) => candidate.repository === row.repository);
+    const lane = lanes.find((candidate) => sameRepository(candidate.repository, row.repository));
     const kind = laneKindLabel(lane?.kind ?? row.lane);
     const lower = kind === 'Queue lane' ? 'queue lane' : kind;
     const where = row.stage.kind === 'head' ? 'head' : row.order !== null ? ordinal(row.order) : null;
@@ -174,7 +175,7 @@ export function byRepository(items: readonly StatusItem[], lanes: readonly PageL
         }
     }
     return order.map((repository) => {
-        const lane = lanes.find((candidate) => candidate.repository === repository);
+        const lane = lanes.find((candidate) => sameRepository(candidate.repository, repository));
         return {
             repository,
             name: repositoryName(repository),

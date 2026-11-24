@@ -13,6 +13,7 @@ import {issueFromBranch, standaloneIssues} from './issues';
 import {locationKey} from './locations';
 import type {DiffSource, FileChange, IssueRef, PullRequestStatus, WorkItem, WorkLocation} from './model';
 import {needsYou} from './status';
+import {sameRepository} from '../project/repo-url';
 
 /** What git says about one branch the session worked on that still exists locally. */
 export interface BranchFacts {
@@ -101,7 +102,7 @@ export function isDone(item: WorkItem): boolean {
  */
 /** True when both repositories are known and differ; GitHub names are case-insensitive. */
 function isForeign(repository: string, sessionRepository: string): boolean {
-    return !!repository && !!sessionRepository && repository.toLowerCase() !== sessionRepository.toLowerCase();
+    return !!repository && !!sessionRepository && !sameRepository(repository, sessionRepository);
 }
 
 export function deriveWorkItems(facts: WorkFacts): WorkItem[] {

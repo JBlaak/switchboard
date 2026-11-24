@@ -18,6 +18,7 @@ import type {
     PlanSummary,
     PlanWarning,
 } from '../../../../domain/plan/model';
+import {sameRepository} from '../../../../domain/project/repo-url';
 
 /** P7, as the node and the detail say it. */
 export const STATE_LABEL: Readonly<Record<NodeState, string>> = {
@@ -149,7 +150,9 @@ export function planQueuePill(
 
 /** `#12`, or `owner/repo#12` for an issue in another repository. */
 export function shortRef(plan: IssueKey, issue: IssueKey): string {
-    return issue.repository === plan.repository ? '#' + issue.number : issue.repository + '#' + issue.number;
+    return sameRepository(issue.repository, plan.repository)
+        ? '#' + issue.number
+        : issue.repository + '#' + issue.number;
 }
 
 /** A title cut to fit a pill. */
