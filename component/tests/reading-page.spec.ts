@@ -92,3 +92,62 @@ test.describe('smoke', () => {
         await expect(await reopenRow(page)).toBeEnabled();
     });
 });
+
+test.describe('font', () => {
+    /** The article's typeface, and whether that face is loaded in the frame. */
+    async function articleFont(page: Page) {
+        const frame = page.frame({url: 'about:srcdoc'});
+        if (!frame) throw new Error('no reading frame');
+        return frame.evaluate(async () => {
+            await document.fonts.ready;
+            const article = document.querySelector('article')!;
+            return {
+                family: getComputedStyle(article).fontFamily,
+                loaded: document.fonts.check("18px 'Atkinson Hyperlegible Next'", 'Readable'),
+                faces: [...document.fonts].filter((face) => face.status === 'loaded').map((face) => face.family),
+            };
+        });
+    }
+
+    test('Hyperlegible sets the page in Atkinson Hyperlegible Next, and is remembered', async ({page, api}) => {
+        /* Given */
+        await openSession(page, api, LABEL.loginFix, S.loginFix);
+        await showPage(api, S.loginFix, {title: TITLE, html: HTML});
+        await expect(article(page).locator('h1')).toHaveText('AI clauses');
+        expect((await articleFont(page)).family).toMatch(/^Charter/);
+
+        /* When */
+        await readingPage(page).getByRole('radio', {name: 'Hyperlegible'}).click();
+
+        /* Then */
+        await expect(readingPage(page).getByRole('radio', {name: 'Hyperlegible'})).toHaveAttribute(
+            'aria-checked',
+            'true',
+        );
+        await expect(article(page).locator('html')).toHaveAttribute('data-font', 'hyperlegible');
+        await expect.poll(async () => (await articleFont(page)).faces).toContain('Atkinson Hyperlegible Next');
+        const font = await articleFont(page);
+        expect(font.family).toMatch(/^"Atkinson Hyperlegible Next"/);
+        expect(font.loaded).toBe(true);
+        expect(api.settings.readingFont).toBe('hyperlegible');
+    });
+});
+
+test.describe('font, stored', () => {
+    test.use({settings: {readingFont: 'hyperlegible'}});
+
+    test('a stored Hyperlegible choice opens the next page in it', async ({page, api}) => {
+        /* Given */
+        await openSession(page, api, LABEL.loginFix, S.loginFix);
+
+        /* When */
+        await showPage(api, S.loginFix, {title: TITLE, html: HTML});
+
+        /* Then */
+        await expect(article(page).locator('html')).toHaveAttribute('data-font', 'hyperlegible');
+        await expect(readingPage(page).getByRole('radio', {name: 'Hyperlegible'})).toHaveAttribute(
+            'aria-checked',
+            'true',
+        );
+    });
+});

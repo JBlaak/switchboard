@@ -12,6 +12,7 @@
 import {movedEntry, withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
 import type {RendererEvent} from './events';
+import type {ReadingFont} from '../../domain/session/page-tool';
 
 export interface SessionPage {
     readonly title: string;
@@ -23,29 +24,35 @@ export interface SessionPage {
 
 export interface PagesState {
     readonly bySession: IdRecord<SessionPage>;
+    /** The typeface every page is set in, the user's choice in the page header (stored as `readingFont`). */
+    readonly font: ReadingFont;
 }
 
 export type PagesEvent =
     /** Esc or the close button: the page steps aside for the terminal. */
     | {type: 'pageClosed'; sessionId: string}
     /** The terminal header's button: the page put away comes back. */
-    | {type: 'pageReopened'; sessionId: string};
+    | {type: 'pageReopened'; sessionId: string}
+    /** The page header's font switch, or the stored choice read at boot. */
+    | {type: 'readingFontChanged'; font: ReadingFont};
 
-export const initialPagesState: PagesState = {bySession: {}};
+export const initialPagesState: PagesState = {bySession: {}, font: 'serif'};
 
 export function pagesReducer(state: PagesState, event: RendererEvent): PagesState {
     switch (event.type) {
         case 'pageShown': {
             const {sessionId, title, html, shownAt} = event.page;
-            return {bySession: withEntry(state.bySession, sessionId, {title, html, shownAt, open: true})};
+            return {...state, bySession: withEntry(state.bySession, sessionId, {title, html, shownAt, open: true})};
         }
         case 'pageClosed':
             return opened(state, event.sessionId, false);
         case 'pageReopened':
             return opened(state, event.sessionId, true);
+        case 'readingFontChanged':
+            return state.font === event.font ? state : {...state, font: event.font};
         case 'sessionArchived': {
             const bySession = withoutEntry(state.bySession, event.sessionId);
-            return bySession === state.bySession ? state : {bySession};
+            return bySession === state.bySession ? state : {...state, bySession};
         }
         default:
             return state;
@@ -54,7 +61,7 @@ export function pagesReducer(state: PagesState, event: RendererEvent): PagesStat
 
 export function rekeyPages(state: PagesState, oldId: string, newId: string): PagesState {
     const bySession = movedEntry(state.bySession, oldId, newId);
-    return bySession === state.bySession ? state : {bySession};
+    return bySession === state.bySession ? state : {...state, bySession};
 }
 
 /** The session's page while it is laid over the terminal; null when it has none or it was put away. */
@@ -66,5 +73,5 @@ export function openPage(state: PagesState, sessionId: string | null): SessionPa
 function opened(state: PagesState, sessionId: string, open: boolean): PagesState {
     const page = state.bySession[sessionId];
     if (!page || page.open === open) return state;
-    return {bySession: withEntry(state.bySession, sessionId, {...page, open})};
+    return {...state, bySession: withEntry(state.bySession, sessionId, {...page, open})};
 }
