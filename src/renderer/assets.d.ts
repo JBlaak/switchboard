@@ -11,3 +11,8 @@
  */
 declare module '*.css';
 declare module '*.png';
+/** A font file the renderer bundles: esbuild's `dataurl` loader makes it a data: URL. */
+declare module '*.woff2' {
+    const url: string;
+    export default url;
+}

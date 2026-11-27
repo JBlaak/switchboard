@@ -158,19 +158,53 @@ export const READING_CSP =
     "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
 
 /**
+ * The typeface a page is set in, which the user picks in the page header:
+ * Switchboard's reading serif, or Atkinson Hyperlegible Next, the Braille
+ * Institute's typeface for low-vision readers.
+ */
+export type ReadingFont = 'serif' | 'hyperlegible';
+
+export const READING_FONTS: readonly {id: ReadingFont; label: string}[] = [
+    {id: 'serif', label: 'Serif'},
+    {id: 'hyperlegible', label: 'Hyperlegible'},
+];
+
+/** A stored choice as a font; anything unknown (nothing stored yet) is the serif. */
+export function normaliseReadingFont(value: unknown): ReadingFont {
+    return value === 'hyperlegible' ? 'hyperlegible' : 'serif';
+}
+
+/** The family name the `@font-face` rules the window passes in declare. */
+export const HYPERLEGIBLE_FAMILY = 'Atkinson Hyperlegible Next';
+
+export interface ReadingOptions {
+    /** The typeface the page opens in; the serif when left out. */
+    readonly font?: ReadingFont;
+    /**
+     * `@font-face` rules with the fonts as data: URLs, the only fonts the CSP
+     * lets in. The window bundles them; without them the Hyperlegible choice
+     * falls back to the system sans.
+     */
+    readonly fontFaces?: string;
+}
+
+/**
  * The whole document the frame shows: the session's body, wrapped in the
  * reading stylesheet and the CSP. The title is the frame's own; the page
- * header outside the frame shows it too.
+ * header outside the frame shows it too. The font is the `data-font`
+ * attribute on <html>, so the window can switch it in place without
+ * reloading the frame (and losing the reader's place).
  */
-export function readingDocument(page: PageInput): string {
+export function readingDocument(page: PageInput, options: ReadingOptions = {}): string {
+    const font = options.font ?? 'serif';
     return `<!doctype html>
-<html lang="en">
+<html lang="en" data-font="${font}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${READING_CSP}">
 <meta name="color-scheme" content="light dark">
 <title>${escapeHtml(page.title)}</title>
-<style>${READING_STYLES}</style>
+<style>${options.fontFaces ?? ''}${READING_STYLES}</style>
 </head>
 <body><article>
 ${page.html}
@@ -204,6 +238,11 @@ article {
     font: 18px/1.65 Charter, 'Iowan Old Style', 'Source Serif Pro', Georgia, serif;
     font-kerning: normal; hyphens: auto; overflow-wrap: break-word;
 }
+html[data-font="hyperlegible"] article,
+html[data-font="hyperlegible"] :is(h1, h2, h3, h4, th) {
+    font-family: '${HYPERLEGIBLE_FAMILY}', system-ui, -apple-system, sans-serif;
+}
+html[data-font="hyperlegible"] article { letter-spacing: 0.01em; }
 h1, h2, h3, h4 {
     font-family: system-ui, -apple-system, sans-serif; color: var(--strong);
     line-height: 1.25; letter-spacing: -0.01em; margin: 2em 0 0.6em; scroll-margin-top: 24px;

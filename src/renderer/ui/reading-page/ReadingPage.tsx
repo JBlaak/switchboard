@@ -13,8 +13,8 @@
  * into the frame's document: to hear Esc, to send links to the browser, and
  * to read its headings for the outline.
  */
-import {useCallback, useMemo, useRef, useState} from 'react';
-import {readingDocument} from '../../../domain/session/page-tool';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {READING_FONTS, readingDocument} from '../../../domain/session/page-tool';
 import {dispatch} from '../../state/app-store';
 import {openPage} from '../../state/pages-slice';
 import {focusTerminal} from '../questions/actions';
@@ -23,6 +23,8 @@ import {useStore} from '../use-store';
 import type {JSX, KeyboardEvent as ReactKeyboardEvent} from 'react';
 import type {SessionPage} from '../../state/pages-slice';
 import {openLink} from '../pr-view/actions';
+import {setReadingFont} from './actions';
+import {HYPERLEGIBLE_FONT_FACES} from './reading-fonts';
 
 /** An outline needs a few headings to be worth its room. */
 const MIN_OUTLINE = 3;
@@ -44,7 +46,20 @@ export function ReadingPage(): JSX.Element | null {
 function ReadingSheet({sessionId, page}: {sessionId: string; page: SessionPage}): JSX.Element {
     const frame = useRef<HTMLIFrameElement>(null);
     const [outline, setOutline] = useState<OutlineEntry[]>([]);
-    const srcDoc = useMemo(() => readingDocument(page), [page.title, page.html]);
+    const font = useStore((s) => s.pages.font);
+    // The font the frame was first written with; later switches go straight
+    // into the live document (below), so the reader keeps their place.
+    const fontRef = useRef(font);
+    fontRef.current = font;
+    const srcDoc = useMemo(
+        () => readingDocument(page, {font: fontRef.current, fontFaces: HYPERLEGIBLE_FONT_FACES}),
+        [page.title, page.html],
+    );
+
+    useEffect(() => {
+        const root = frame.current?.contentDocument?.documentElement;
+        if (root) root.dataset.font = font;
+    }, [font]);
 
     const close = useCallback(() => {
         dispatch({type: 'pageClosed', sessionId});
@@ -61,6 +76,7 @@ function ReadingSheet({sessionId, page}: {sessionId: string; page: SessionPage})
             }
         });
         doc.addEventListener('click', (event) => followLink(doc, event));
+        doc.documentElement.dataset.font = fontRef.current;
         setOutline(readOutline(doc));
         // The keyboard goes to the page, so arrows and space scroll it and Esc closes it.
         frame.current?.contentWindow?.focus();
@@ -84,6 +100,19 @@ function ReadingSheet({sessionId, page}: {sessionId: string; page: SessionPage})
                 <h2 className="rp-title" title={page.title}>
                     {page.title}
                 </h2>
+                <div className="rp-font" role="radiogroup" aria-label="Font">
+                    {READING_FONTS.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={font === option.id}
+                            className={`rp-font-option${font === option.id ? ' is-on' : ''}`}
+                            onClick={() => setReadingFont(option.id)}>
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
                 <button type="button" className="sw-btn rp-close" onClick={close}>
                     Back to terminal<kbd className="qh-kbd">esc</kbd>
                 </button>

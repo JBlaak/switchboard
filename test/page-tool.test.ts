@@ -10,6 +10,7 @@ import {
     PAGE_TOOL_QUALIFIED_NAME,
     pageTool,
     parsePageInput,
+    normaliseReadingFont,
     READING_CSP,
     readingDocument,
 } from '../src/domain/session/page-tool';
@@ -92,6 +93,32 @@ test('the document locks the page down and escapes the title', () => {
     assert.doesNotMatch(READING_CSP, /script-src/);
     assert.ok(doc.includes('<title>&lt;b&gt;&quot;Terms&quot;&lt;/b&gt;</title>'));
     assert.ok(doc.includes('<article>\n<h2>Scope</h2><p>Text</p>\n</article>'));
+});
+
+test('a page opens in the serif unless the Hyperlegible font is asked for', () => {
+    /* When */
+    const plain = readingDocument({title: 'T', html: '<p>x</p>'});
+    const hyperlegible = readingDocument(
+        {title: 'T', html: '<p>x</p>'},
+        {font: 'hyperlegible', fontFaces: "@font-face { font-family: 'Atkinson Hyperlegible Next'; }"},
+    );
+
+    /* Then */
+    assert.ok(plain.includes('<html lang="en" data-font="serif">'));
+    assert.ok(hyperlegible.includes('<html lang="en" data-font="hyperlegible">'));
+    assert.ok(hyperlegible.includes("<style>@font-face { font-family: 'Atkinson Hyperlegible Next'; }"));
+    assert.match(
+        hyperlegible,
+        /html\[data-font="hyperlegible"\] article,[^{]*\{\s*font-family: 'Atkinson Hyperlegible Next'/,
+    );
+});
+
+test('a stored reading font that is not known reads as the serif', () => {
+    /* Then */
+    assert.equal(normaliseReadingFont('hyperlegible'), 'hyperlegible');
+    assert.equal(normaliseReadingFont('serif'), 'serif');
+    assert.equal(normaliseReadingFont(undefined), 'serif');
+    assert.equal(normaliseReadingFont('comic-sans'), 'serif');
 });
 
 // ── The protocol ──
@@ -353,4 +380,20 @@ test('closing a session with no page changes nothing', () => {
 
     /* Then */
     assert.equal(next, state);
+});
+
+test('the reading font switches for every page and outlives a page being shown', () => {
+    /* Given */
+    const state = run(initialRendererState(), shown('s1'));
+    assert.equal(state.pages.font, 'serif');
+
+    /* When */
+    const next = run(state, {type: 'readingFontChanged', font: 'hyperlegible'}, shown('s2'), {
+        type: 'pageClosed',
+        sessionId: 's1',
+    });
+
+    /* Then */
+    assert.equal(next.pages.font, 'hyperlegible');
+    assert.equal(openPage(next.pages, 's2')?.title, 'Terms');
 });

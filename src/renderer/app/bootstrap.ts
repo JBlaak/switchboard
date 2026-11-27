@@ -28,6 +28,7 @@ import {installGrill} from '../ui/grill/actions';
 import {mountReactRoot} from '../ui/Root';
 import {installFooter} from '../ui/footer/install-footer';
 import {installToolbar} from '../ui/toolbar/actions';
+import {installReadingFont} from '../ui/reading-page/actions';
 import {installSessionList} from '../ui/session-list/install-session-list';
 import {installSessionWork} from '../ui/session-work/install-session-work';
 import {installPlan} from '../ui/session-work/plan/install-plan';
@@ -61,6 +62,7 @@ export function bootstrap(): void {
     installLayout();
     installLoopPause();
     installToolbar();
+    installReadingFont();
     installSidebarKeyboard();
     installShortcuts();
     installSessionList();
